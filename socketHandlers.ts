@@ -300,56 +300,25 @@ export const createHandlers = (deps: any) => {
       }
     },
     select_action_category: (socket: any, category: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_select_category' && playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedOption = category;
-        gameState.phase = 'action_select_action';
-        broadcastState();
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectActionCategory(gameState, playerIndex, category, actionHelpers, socket);
     },
     select_common_action: (socket: any, action: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_common' && playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedOption = action;
-        gameState.phase = 'action_select_hero';
-        broadcastState();
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectCommonAction(gameState, playerIndex, action, actionHelpers, socket);
     },
     select_hero_action: (socket: any, action: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_select_action' && playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedOption = action;
-        gameState.phase = 'action_select_hero';
-        broadcastState();
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectHeroAction(gameState, playerIndex, action, actionHelpers, socket);
     },
     select_hero_for_action: (socket: any, tokenId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if ((gameState.phase === 'action_select_hero' || gameState.phase === 'action_select_substitute') && playerIndex === gameState.activePlayerIndex) {
-        const token = gameState.tokens.find((t: any) => t.id === tokenId);
-        if (token && token.boundToCardId) {
-          gameState.selectedTokenId = tokenId;
-          gameState.phase = 'action_play';
-          broadcastState();
-        }
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectHeroForAction(gameState, playerIndex, tokenId, actionHelpers, socket);
     },
     click_action_token: (socket: any, tokenId: string) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.clickActionToken(gameState, playerIndex, tokenId, actionHelpers, socket);
-    },
+    }, 
     cancel_action_token: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
