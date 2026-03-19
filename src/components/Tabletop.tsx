@@ -328,7 +328,7 @@ function ActionTokenNode({ token, onClick, isMyTurn, isSelected }: { token: any,
 }
 
 function TokenNode({ token, socket, onClick, isSelected, draggable, lastEvolvedId, onHexClick, isMyToken }: { token: Token; socket: Socket, onClick?: (id: string) => void, isSelected?: boolean, draggable?: boolean, lastEvolvedId?: string | null, onHexClick?: (q: number, r: number) => void, isMyToken?: boolean }) {
-  const [image] = useImage(token.image);
+  const [image] = useImage(token.heroClass ? getHeroTokenImage(token.heroClass) : 'https://image.pollinations.ai/prompt/A%20glowing%20golden%20star%20token%20fantasy%20anime%20art?nologo=true');
   const groupRef = useRef<any>(null);
 
   useEffect(() => {

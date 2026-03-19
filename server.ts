@@ -17,6 +17,7 @@ import { CardLogic } from './src/logic/card/cardLogic.ts';
 import { HeroEngine } from './src/logic/hero/heroEngine.ts';
 import { BotStrategy, BotAction } from './src/logic/ai/botStrategy.ts';
 import { ActionEngine, ActionHelpers } from './src/logic/action/actionEngine.ts';
+import { createHandlers } from './socketHandlers.ts';
 
 const heroesDatabase = HEROES_DATABASE;
 
@@ -412,7 +413,7 @@ const broadcastState = () => {
 
         switch (action.type) {
           case 'play_card':
-            handlers.play_card(botSocket, action.payload);
+            migratedHandlers.play_card(botSocket, action.payload);
             break;
           case 'revive_hero':
             handlers.revive_hero(botSocket, action.payload);
@@ -734,6 +735,43 @@ const broadcastState = () => {
     updateAvailableActions: (playerIndex) => updateAvailableActions(playerIndex),
   };
 
+  const migratedHandlers = createHandlers({
+    gameState,
+    io,
+    actionHelpers,
+    HeroEngine,
+    addLog,
+    checkBotTurn,
+    broadcastState,
+    checkAllTokensUsed,
+    pixelToHex,
+    getReachableHexes,
+    hexToPixel,
+    getRecoilHex,
+    REWARDS,
+    addReputation,
+    getAttackableHexes,
+    getPlayerIndex,
+    heroesDatabase,
+    isTargetInAttackRange,
+    getNeighbors,
+    alignHireArea,
+    setPhase,
+    createActionTokensForPlayer,
+    updateAvailableActions,
+    drawCards,
+    discardOpponentCard: (pIdx: number) => {
+      const opponentId = gameState.seats[1 - pIdx];
+      if (opponentId) {
+        const opponent = gameState.players[opponentId];
+        if (opponent.hand.length > 0) {
+          const randomIndex = Math.floor(Math.random() * opponent.hand.length);
+          const discarded = opponent.hand.splice(randomIndex, 1)[0];
+          gameState.discardPiles.action.push(discarded);
+        }
+      }
+    }
+  });
   const handlers = {
     checkAndResetChanting: (tokenId: string) => {
       const magicCircle = gameState.magicCircles.find(mc => mc.state === 'chanting' && mc.chantingTokenId === tokenId);
@@ -1227,9 +1265,15 @@ const broadcastState = () => {
       const isPlayer1 = gameState.seats[0] === socket.id;
       const isPlayer2 = gameState.seats[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
+      console.log(`[DEBUG] Received select_target: ${targetId}`);
+     
+      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
+        gameState.selectedTargetId = targetId;
+        io.emit('state_update', gameState);
+      }
       ActionEngine.resolveTargetSelection(gameState, playerIndex, targetId, actionHelpers, socket);
     },
+
     proceed_phase: (socket: any) => {
       ActionEngine.proceedPhase(gameState, actionHelpers, socket);
     },
@@ -2085,52 +2129,7 @@ const broadcastState = () => {
         checkBotTurn();
       }
     },
-    play_card: (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
 
-      const result = CardLogic.playCard(
-        gameState,
-        playerIndex,
-        socket.id,
-        cardId,
-        x,
-        y,
-        targetCastleIndex,
-        {
-          addLog,
-          broadcastState,
-          setPhase,
-          alignHireArea,
-          createActionTokensForPlayer,
-          updateAvailableActions,
-          drawCards: (pIdx: number, count: number) => {
-            const sid = gameState.seats[pIdx];
-            if (sid) drawCards(sid, count);
-          },
-          discardOpponentCard: (pIdx: number) => {
-            const opponentId = gameState.seats[1 - pIdx];
-            if (opponentId) {
-              const opponent = gameState.players[opponentId];
-              if (opponent.hand.length > 0) {
-                const randomIndex = Math.floor(Math.random() * opponent.hand.length);
-                const discarded = opponent.hand.splice(randomIndex, 1)[0];
-                gameState.discardPiles.action.push(discarded);
-              }
-            }
-          }
-        }
-      );
-
-      if (!result.success) {
-        socket.emit('error_message', result.reason);
-        return;
-      }
-
-      broadcastState();
-      checkBotTurn();
-    },
     cancel_play_card: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex) return;
@@ -2552,7 +2551,7 @@ const broadcastState = () => {
       }
     });
 
-    socket.on('play_card', ({ cardId, x, y, targetCastleIndex }) => handlers.play_card(socket, { cardId, x, y, targetCastleIndex }));
+    socket.on('play_card', ({ cardId, x, y, targetCastleIndex }) => migratedHandlers.play_card(socket, { cardId, x, y, targetCastleIndex }));
 
     socket.on('undo_play', () => {
       const player = gameState.players[socket.id];
@@ -2742,6 +2741,8 @@ const broadcastState = () => {
 
     socket.on('select_token', (tokenId: string) => handlers.select_token(socket, tokenId));
 
+    socket.on('select_target', (targetId: string) => handlers.select_target(socket, targetId));
+
     socket.on('move_token_to_cell', ({ q, r }) => handlers.move_token_to_cell(socket, { q, r }));
 
     socket.on('steal_first_player', () => {
@@ -2756,17 +2757,6 @@ const broadcastState = () => {
     });
 
     socket.on('pass_action', () => handlers.pass_action(socket));
-
-    socket.on('select_target', (targetId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedTargetId = targetId;
-        io.emit('state_update', gameState);
-      }
-    });
 
     socket.on('finish_resolve', () => handlers.finish_resolve(socket));
 
