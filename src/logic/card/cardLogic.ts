@@ -1,6 +1,8 @@
 import { GameState, TableCard, Token, ActionCard, HeroCard, GamePhase, Card } from '../../shared/types';
 import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
+import { applyEnhancementImmediateEffect } from './enhancementImmediateEffects';
+import { requiresSubstituteSelection } from './enhancementModifiers';
 
 /**
  * 卡牌效果引擎
@@ -139,13 +141,12 @@ export class CardLogic {
       gameState.movedTokens = undefined;
       gameState.movementHistory = undefined;
 
-      const { logs, nextPhase } = this.applyActionCard(card as ActionCard, gameState, playerIndex);
+      const { logs, nextPhase } = this.applyActionCard(
+        card as ActionCard,
+        gameState,
+        playerIndex
+        );
       logs.forEach(log => helpers.addLog(log, playerIndex));
-
-      // 特殊处理：间谍
-      if (card.name === '间谍') {
-        helpers.discardOpponentCard(playerIndex);
-      }
 
       if (nextPhase) {
         helpers.setPhase(nextPhase as GamePhase);
@@ -203,8 +204,12 @@ export class CardLogic {
     
     // 生成 Token
     const castleIdx = (targetCastleIndex !== undefined) ? targetCastleIndex : 0;
-    const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     const castleCoord = playerCastles[castleIdx] || playerCastles[0];
+    if (!castleCoord) {
+      // Fallback if no castle found
+      return { tableCard, token: { id: generateId(), x: 0, y: 0, image: '', label: '', lv: 1, time: 0 }, logs: [...logs, '错误：找不到王城坐标'] };
+    }
     const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
     
     const token: Token = {
@@ -227,7 +232,11 @@ export class CardLogic {
   static applyActionCard(
     card: ActionCard, 
     gameState: GameState, 
-    playerIndex: number
+    playerIndex: number,
+    helpers?: {
+      addLog?: (message: string, playerIndex?: number) => void;
+      discardOpponentCard?: (playerIndex: number) => void;
+    }
   ): { logs: string[]; nextPhase?: string } {
     const logs: string[] = [];
     let nextPhase: string | undefined;
@@ -235,25 +244,20 @@ export class CardLogic {
     if (gameState.phase === 'action_play' || gameState.phase === 'setup') {
       logs.push(`玩家${playerIndex + 1}打出了${card.name}`);
       nextPhase = 'action_select_option';
-    } else if (gameState.phase === 'action_select_card') {
+    } else if (
+      gameState.phase === 'action_select_card' ||
+      gameState.phase === 'action_play_enhancement'
+    ) {
       logs.push(`玩家${playerIndex + 1}打出了增强卡${card.name}`);
-      
-      // 立即效果处理
-      if (card.name === '回复' || card.name === '治疗药水') {
-        const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
-        if (heroToken) {
-          const targetCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
-          if (targetCard && targetCard.damage && targetCard.damage > 0) {
-            targetCard.damage -= 1;
-            logs.push(`玩家${playerIndex + 1}使用了回复，英雄恢复1点生命`);
-          }
-        }
-      } else if (card.name === '间谍') {
-        // 间谍逻辑涉及随机弃牌，建议在 server.ts 处理或返回指令
-        // 这里仅记录日志
-      }
 
-      if (card.name === '替身') {
+      applyEnhancementImmediateEffect(card.name || '', {
+        gameState,
+        playerIndex,
+        addLog: (message: string) => logs.push(message),
+        discardOpponentCard: helpers?.discardOpponentCard || (() => {})
+      });
+
+      if (requiresSubstituteSelection(card.name)) {
         nextPhase = 'action_select_substitute';
       } else {
         nextPhase = 'action_select_action';

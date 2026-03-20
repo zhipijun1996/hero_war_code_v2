@@ -2,6 +2,12 @@
 import { ActionEngine } from './src/logic/action/actionEngine.ts';
 import { HeroEngine } from './src/logic/hero/heroEngine.ts';
 import { CardLogic } from './src/logic/card/cardLogic.ts';
+import {
+  isEnhancementCardName,
+  getMoveBonusFromEnhancement,
+  getAttackRangeBonusFromEnhancement,
+  getAttackDamageBonusFromEnhancement
+} from './src/logic/card/enhancementModifiers';
 
 export const createHandlers = (deps: any) => {
   const {
@@ -34,8 +40,8 @@ export const createHandlers = (deps: any) => {
 
   return {
     play_card: (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
 
       const result = CardLogic.playCard(
@@ -54,14 +60,14 @@ export const createHandlers = (deps: any) => {
           createActionTokensForPlayer,
           updateAvailableActions,
           drawCards: (pIdx: number, count: number) => {
-            const sid = gameState.seats[pIdx];
+            const sid = gameState.seats?.[pIdx];
             if (sid) drawCards(sid, count);
           },
           discardOpponentCard: (pIdx: number) => {
-            const opponentId = gameState.seats[1 - pIdx];
+            const opponentId = gameState.seats?.[1 - pIdx];
             if (opponentId) {
-              const opponent = gameState.players[opponentId];
-              if (opponent.hand.length > 0) {
+              const opponent = gameState.players?.[opponentId];
+              if (opponent && opponent.hand.length > 0) {
                 const randomIndex = Math.floor(Math.random() * opponent.hand.length);
                 const discarded = opponent.hand.splice(randomIndex, 1)[0];
                 gameState.discardPiles.action.push(discarded);
@@ -80,7 +86,7 @@ export const createHandlers = (deps: any) => {
       checkBotTurn();
     },
     discard_card: (socket: any, cardId: string) => {
-      const player = gameState.players[socket.id];
+      const player = gameState.players?.[socket.id];
       if (!player) return;
 
       if (gameState.phase !== 'discard') {
@@ -138,7 +144,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
       const playerIndex = isPlayer1 ? 0 : 1;
       
       const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, {
@@ -155,15 +161,15 @@ export const createHandlers = (deps: any) => {
       checkBotTurn();
     },
     move_token_to_cell: (socket: any, { q, r }: { q: number, r: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
     select_hire_cost: (socket: any, cost: number) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (playerIndex === gameState.activePlayerIndex) {
@@ -172,8 +178,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     select_token: (socket: any, tokenId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex) {
@@ -223,8 +229,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     select_option: (socket: any, option: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if ((gameState.phase === 'action_select_option' || gameState.phase === 'shop') && playerIndex === gameState.activePlayerIndex) {
@@ -237,7 +243,7 @@ export const createHandlers = (deps: any) => {
           return;
         }
         if (option === 'hire') {
-          const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+          const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
           const anyCastleFree = playerCastles.some((cCoord: any) => {
             const pos = hexToPixel(cCoord.q, cCoord.r);
             return !gameState.tokens.some((t: any) => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
@@ -376,8 +382,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     select_target: (socket: any, targetId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       console.log(`[DEBUG] Received select_target: ${targetId}`);
      
@@ -402,8 +408,7 @@ export const createHandlers = (deps: any) => {
 
       const card = player.hand[cardIndex];
       
-      const enhancementNames = ['冲刺', '回复', '间谍', '替身', '远攻', '强击', '冲刺卷轴', '治疗药水', '远程战术'];
-      if (!enhancementNames.includes(card.name || '')) {
+      if (!isEnhancementCardName(card.name || '')) {
         socket.emit('error_message', '只能打出增强卡');
         return;
       }
@@ -412,22 +417,24 @@ export const createHandlers = (deps: any) => {
       gameState.discardPiles.action.push(card);
       gameState.activeEnhancementCardId = card.id;
 
-      if (card.name === '回复' || card.name === '治疗药水') {
-        const heroToken = gameState.tokens.find((t: any) => t.id === gameState.activeHeroTokenId);
-        if (heroToken) {
-          const targetCard = gameState.tableCards.find((c: any) => c.id === heroToken.boundToCardId);
-          if (targetCard && targetCard.damage && targetCard.damage > 0) {
-            targetCard.damage -= 1;
-            const damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === heroToken.boundToCardId);
-            if (damageCounter) damageCounter.value -= 1;
-            addLog(`玩家${playerIndex + 1}使用回复卡，恢复了${targetCard.heroClass}的1点生命值`, playerIndex);
-          }
+      const { logs, nextPhase } = CardLogic.applyActionCard(
+        card as any,
+        gameState,
+        playerIndex,
+        {
+          addLog,
+          discardOpponentCard
         }
-      } else if (card.name === '间谍') {
-        discardOpponentCard(playerIndex);
-        addLog(`玩家${playerIndex + 1}使用了间谍，随机弃掉对方一张手牌`, playerIndex);
+      );
+
+      logs.forEach((log: string) => addLog(log, playerIndex));
+
+      if (nextPhase) {
+        gameState.phase = nextPhase as any;
       }
+
       broadcastState();
+      checkBotTurn();
     },
 
     pass_enhancement: (socket: any) => {
@@ -458,7 +465,7 @@ export const createHandlers = (deps: any) => {
 
       if (gameState.activeActionType === 'move') {
         let mv = levelData?.mv || 1;
-        if (enhancementCard?.name === '冲刺' || enhancementCard?.name === '冲刺卷轴') mv += 1;
+        mv += getMoveBonusFromEnhancement(enhancementCard?.name);
         
         const hex = pixelToHex(heroToken.x, heroToken.y);
         gameState.reachableCells = getReachableHexes(hex, mv, playerIndex, gameState);
@@ -468,7 +475,7 @@ export const createHandlers = (deps: any) => {
         gameState.notification = null;
       } else if (gameState.activeActionType === 'attack') {
         let ar = levelData?.ar || 1;
-        if (enhancementCard?.name === '远攻' || enhancementCard?.name === '远程战术') ar += 1;
+        ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
         
         const hex = pixelToHex(heroToken.x, heroToken.y);
         gameState.reachableCells = getAttackableHexes(hex.q, hex.r, ar, playerIndex, gameState, heroCard?.level || 1);
@@ -518,8 +525,8 @@ export const createHandlers = (deps: any) => {
       checkBotTurn();
     },
     pass_action: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_play' && playerIndex === gameState.activePlayerIndex) {
@@ -534,8 +541,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     pass_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -547,8 +554,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     declare_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -572,8 +579,8 @@ export const createHandlers = (deps: any) => {
       }
     },
     declare_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {

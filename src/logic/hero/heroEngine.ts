@@ -81,8 +81,9 @@ export class HeroEngine {
     const card = gameState.hireAreaCards[cardIndex];
 
     // 3. 检查位置
-    const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     const castleCoord = playerCastles[targetCastleIndex] || playerCastles[0];
+    if (!castleCoord) return { success: false, reason: '雇佣失败：找不到王城坐标。' };
     const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
     const castleOccupied = gameState.tokens.some(t => Math.abs(t.x - castlePos.x) < 10 && Math.abs(t.y - castlePos.y) < 10);
     if (castleOccupied) {
@@ -171,12 +172,13 @@ export class HeroEngine {
   ): { success: boolean; reason?: string } {
     if (gameState.phase !== 'revival') return { success: false, reason: '当前不是复活阶段。' };
 
-    if (!gameState.pendingRevivals) return { success: false, reason: '没有待复活的英雄。' };
+    if (!gameState.pendingRevivals || gameState.pendingRevivals.length === 0) return { success: false, reason: '没有待复活的英雄。' };
     const revivalIndex = gameState.pendingRevivals.findIndex(r => r.heroCardId === heroCardId && r.playerIndex === playerIndex);
     if (revivalIndex === -1) return { success: false, reason: '找不到该英雄的复活请求。' };
 
-    const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     const castleCoord = playerCastles[targetCastleIndex] || playerCastles[0];
+    if (!castleCoord) return { success: false, reason: '找不到王城坐标。' };
     const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
 
     const occupied = gameState.tokens.some(t => Math.abs(t.x - castlePos.x) < 10 && Math.abs(t.y - castlePos.y) < 10);

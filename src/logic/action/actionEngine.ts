@@ -4,6 +4,11 @@ import { getPathDist, resolveTileEffect, getReachableHexes, isTargetInAttackRang
 import { isHeroDead } from '../combat/combatLogic';
 import { HEROES_DATABASE } from '../../shared/config/heroes';
 import { REWARDS } from '../../shared/hex/tileLogic';
+import {
+  getMoveBonusFromEnhancement,
+  getAttackRangeBonusFromEnhancement,
+  getAttackDamageBonusFromEnhancement
+} from '../card/enhancementModifiers';
 
 const heroesDatabase = HEROES_DATABASE;
 
@@ -120,10 +125,10 @@ export class ActionEngine {
             }
 
             // Increment action count for this token if it's the first move in this action
-            const hasMovedThisAction = gameState.movementHistory?.some(step => 
+            const hasMovedThisAction = gameState.movementHistory?.some((step, idx) => 
               step.tokenId === token.id && 
               step.mvCost > 0 && 
-              step !== gameState.movementHistory![gameState.movementHistory!.length - 1]
+              idx < gameState.movementHistory!.length - 1
             );
             if (!hasMovedThisAction) {
               if (!gameState.roundActionCounts[token.id]) gameState.roundActionCounts[token.id] = 0;
@@ -148,7 +153,7 @@ export class ActionEngine {
           helpers.checkAndResetChanting(token.id);
 
           // Handle attack on hex
-          const monster = gameState.map!.monsters.find(m => m.q === q && m.r === r);
+          const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
           if (monster) {
             const pos = hexToPixel(q, r);
             const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
@@ -215,7 +220,7 @@ export class ActionEngine {
             }
           }
           
-          const enemyCastle = gameState.map!.castles[1 - playerIndex as 0 | 1].find(c => c.q === q && c.r === r);
+          const enemyCastle = gameState.map?.castles?.[1 - playerIndex as 0 | 1]?.find(c => c.q === q && c.r === r);
           if (enemyCastle) {
             gameState.castleHP[1 - playerIndex] -= 1;
             const heroCard = gameState.tableCards.find(c => c.id === token.boundToCardId);
@@ -271,7 +276,7 @@ export class ActionEngine {
           helpers.checkAndResetChanting(token.id);
 
           // Handle attack on hex
-          const monster = gameState.map!.monsters.find(m => m.q === q && m.r === r);
+          const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
           if (monster) {
             const pos = hexToPixel(q, r);
             const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
@@ -284,11 +289,12 @@ export class ActionEngine {
               }
               
               let damage = 1; // Base damage
-              const enhancementCard = gameState.activeEnhancementCardId 
-                ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
+              const enhancementCard = gameState.activeEnhancementCardId
+                ? (gameState.playAreaCards.find(c => c.id === gameState.activeEnhancementCardId) ||
+                   gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
                 : null;
-              if (enhancementCard?.name === '强击') damage += 1;
-              damageCounter.value += damage;
+
+              damage += getAttackDamageBonusFromEnhancement(enhancementCard?.name);
               
               const heroCard = gameState.tableCards.find(c => c.id === token.boundToCardId);
               if (heroCard) {
@@ -395,7 +401,7 @@ export class ActionEngine {
           
           // Attack enemy castle
           const enemyIndex = 1 - playerIndex;
-          const enemyCastles = gameState.map!.castles[enemyIndex as 0 | 1];
+          const enemyCastles = gameState.map?.castles?.[enemyIndex as 0 | 1] || [];
           const isEnemyCastle = enemyCastles.some(c => c.q === q && c.r === r);
           if (isEnemyCastle) {
             const enemyUnit = gameState.tokens.find(t => {
@@ -606,7 +612,7 @@ export class ActionEngine {
       let openedAny = false;
       for (const token of playerTokens) {
         const hex = pixelToHex(token.x, token.y);
-        const chest = gameState.map!.chests.find(ch => ch.q === hex.q && ch.r === hex.r);
+        const chest = gameState.map?.chests?.find(ch => ch.q === hex.q && ch.r === hex.r);
         if (chest) {
           const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - token.x) < 10 && Math.abs(c.y - token.y) < 10);
           if (!hasTimer) {
@@ -760,10 +766,12 @@ export class ActionEngine {
       const levelData = heroData?.levels?.[heroCard?.level || 1];
       
       let ar = levelData?.ar || 1;
-      const enhancementCard = gameState.activeEnhancementCardId 
-        ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
+      const enhancementCard = gameState.activeEnhancementCardId
+        ? (gameState.playAreaCards.find(c => c.id === gameState.activeEnhancementCardId) ||
+          gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
         : null;
-      if (enhancementCard?.name === '远攻' || enhancementCard?.name === '远程战术') ar += 1;
+
+      ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
 
       const attackerHex = pixelToHex(heroToken.x, heroToken.y);
       gameState.reachableCells = getAttackableHexes(attackerHex.q, attackerHex.r, ar, playerIndex, gameState, heroCard?.level || 1);
@@ -777,10 +785,12 @@ export class ActionEngine {
       const levelData = heroData?.levels?.[heroCard?.level || 1];
       
       let mv = levelData?.mv || 2;
-      const enhancementCard = gameState.activeEnhancementCardId 
-        ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
+      const enhancementCard = gameState.activeEnhancementCardId
+        ? (gameState.playAreaCards.find(c => c.id === gameState.activeEnhancementCardId) ||
+          gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
         : null;
-      if (enhancementCard?.name === '冲刺' || enhancementCard?.name === '冲刺卷轴') mv += 1;
+
+      mv += getMoveBonusFromEnhancement(enhancementCard?.name);
 
       const currentHex = pixelToHex(heroToken.x, heroToken.y);
       gameState.reachableCells = getReachableHexes(currentHex, mv, playerIndex, gameState);
@@ -852,7 +862,7 @@ export class ActionEngine {
       
       // Count free castles for each player
       for (let pIdx = 0; pIdx < 2; pIdx++) {
-        const playerCastles = gameState.map!.castles[pIdx as 0 | 1];
+        const playerCastles = gameState.map?.castles?.[pIdx as 0 | 1] || [];
         for (const cCoord of playerCastles) {
           const pos = hexToPixel(cCoord.q, cCoord.r);
           const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
@@ -888,7 +898,7 @@ export class ActionEngine {
           
           // Refresh monsters/chests/traps
           const hex = pixelToHex(counter.x, counter.y);
-          const isTrap = gameState.map!.traps?.some(t => t.q === hex.q && t.r === hex.r);
+          const isTrap = gameState.map?.traps?.some(t => t.q === hex.q && t.r === hex.r);
           if (isTrap) {
             if (counter.value >= 2) {
               countersToRemove.push(counter.id);
@@ -992,7 +1002,7 @@ export class ActionEngine {
              gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
           : null;
         let ar = attackerLevelData?.ar || 1;
-        if (enhancementCard?.name === '远攻' || enhancementCard?.name === '远程战术') ar += 1;
+        ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
         if (gameState.selectedOption === 'turret_attack') ar += 1;
 
         const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
@@ -1026,7 +1036,7 @@ export class ActionEngine {
           const parts = targetId.split('_');
           const cq = parseInt(parts[1]);
           const cr = parseInt(parts[2]);
-          const castleIdx = (cq === 0 && cr === -4) || (gameState.map?.castles[0]?.some(c => c.q === cq && c.r === cr)) ? 0 : 1;
+          const castleIdx = (cq === 0 && cr === -4) || (gameState.map?.castles?.[0]?.some(c => c.q === cq && c.r === cr)) ? 0 : 1;
           
           if (castleIdx === playerIndex) {
             socket.emit('error_message', '不能攻击自己的城堡');

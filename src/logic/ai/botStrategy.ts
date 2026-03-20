@@ -98,7 +98,7 @@ export class BotStrategy {
   private static decideRevivalAction(gameState: GameState, playerIndex: number): BotAction {
     const pending = gameState.pendingRevivals?.find(r => r.playerIndex === playerIndex);
     if (pending) {
-      const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+      const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
       let freeCastleIdx = -1;
       for (let i = 0; i < playerCastles.length; i++) {
         const pos = hexToPixel(playerCastles[i].q, playerCastles[i].r);
@@ -130,7 +130,7 @@ export class BotStrategy {
         const heroCard = sortedHeroes[0];
         
         // Find a free castle
-        const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+        const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
         let freeCastleIdx = 0;
         for (let i = 0; i < playerCastles.length; i++) {
           const cCoord = playerCastles[i];

@@ -75,8 +75,8 @@ const getHeroBackImage = (level: number) => {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 const getPlayerIndex = (socketId: string) => {
-  if (gameState.seats[0] === socketId) return 0;
-  if (gameState.seats[1] === socketId) return 1;
+  if (gameState.seats?.[0] === socketId) return 0;
+  if (gameState.seats?.[1] === socketId) return 1;
   return -1;
 };
 
@@ -349,7 +349,7 @@ const broadcastState = () => {
     const totalHeroes = playerHeroes.length;
     
     // Check if any castle is free
-    const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     const anyCastleFree = playerCastles.some(cPos => {
       const pos = hexToPixel(cPos.q, cPos.r);
       return !gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
@@ -364,7 +364,7 @@ const broadcastState = () => {
     });
     const onChest = playerTokens.some(t => {
       const hex = pixelToHex(t.x, t.y);
-      return gameState.map!.chests.some(ch => ch.q === hex.q && ch.r === hex.r);
+      return gameState.map?.chests?.some(ch => ch.q === hex.q && ch.r === hex.r) || false;
     });
     (gameState as any).canOpenChest = onChest;
   };
@@ -376,7 +376,7 @@ const broadcastState = () => {
     console.log(`checkBotTurn: phase=${phase}, activePlayerIndex=${gameState.activePlayerIndex}`);
     
     if (phase === 'discard') {
-      gameState.seats.filter(id => id !== null).forEach(id => {
+      gameState.seats?.filter(id => id !== null).forEach(id => {
         const player = gameState.players[id!];
         if (player?.isBot && !player.discardFinished && player.hand) {
           const botSocket = { id: id!, emit: () => {}, broadcast: { emit: () => {} } };
@@ -393,14 +393,14 @@ const broadcastState = () => {
       return;
     }
 
-    const activePlayerId = gameState.seats[gameState.activePlayerIndex];
+    const activePlayerId = gameState.seats?.[gameState.activePlayerIndex];
     if (activePlayerId && gameState.players[activePlayerId]?.isBot) {
       const botPlayer = gameState.players[activePlayerId];
       if (!botPlayer || !botPlayer.hand) return;
       
       setTimeout(() => {
         if (!gameState.gameStarted) return;
-        const currentActiveId = gameState.seats[gameState.activePlayerIndex];
+        const currentActiveId = gameState.seats?.[gameState.activePlayerIndex];
         if (currentActiveId !== activePlayerId) return;
         if (!botPlayer || !botPlayer.hand) return;
 
@@ -522,7 +522,7 @@ const broadcastState = () => {
         const cardOwnerIndex = card.y > 0 ? 0 : 1;
         if (cardOwnerIndex === playerIndex) {
           const hex = pixelToHex(token.x, token.y);
-          const chest = gameState.map!.chests.find(ch => ch.q === hex.q && ch.r === hex.r);
+          const chest = gameState.map?.chests?.find(ch => ch.q === hex.q && ch.r === hex.r);
           if (chest) {
             // Check if already depleted
             const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - token.x) < 10 && Math.abs(c.y - token.y) < 10);
@@ -541,7 +541,9 @@ const broadcastState = () => {
               const deckKey = `treasure${chestType}` as keyof typeof gameState.decks;
               if (gameState.decks[deckKey] && (gameState.decks[deckKey] as any[]).length > 0) {
                 const treasureCard = (gameState.decks[deckKey] as any[]).pop()!;
-                const player = gameState.players[gameState.seats[playerIndex]!];
+                const seatId = gameState.seats?.[playerIndex];
+    if (!seatId) return;
+    const player = gameState.players[seatId];
                 if (player) {
                   player.hand.push(treasureCard);
                   addLog(`玩家${playerIndex + 1}在回合结束开启了${chestType}级宝箱，获得了${goldReward}金币和一张宝藏卡`, playerIndex);
@@ -579,7 +581,7 @@ const broadcastState = () => {
   };
 
   const createActionTokensForPlayer = (playerId: string) => {
-    const isPlayer1 = gameState.seats[0] === playerId;
+    const isPlayer1 = gameState.seats?.[0] === playerId;
     const playerIndex = isPlayer1 ? 0 : 1;
     const playerHeroes = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)));
     
@@ -643,12 +645,12 @@ const broadcastState = () => {
     setPhase('supply');
     addLog(`进入补给阶段`, -1);
     
-    if (gameState.seats[0]) drawCards(gameState.seats[0], 2);
-    if (gameState.seats[1]) drawCards(gameState.seats[1], 2);
+    if (gameState.seats?.[0]) drawCards(gameState.seats[0], 2);
+    if (gameState.seats?.[1]) drawCards(gameState.seats[1], 2);
 
     // Check for discard phase
-    const p1HandSize = gameState.seats[0] ? gameState.players[gameState.seats[0]]?.hand.length : 0;
-    const p2HandSize = gameState.seats[1] ? gameState.players[gameState.seats[1]]?.hand.length : 0;
+    const p1HandSize = (gameState.seats?.[0] && gameState.players[gameState.seats[0]]) ? gameState.players[gameState.seats[0]].hand.length : 0;
+    const p2HandSize = (gameState.seats?.[1] && gameState.players[gameState.seats[1]]) ? gameState.players[gameState.seats[1]].hand.length : 0;
 
     if (p1HandSize > 5 || p2HandSize > 5) {
       gameState.phase = 'discard';
@@ -657,6 +659,7 @@ const broadcastState = () => {
       startShopPhase();
     }
     broadcastState();
+    checkBotTurn();
   }
 
   function startShopPhase() {
@@ -689,7 +692,7 @@ const broadcastState = () => {
           const heroCard = gameState.tableCards.find(c => c.id === counter.boundToCardId);
           if (heroCard) {
             const playerIndex = heroCard.y > 0 ? 0 : 1;
-            const castles = gameState.map!.castles[playerIndex as 0 | 1];
+            const castles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
             const freeCastle = castles.find(hex => !gameState.tokens.some(t => {
               const tHex = pixelToHex(t.x, t.y);
               return tHex.q === hex.q && tHex.r === hex.r;
@@ -764,7 +767,7 @@ const broadcastState = () => {
     updateAvailableActions,
     drawCards,
     discardOpponentCard: (pIdx: number) => {
-      const opponentId = gameState.seats[1 - pIdx];
+      const opponentId = gameState.seats?.[1 - pIdx];
       if (opponentId) {
         const opponent = gameState.players[opponentId];
         if (opponent.hand.length > 0) {
@@ -791,8 +794,9 @@ const broadcastState = () => {
       }
     },
     revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : 1;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, {
         addLog,
@@ -808,8 +812,8 @@ const broadcastState = () => {
       checkBotTurn();
     },
     select_hire_cost: (socket: any, cost: number) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (playerIndex === gameState.activePlayerIndex) {
@@ -818,8 +822,8 @@ const broadcastState = () => {
       }
     },
     select_token: (socket: any, tokenId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex) {
@@ -1034,7 +1038,7 @@ const broadcastState = () => {
                   
                   const hasMonster = gameState.map!.monsters.some(m => m.q === currentQ && m.r === currentR && !gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - targetPos.x) < 10 && Math.abs(c.y - targetPos.y) < 10));
                   
-                  const hasEnemyCastle = gameState.map!.castles[1 - playerIndex as 0 | 1].some(c => c.q === currentQ && c.r === currentR);
+                  const hasEnemyCastle = gameState.map?.castles?.[1 - playerIndex as 0 | 1]?.some(c => c.q === currentQ && c.r === currentR) || false;
                   
                   if (hasEnemyToken || hasMonster || hasEnemyCastle) {
                     attackable.push({ q: currentQ, r: currentR });
@@ -1128,15 +1132,15 @@ const broadcastState = () => {
       }
     },
     move_token_to_cell: (socket: any, { q, r }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
     select_option: (socket: any, option: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if ((gameState.phase === 'action_select_option' || gameState.phase === 'shop') && playerIndex === gameState.activePlayerIndex) {
@@ -1149,7 +1153,7 @@ const broadcastState = () => {
           return;
         }
         if (option === 'hire') {
-          const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+          const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
           const anyCastleFree = playerCastles.some(cCoord => {
             const pos = hexToPixel(cCoord.q, cCoord.r);
             return !gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
@@ -1265,8 +1269,8 @@ const broadcastState = () => {
     },
 
     select_target: (socket: any, targetId: string) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       console.log(`[DEBUG] Received select_target: ${targetId}`);
      
@@ -1464,8 +1468,8 @@ const broadcastState = () => {
     },
 
     pass_action: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_play' && playerIndex === gameState.activePlayerIndex) {
@@ -1480,8 +1484,8 @@ const broadcastState = () => {
       }
     },
     pass_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -1493,8 +1497,8 @@ const broadcastState = () => {
       }
     },
     declare_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -1518,8 +1522,8 @@ const broadcastState = () => {
       }
     },
     declare_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -1557,8 +1561,8 @@ const broadcastState = () => {
       }
     },
     end_resolve_attack: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
@@ -1621,7 +1625,7 @@ const broadcastState = () => {
             const parts = gameState.selectedTargetId.split('_');
             const cq = parseInt(parts[1]);
             const cr = parseInt(parts[2]);
-            const castleIdx = (cq === 0 && cr === -4) || (gameState.map?.castles[0]?.some(c => c.q === cq && c.r === cr)) ? 0 : 1;
+            const castleIdx = (cq === 0 && cr === -4) || (gameState.map?.castles?.[0]?.some(c => c.q === cq && c.r === cr)) ? 0 : 1;
             
             const enhancementCard = gameState.activeEnhancementCardId 
               ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
@@ -1748,8 +1752,8 @@ const broadcastState = () => {
       }
     },
     end_resolve_attack_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_resolve_attack_counter' && playerIndex === gameState.activePlayerIndex) {
@@ -1856,8 +1860,8 @@ const broadcastState = () => {
       }
     },
     end_resolve_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'action_resolve_counter' && playerIndex === gameState.activePlayerIndex) {
@@ -1952,8 +1956,8 @@ const broadcastState = () => {
       }
     },
     finish_resolve: (socket: any) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if ((gameState.phase === 'action_select_option' || gameState.phase === 'shop') && playerIndex === gameState.activePlayerIndex) {
@@ -2100,8 +2104,12 @@ const broadcastState = () => {
               gameState.tableCards.push(tableCard);
 
               // Spawn Token
-              const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+              const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
               const castleCoord = playerCastles[0];
+              if (!castleCoord) {
+                console.error('No castle found for player', playerIndex);
+                return;
+              }
               const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
               if (tableCard.heroClass) {
                 gameState.tokens.push({
@@ -2245,8 +2253,9 @@ const broadcastState = () => {
       }
     },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: { cardId: string, goldAmount: number, targetCastleIndex: number }) => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : 1;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       const result = HeroEngine.hireHero(gameState, playerIndex, cardId, goldAmount, targetCastleIndex, {
         addLog,
@@ -2575,8 +2584,8 @@ const broadcastState = () => {
       const player = gameState.players[socket.id];
       if (!player) return;
       
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
@@ -2764,8 +2773,8 @@ const broadcastState = () => {
     socket.on('move_token_to_cell', ({ q, r }) => handlers.move_token_to_cell(socket, { q, r }));
 
     socket.on('steal_first_player', () => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (playerIndex !== -1 && playerIndex !== gameState.firstPlayerIndex) {
@@ -2788,8 +2797,8 @@ const broadcastState = () => {
     socket.on('declare_counter', () => handlers.declare_counter(socket));
 
     socket.on('cancel_defend_or_counter', () => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if ((gameState.phase === 'action_play_defense' || gameState.phase === 'action_play_counter') && playerIndex === gameState.activePlayerIndex) {
@@ -2809,8 +2818,8 @@ const broadcastState = () => {
     socket.on('end_resolve_counter', () => handlers.end_resolve_counter(socket));
 
     socket.on('next_shop', () => {
-      const isPlayer1 = gameState.seats[0] === socket.id;
-      const isPlayer2 = gameState.seats[1] === socket.id;
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
       if (gameState.phase === 'shop' && playerIndex === gameState.activePlayerIndex) {

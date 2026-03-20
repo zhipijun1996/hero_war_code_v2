@@ -14,10 +14,10 @@ export interface TileInfo {
  */
 export function getTileInfo(q: number, r: number, map: MapConfig): TileInfo {
   // 1. 王城
-  if (map.castles[0].some(c => c.q === q && c.r === r)) {
+  if (map.castles?.[0]?.some(c => c.q === q && c.r === r)) {
     return { type: 'castle', ownerIndex: 0 };
   }
-  if (map.castles[1].some(c => c.q === q && c.r === r)) {
+  if (map.castles?.[1]?.some(c => c.q === q && c.r === r)) {
     return { type: 'castle', ownerIndex: 1 };
   }
 
