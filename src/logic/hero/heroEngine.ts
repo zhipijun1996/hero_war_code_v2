@@ -23,6 +23,7 @@ export class HeroEngine {
       x: castlePos.x,
       y: castlePos.y,
       image: getHeroTokenImage(card.heroClass!),
+      heroClass: card.heroClass,
       label: `${card.heroClass} Lv${card.level || 1}`,
       lv: card.level || 1,
       time: 0,
@@ -181,7 +182,7 @@ export class HeroEngine {
     const occupied = gameState.tokens.some(t => Math.abs(t.x - castlePos.x) < 10 && Math.abs(t.y - castlePos.y) < 10);
     if (occupied) {
       return { success: false, reason: '王城已被占用，请选择其他位置。' };
-    }
+    } 
 
     const heroCard = gameState.tableCards.find(c => c.id === heroCardId);
     const token = gameState.tokens.find(t => t.boundToCardId === heroCardId);

@@ -36,8 +36,9 @@ export interface Token {
   lv: number;
   time: number;
   boundToCardId?: string;
+  heroClass?: string;
   type?: 'hero' | 'monster' | 'chest' | 'castle' | 'obstacle';
-}
+} 
 
 export interface Counter {
   id: string;

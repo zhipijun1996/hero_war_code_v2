@@ -452,6 +452,9 @@ const broadcastState = () => {
               handlers.pass_action(botSocket);
             }
             break;
+          case 'finish_action':
+            handlers.finish_action(botSocket);
+            break;            
           case 'finish_resolve':
             handlers.finish_resolve(botSocket);
             break;
@@ -1598,7 +1601,22 @@ const broadcastState = () => {
             }
 
             // Remove monster from map
-            gameState.map!.monsters = gameState.map!.monsters.filter(m => `monster_${m.q}_${m.r}` !== gameState.selectedTargetId);
+            // gameState.map!.monsters = gameState.map!.monsters.filter(m => `monster_${m.q}_${m.r}` !== gameState.selectedTargetId);
+            
+            // add timer counter
+            const monsterPos = hexToPixel(monster.q, monster.r);
+            const existingTimeCounter = gameState.counters.find(
+              c => c.type === 'time' && Math.abs(c.x - monsterPos.x) < 10 && Math.abs(c.y - monsterPos.y) < 10 
+            );
+            if(!existingTimeCounter) {
+              gameState.counters.push({
+                id: generateId(),
+                type: 'time',
+                x: monsterPos.x,
+                y: monsterPos.y,
+                value: 0
+              });
+            }
           } else if (isCastle) {
             const parts = gameState.selectedTargetId.split('_');
             const cq = parseInt(parts[1]);
@@ -2561,7 +2579,7 @@ const broadcastState = () => {
       const isPlayer2 = gameState.seats[1] === socket.id;
       const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
       
-      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend') && playerIndex === gameState.activePlayerIndex) {
+      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
         if (gameState.selectedTargetId) {
           gameState.selectedTargetId = null;
           broadcastState();

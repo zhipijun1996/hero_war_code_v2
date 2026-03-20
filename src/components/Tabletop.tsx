@@ -328,7 +328,7 @@ function ActionTokenNode({ token, onClick, isMyTurn, isSelected }: { token: any,
 }
 
 function TokenNode({ token, socket, onClick, isSelected, draggable, lastEvolvedId, onHexClick, isMyToken }: { token: Token; socket: Socket, onClick?: (id: string) => void, isSelected?: boolean, draggable?: boolean, lastEvolvedId?: string | null, onHexClick?: (q: number, r: number) => void, isMyToken?: boolean }) {
-  const [image] = useImage(token.heroClass ? getHeroTokenImage(token.heroClass) : 'https://image.pollinations.ai/prompt/A%20glowing%20golden%20star%20token%20fantasy%20anime%20art?nologo=true');
+  const [image] = useImage(token.image ||  'https://image.pollinations.ai/prompt/A%20glowing%20golden%20star%20token%20fantasy%20anime%20art?nologo=true');
   const groupRef = useRef<any>(null);
 
   useEffect(() => {
@@ -1104,9 +1104,14 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
 
     if (gameState.phase === 'action_resolve') {
       return (
-        <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-          完成结算 (Finish Resolve)
-        </button>
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+            撤回 (Undo)
+          </button>
+          <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
+            完成结算 (Finish Resolve)
+          </button>
+        </div>
       );
     }
 

@@ -141,6 +141,7 @@ export class ActionEngine {
               gameState.reachableCells = [];
             }
             helpers.broadcastState();
+            helpers.checkBotTurn();
           }
         } else if (gameState.selectedOption === 'turret_attack') {
           // Interrupt chanting when performing an action
@@ -779,7 +780,7 @@ export class ActionEngine {
       const enhancementCard = gameState.activeEnhancementCardId 
         ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
         : null;
-      if (enhancementCard?.name === '急行' || enhancementCard?.name === '快速移动') mv += 2;
+      if (enhancementCard?.name === '冲刺' || enhancementCard?.name === '冲刺卷轴') mv += 1;
 
       const currentHex = pixelToHex(heroToken.x, heroToken.y);
       gameState.reachableCells = getReachableHexes(currentHex, mv, playerIndex, gameState);

@@ -17,6 +17,7 @@ export type BotAction =
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
   | { type: 'finish_resolve' }
+  | { type: 'finish_action'}
   | { type: 'discard_card'; payload: { cardId: string } }
   | { type: 'finish_discard' }
   | { type: 'none' };
@@ -307,7 +308,7 @@ export class BotStrategy {
         }
         return { type: 'move_token_to_cell', payload: { tokenId: heroToken.id, q: bestCell.q, r: bestCell.r } };
       }
-      return { type: 'finish_resolve' };
+      return { type: 'finish_action' };
     } else if (gameState.activeActionType === 'attack') {
       if (gameState.reachableCells && gameState.reachableCells.length > 0) {
         let bestTargetId: string | null = null;
@@ -341,9 +342,9 @@ export class BotStrategy {
           return { type: 'select_target', payload: { targetId: bestTargetId } };
         }
       }
-      return { type: 'finish_resolve' };
+      return { type: 'finish_action' };
     }
-    return { type: 'finish_resolve' };
+    return { type: 'finish_action' };
   }
 
   private static decideActionPlayDefenseAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {

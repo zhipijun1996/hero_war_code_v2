@@ -412,7 +412,7 @@ export const createHandlers = (deps: any) => {
       gameState.discardPiles.action.push(card);
       gameState.activeEnhancementCardId = card.id;
 
-      if (card.name === '回复') {
+      if (card.name === '回复' || card.name === '治疗药水') {
         const heroToken = gameState.tokens.find((t: any) => t.id === gameState.activeHeroTokenId);
         if (heroToken) {
           const targetCard = gameState.tableCards.find((c: any) => c.id === heroToken.boundToCardId);
@@ -423,6 +423,9 @@ export const createHandlers = (deps: any) => {
             addLog(`玩家${playerIndex + 1}使用回复卡，恢复了${targetCard.heroClass}的1点生命值`, playerIndex);
           }
         }
+      } else if (card.name === '间谍') {
+        discardOpponentCard(playerIndex);
+        addLog(`玩家${playerIndex + 1}使用了间谍，随机弃掉对方一张手牌`, playerIndex);
       }
       broadcastState();
     },
