@@ -510,6 +510,7 @@ export class ActionEngine {
       gameState.notification = null;
     }
     helpers.broadcastState();
+    helpers.checkBotTurn();
   }
 
   /**
