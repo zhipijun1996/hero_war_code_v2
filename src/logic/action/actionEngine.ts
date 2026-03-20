@@ -577,6 +577,7 @@ export class ActionEngine {
       gameState.notification = null;
     }
     helpers.broadcastState();
+    helpers.checkBotTurn();
   }
 
   /**
@@ -706,11 +707,13 @@ export class ActionEngine {
       gameState.phase = 'action_options';
       gameState.notification = null;
       helpers.broadcastState();
+      helpers.checkBotTurn();
     } else if (gameState.phase === 'action_select_substitute') {
       gameState.activeHeroTokenId = heroTokenId;
       gameState.phase = 'action_select_action';
       gameState.notification = null;
       helpers.broadcastState();
+      helpers.checkBotTurn();
     }
   }
 
@@ -794,6 +797,7 @@ export class ActionEngine {
       gameState.notification = '确认进化 (Confirm evolve)';
     }
     helpers.broadcastState();
+    helpers.checkBotTurn();
   }
 
   /**

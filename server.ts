@@ -425,22 +425,22 @@ const broadcastState = () => {
             handlers.move_token_to_cell(botSocket, action.payload);
             break;
           case 'click_action_token':
-            if (gameState.phase === 'action_select_hero' || gameState.phase === 'action_select_substitute') {
-              handlers.select_hero_for_action(botSocket, action.payload.tokenId);
-            } else {
-              handlers.click_action_token(botSocket, action.payload.tokenId);
-            }
+            handlers.click_action_token(botSocket, action.payload.tokenId);
+            break;
+          case 'select_action_category':
+            handlers.select_action_category(botSocket, action.payload.category as any);
+            break;
+          case 'select_common_action':
+            handlers.select_common_action(botSocket, action.payload.action as any);
+            break;
+          case 'select_hero_for_action':
+            handlers.select_hero_for_action(botSocket, action.payload.tokenId);
+            break;
+          case 'select_hero_action':
+            handlers.select_hero_action(botSocket, action.payload.action as any);
             break;
           case 'select_option':
-            if (gameState.phase === 'action_select_category' || gameState.phase === 'action_options') {
-              handlers.select_action_category(botSocket, action.payload.option as any);
-            } else if (gameState.phase === 'action_common') {
-              handlers.select_common_action(botSocket, action.payload.option as any);
-            } else if (gameState.phase === 'action_select_action') {
-              handlers.select_hero_action(botSocket, action.payload.option as any);
-            } else {
-              handlers.select_option(botSocket, action.payload.option);
-            }
+            handlers.select_option(botSocket, action.payload.option);
             break;
           case 'select_target':
             handlers.select_target(botSocket, action.payload.targetId);

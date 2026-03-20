@@ -9,6 +9,10 @@ export type BotAction =
   | { type: 'hire_hero'; payload: { cardId: string; goldAmount: number; targetCastleIndex: number } }
   | { type: 'move_token_to_cell'; payload: { tokenId: string; q: number; r: number } }
   | { type: 'click_action_token'; payload: { tokenId: string } }
+  | { type: 'select_action_category'; payload: { category: string } }
+  | { type: 'select_common_action'; payload: { action: string } }
+  | { type: 'select_hero_for_action'; payload: { tokenId: string } }
+  | { type: 'select_hero_action'; payload: { action: string } }
   | { type: 'select_option'; payload: { option: string } }
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
@@ -40,7 +44,7 @@ export class BotStrategy {
 
       case 'action_select_category':
       case 'action_options':
-        return { type: 'select_option', payload: { option: 'direct_action' } };
+        return { type: 'select_action_category', payload: { category: 'direct_action' } };
 
       case 'action_common':
         return this.decideActionCommonAction(gameState, playerIndex);
@@ -231,11 +235,11 @@ export class BotStrategy {
     const gold = goldCounter ? goldCounter.value : 0;
     
     if (gold >= 2) {
-      return { type: 'select_option', payload: { option: 'recruit' } };
+      return { type: 'select_common_action', payload: { action: 'recruit' } };
     } else if (gold > 0) {
-      return { type: 'select_option', payload: { option: 'early_buy' } };
+      return { type: 'select_common_action', payload: { action: 'early_buy' } };
     } else {
-      return { type: 'select_option', payload: { option: 'seize_initiative' } };
+      return { type: 'select_common_action', payload: { action: 'seize_initiative' } };
     }
   }
 
@@ -248,7 +252,7 @@ export class BotStrategy {
     });
     if (myHeroTokens.length > 0) {
       const heroToken = myHeroTokens[Math.floor(Math.random() * myHeroTokens.length)];
-      return { type: 'click_action_token', payload: { tokenId: heroToken.id } }; // Reuse click_action_token for select_hero
+      return { type: 'select_hero_for_action', payload: { tokenId: heroToken.id } }; // Reuse click_action_token for select_hero
     }
     return { type: 'pass_action' };
   }
@@ -277,9 +281,9 @@ export class BotStrategy {
       }
       
       if (canAttack) {
-        return { type: 'select_option', payload: { option: 'attack' } };
+        return { type: 'select_hero_action', payload: { action: 'attack' } };
       } else {
-        return { type: 'select_option', payload: { option: 'move' } };
+        return { type: 'select_hero_action', payload: { action: 'move' } };
       }
     }
     return { type: 'pass_action' };
