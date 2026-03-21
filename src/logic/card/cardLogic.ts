@@ -59,7 +59,18 @@ export class CardLogic {
       discardOpponentCard: (pIdx: number) => void;
     }
   ): { success: boolean; reason?: string } {
-    const player = gameState.players[socketId];
+    if (playerIndex !== 0 && playerIndex !== 1) {
+      return { success: false, reason: '无效的玩家索引。' };
+    }
+
+    const resolvedPlayerId =
+      gameState.players[socketId]
+        ? socketId
+        : ((playerIndex === 0 || playerIndex === 1)
+            ? gameState.seats?.[playerIndex] || socketId
+            : socketId);
+
+    const player = resolvedPlayerId ? gameState.players[resolvedPlayerId] : undefined;
     if (!player) return { success: false, reason: '找不到玩家。' };
 
     const cardIndex = player.hand.findIndex(c => c.id === cardId);
@@ -76,13 +87,13 @@ export class CardLogic {
 
     // 3. 分支处理：英雄牌
     if (card.type === 'hero') {
-      const playedCount = gameState.heroPlayedCount[socketId] || 0;
+      const playedCount = gameState.heroPlayedCount[resolvedPlayerId] || 0;
       if (playedCount >= 2) {
         player.hand.push(card); // 放回手牌
         return { success: false, reason: '你已经打出了两名英雄。' };
       }
 
-      gameState.heroPlayedCount[socketId] = playedCount + 1;
+      gameState.heroPlayedCount[resolvedPlayerId] = playedCount + 1;
       const { tableCard, token, logs } = this.applyHeroCard(card as HeroCard, targetCastleIndex, gameState, playerIndex);
       logs.forEach(log => helpers.addLog(log, playerIndex));
 
@@ -94,8 +105,8 @@ export class CardLogic {
       gameState.counters.push({ id: generateId(), type: 'damage', x: tableCard.x! + 50, y: tableCard.y! + 180, value: 0, boundToCardId: tableCard.id });
 
       // 检查是否完成初始放置
-      if (gameState.heroPlayedCount[socketId] === 2) {
-        gameState.heroPlayed[socketId] = true;
+      if (gameState.heroPlayedCount[resolvedPlayerId] === 2) {
+        gameState.heroPlayed[resolvedPlayerId] = true;
         
         // 剩余英雄进入招募区
         const otherHeroes = player.hand.filter(c => c.type === 'hero');
@@ -144,7 +155,10 @@ export class CardLogic {
       const { logs, nextPhase } = this.applyActionCard(
         card as ActionCard,
         gameState,
-        playerIndex
+        playerIndex,{
+          addLog: helpers.addLog,
+          discardOpponentCard: helpers.discardOpponentCard
+        }
         );
       logs.forEach(log => helpers.addLog(log, playerIndex));
 

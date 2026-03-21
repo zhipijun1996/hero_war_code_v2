@@ -35,10 +35,15 @@ export const createHandlers = (deps: any) => {
     createActionTokensForPlayer,
     updateAvailableActions,
     drawCards,
-    discardOpponentCard
+    discardOpponentCard,
+    generateId,
+    getHeroTokenImage,
+    getHeroCardImage,
+    getHeroBackImage,
+    createInitialState
   } = deps;
 
-  return {
+  const handlers: any = {
     play_card: (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
       const isPlayer1 = gameState.seats?.[0] === socket.id;
       const isPlayer2 = gameState.seats?.[1] === socket.id;
@@ -617,5 +622,879 @@ export const createHandlers = (deps: any) => {
         checkBotTurn();
       }
     },
+    undo_play: (socket: any) => {
+      const player = gameState.players[socket.id];
+      if (!player) return;
+      
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
+        if (gameState.selectedTargetId) {
+          gameState.selectedTargetId = null;
+          broadcastState();
+        } else if (gameState.movementHistory && gameState.movementHistory.length > 0 && (!gameState.selectedTokenId || gameState.movementHistory[gameState.movementHistory.length - 1].tokenId === gameState.selectedTokenId)) {
+          const lastStep = gameState.movementHistory.pop()!;
+          const token = gameState.tokens.find((t: any) => t.id === lastStep.tokenId);
+          
+          if (token) {
+            if (!gameState.selectedTokenId) {
+              gameState.selectedTokenId = token.id;
+              if (gameState.globalMovementMovedTokens) {
+                gameState.globalMovementMovedTokens = gameState.globalMovementMovedTokens.filter((id: any) => id !== token.id);
+              }
+              
+              const card = gameState.tableCards.find((c: any) => c.id === token.boundToCardId);
+              if (card) {
+                const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
+                const levelData = heroData?.levels?.[card.level || 1];
+                let mv = levelData?.mv || 1;
+                if (gameState.selectedOption === 'sprint') mv += 1;
+                
+                const totalMvCost = gameState.movementHistory.filter((step: any) => step.tokenId === token.id).reduce((sum: any, step: any) => sum + step.mvCost, 0);
+                gameState.remainingMv = mv - totalMvCost;
+              }
+            } else {
+              gameState.remainingMv! += lastStep.mvCost;
+            }
+            
+            token.x = lastStep.fromX;
+            token.y = lastStep.fromY;
+            
+            const hasOtherMoves = gameState.movementHistory?.some((step: any) => step.tokenId === token.id && step.mvCost > 0);
+            if (!hasOtherMoves && lastStep.mvCost > 0) {
+              if (gameState.roundActionCounts[token.id]) {
+                gameState.roundActionCounts[token.id]--;
+              }
+            }
+            
+            if (lastStep.wasChanting) {
+              const hex = pixelToHex(token.x, token.y);
+              const magicCircle = gameState.magicCircles?.find((mc: any) => mc.q === hex.q && mc.r === hex.r);
+              if (magicCircle) {
+                magicCircle.state = 'chanting';
+                magicCircle.chantingTokenId = token.id;
+              }
+            }
+            
+            const hex = pixelToHex(token.x, token.y);
+            gameState.reachableCells = getReachableHexes(hex, gameState.remainingMv!, gameState);
+          }
+          broadcastState();
+        } else if (gameState.selectedTokenId) {
+          const deselectedTokenId = gameState.selectedTokenId;
+          gameState.selectedTokenId = null;
+          gameState.remainingMv = 0;
+          gameState.reachableCells = [];
+          
+          if (gameState.movementHistory && gameState.movementHistory.length > 0) {
+             const prevTokenId = gameState.movementHistory[gameState.movementHistory.length - 1].tokenId;
+             if (gameState.globalMovementMovedTokens) {
+               gameState.globalMovementMovedTokens = gameState.globalMovementMovedTokens.filter((id: any) => id !== deselectedTokenId);
+             }
+             if (gameState.globalMovementMovedTokens) {
+               gameState.globalMovementMovedTokens = gameState.globalMovementMovedTokens.filter((id: any) => id !== prevTokenId);
+             }
+          }
+          
+          broadcastState();
+        } else if (gameState.selectedOption) {
+          gameState.selectedOption = null;
+          gameState.selectedTokenId = null;
+          gameState.remainingMv = 0;
+          gameState.reachableCells = [];
+          gameState.globalMovementMovedTokens = [];
+          gameState.movementHistory = undefined;
+          broadcastState();
+        } else if (gameState.lastPlayedCardId) {
+          let cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
+          let card;
+          
+          if (cardIndex !== -1) {
+            card = gameState.playAreaCards.splice(cardIndex, 1)[0];
+          } else {
+            cardIndex = gameState.tableCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
+            if (cardIndex !== -1) {
+              card = gameState.tableCards.splice(cardIndex, 1)[0];
+            }
+          }
+
+          if (card) {
+            if (gameState.movedTokens) {
+              Object.entries(gameState.movedTokens).forEach(([tokenId, pos]: [string, any]) => {
+                const token = gameState.tokens.find((t: any) => t.id === tokenId);
+                if (token) {
+                  token.x = pos.x;
+                  token.y = pos.y;
+                }
+              });
+              gameState.movedTokens = undefined;
+            }
+
+            if (card.type === 'hero') {
+              gameState.tokens = gameState.tokens.filter((t: any) => t.boundToCardId !== card.id);
+              gameState.counters = gameState.counters.filter((c: any) => c.boundToCardId !== card.id);
+              gameState.heroPlayed[socket.id] = false;
+            }
+
+            player.hand.push({
+              id: card.id,
+              frontImage: card.frontImage,
+              backImage: card.backImage,
+              type: card.type,
+              name: card.name,
+              heroClass: card.heroClass,
+              level: card.level
+            });
+            if (gameState.phase !== 'action_defend') {
+              gameState.phase = 'action_play';
+            }
+            gameState.lastPlayedCardId = null;
+            gameState.selectedOption = null;
+            gameState.selectedTokenId = null;
+            gameState.remainingMv = 0;
+            gameState.reachableCells = [];
+            broadcastState();
+          }
+        }
+      }
+    },
+    undo_discard: (socket: any) => {
+      const player = gameState.players[socket.id];
+      if (!player || gameState.phase !== 'discard' || player.discardFinished || !player.discardHistory || player.discardHistory.length === 0) return;
+
+      const card = player.discardHistory.pop();
+      if (card) {
+        player.hand.push(card);
+        const discardIndex = gameState.discardPiles.action.findIndex((c: any) => c.id === card.id);
+        if (discardIndex !== -1) gameState.discardPiles.action.splice(discardIndex, 1);
+        io.emit('state_update', gameState);
+      }
+    },
+    steal_first_player: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (playerIndex !== -1 && playerIndex !== gameState.firstPlayerIndex) {
+        gameState.firstPlayerIndex = playerIndex;
+        io.emit('state_update', gameState);
+      }
+    },
+    clear_notification: (socket: any) => {
+      gameState.notification = null;
+      broadcastState();
+    },
+    cancel_defend_or_counter: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if ((gameState.phase === 'action_play_defense' || gameState.phase === 'action_play_counter') && playerIndex === gameState.activePlayerIndex) {
+        gameState.phase = 'action_defend';
+        gameState.notification = null;
+        broadcastState();
+        checkBotTurn();
+      }
+    },
+    next_shop: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (gameState.phase === 'shop' && playerIndex === gameState.activePlayerIndex) {
+        gameState.consecutivePasses = 0;
+        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+        broadcastState();
+        checkBotTurn();
+      }
+    },
+    pass_shop: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (gameState.phase === 'shop' && playerIndex === gameState.activePlayerIndex) {
+        gameState.consecutivePasses = (gameState.consecutivePasses || 0) + 1;
+        if (gameState.consecutivePasses >= 2) {
+          // @ts-ignore
+          handlers.proceed_phase(socket);
+        } else {
+          gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+          broadcastState();
+          checkBotTurn();
+        }
+      }
+    },
+    evolve_hero: (socket: any, cardId: string) => {
+      const card = gameState.tableCards.find((c: any) => c.id === cardId);
+      if (card && card.type === 'hero' && card.heroClass && card.level && card.level < 3) {
+        const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === card.id);
+        const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
+        const levelData = heroData?.levels?.[card.level.toString()];
+        const expNeeded = levelData?.xp;
+
+        if (expCounter && typeof expNeeded === 'number' && expNeeded > 0 && expCounter.value >= expNeeded) {
+          expCounter.value -= expNeeded;
+          card.level += 1;
+          card.frontImage = getHeroCardImage(card.heroClass, card.level);
+          card.backImage = getHeroBackImage(card.level);
+          
+          const token = gameState.tokens.find((t: any) => t.boundToCardId === card.id);
+          if (token) {
+            token.lv = card.level;
+            token.label = `${card.heroClass} Lv${card.level}`;
+          }
+          
+          addLog(`玩家${gameState.activePlayerIndex + 1}进化了${card.heroClass}到Lv${card.level}`, gameState.activePlayerIndex);
+          gameState.lastEvolvedId = card.id;
+          broadcastState();
+          
+          setTimeout(() => {
+            if (gameState.lastEvolvedId === card.id) {
+              gameState.lastEvolvedId = null;
+              broadcastState();
+            }
+          }, 2000);
+        }
+      }
+    },
+    flip_card: (socket: any, cardId: string) => {
+      let card = gameState.tableCards.find((c: any) => c.id === cardId);
+      if (!card) card = gameState.hireAreaCards.find((c: any) => c.id === cardId);
+      if (!card && gameState.playAreaCards) card = gameState.playAreaCards.find((c: any) => c.id === cardId);
+      
+      if (card) {
+        card.faceUp = !card.faceUp;
+        io.emit('card_flipped', { id: cardId, faceUp: card.faceUp });
+      }
+    },
+    add_counter: (socket: any, { type, x, y, value }: any) => {
+      const counter: any = { id: generateId(), type, x, y, value: value ?? 0 };
+      gameState.counters.push(counter);
+      io.emit('state_update', gameState);
+    },
+    update_counter: (socket: any, { id, delta }: any) => {
+      const counterIndex = gameState.counters.findIndex((c: any) => c.id === id);
+      if (counterIndex !== -1) {
+        const counter = gameState.counters[counterIndex];
+        counter.value += delta;
+        
+        if (counter.type === 'damage' && counter.boundToCardId) {
+          const card = gameState.tableCards.find((c: any) => c.id === counter.boundToCardId);
+          if (card) {
+            card.damage = counter.value;
+          }
+        }
+
+        if (counter.type === 'time' && counter.value >= 4) {
+          gameState.counters.splice(counterIndex, 1);
+          io.emit('state_update', gameState);
+        } else {
+          io.emit('counter_updated', { id, value: counter.value });
+        }
+      }
+    },
+    update_token_value: (socket: any, { id, field, delta }: any) => {
+      const token = gameState.tokens.find((t: any) => t.id === id);
+      if (token && (field === 'lv' || field === 'time')) {
+        token[field] += delta;
+        io.emit('state_update', gameState);
+      }
+    },
+    spawn_hero: (socket: any, { heroClass, level, x, y }: any) => {
+      if (level === 1) {
+        const token: any = {
+          id: generateId(),
+          x, y,
+          image: getHeroTokenImage(heroClass),
+          label: `${heroClass} Lv1`,
+          lv: 1,
+          time: 0
+        };
+        gameState.tokens.push(token);
+      } else {
+        const card: any = {
+          id: generateId(),
+          x, y,
+          frontImage: getHeroCardImage(heroClass, level),
+          backImage: getHeroBackImage(level),
+          type: 'hero',
+          faceUp: true
+        };
+        gameState.tableCards.push(card);
+      }
+      io.emit('state_update', gameState);
+    },
+    reset_game: (socket: any) => {
+      const currentPlayers = { ...gameState.players };
+      const currentSeats = [...gameState.seats];
+      
+      const newState = createInitialState(gameState.map);
+      Object.assign(gameState, newState);
+      gameState.players = currentPlayers;
+      gameState.seats = currentSeats;
+      Object.keys(currentPlayers).forEach(id => {
+        gameState.heroPlayed[id] = false;
+        gameState.heroPlayedCount[id] = 0;
+        if (gameState.players[id]) {
+          gameState.players[id].discardFinished = false;
+          gameState.players[id].hand = [];
+        }
+      });
+      io.emit('init', gameState);
+    },
+    add_bot: (socket: any, { seatIndex, difficulty }: { seatIndex: number, difficulty: number }) => {
+      if (!gameState.gameStarted && gameState.seats[seatIndex] === null) {
+        const botId = `bot_${generateId()}`;
+        gameState.seats[seatIndex] = botId;
+        gameState.players[botId] = {
+          id: botId,
+          name: `AI (Lv${difficulty})`,
+          hand: [],
+          isBot: true,
+          botDifficulty: difficulty
+        };
+        gameState.heroPlayed[botId] = false;
+        gameState.heroPlayedCount[botId] = 0;
+        io.emit('state_update', gameState);
+      }
+    },
+    remove_bot: (socket: any, { seatIndex }: { seatIndex: number }) => {
+      if (!gameState.gameStarted) {
+        const occupantId = gameState.seats[seatIndex];
+        if (occupantId && occupantId.startsWith('bot_')) {
+          gameState.seats[seatIndex] = null;
+          if (gameState.players[occupantId]) {
+            delete gameState.players[occupantId];
+          }
+          io.emit('state_update', gameState);
+        }
+      }
+    },
+    sit_down: (socket: any, { seatIndex, playerName }: { seatIndex: number, playerName: string }) => {
+      if (!gameState.gameStarted && gameState.seats[seatIndex] === null) {
+        const existingIndex = gameState.seats.indexOf(socket.id);
+        if (existingIndex !== -1) {
+          gameState.seats[existingIndex] = null;
+        }
+        gameState.seats[seatIndex] = socket.id;
+        
+        if (gameState.players[socket.id]) {
+          gameState.players[socket.id].name = playerName;
+        } else {
+          gameState.players[socket.id] = {
+            id: socket.id,
+            name: playerName,
+            hand: [],
+            discardFinished: false,
+            isBot: false
+          };
+        }
+        
+        io.emit('state_update', gameState);
+      } else if (gameState.gameStarted && gameState.seats[seatIndex] === null) {
+        // Reconnect logic
+        const oldPlayerId = Object.keys(gameState.players).find(id => gameState.players[id].name === playerName);
+        if (oldPlayerId) {
+          // Transfer data to new socket id
+          gameState.players[socket.id] = { ...gameState.players[oldPlayerId], id: socket.id };
+          if (gameState.heroPlayed[oldPlayerId] !== undefined) {
+             gameState.heroPlayed[socket.id] = gameState.heroPlayed[oldPlayerId];
+          }
+          if (gameState.heroPlayedCount[oldPlayerId] !== undefined) {
+             gameState.heroPlayedCount[socket.id] = gameState.heroPlayedCount[oldPlayerId];
+          }
+          gameState.seats[seatIndex] = socket.id;
+          io.emit('state_update', gameState);
+        }
+      }
+    },
+    start_game: (socket: any) => {
+      if (gameState.gameStarted) return;
+      
+      const occupiedSeats = gameState.seats.filter(id => id !== null) as string[];
+      if (occupiedSeats.length === 0) return;
+
+      gameState.gameStarted = true;
+      
+      // AI Substitute for Player 2 if only one player is present and no bot added
+      const botCount = Object.values(gameState.players).filter((p: any) => p.isBot).length;
+      if (occupiedSeats.length === 1 && botCount === 0) {
+        const emptySeatIndex = gameState.seats.indexOf(null);
+        if (emptySeatIndex !== -1 && emptySeatIndex < 2) {
+          const botId = `bot_player_${emptySeatIndex + 1}`;
+          gameState.seats[emptySeatIndex] = botId;
+          gameState.players[botId] = {
+            id: botId,
+            name: 'Computer (AI)',
+            hand: [],
+            isBot: true,
+            botDifficulty: 0
+          };
+          gameState.heroPlayed[botId] = false;
+          gameState.heroPlayedCount[botId] = 0;
+        }
+      }
+
+      const activeSeats = gameState.seats.filter(id => id !== null) as string[];
+      activeSeats.forEach(id => {
+        for (let i = 0; i < 4; i++) {
+          if (gameState.decks.hero.length > 0) {
+            gameState.players[id].hand.push(gameState.decks.hero.pop()!);
+          }
+        }
+      });
+      
+      broadcastState();
+      checkBotTurn();
+    },
+    update_image_config: (socket: any) => {
+      const newState = createInitialState();
+      Object.assign(gameState, newState);
+      io.emit('init', gameState);
+    },
+    update_map: (socket: any, mapConfig: any) => {
+      if (!gameState.gameStarted) {
+        const currentPlayers = { ...gameState.players };
+        const currentSeats = [...gameState.seats];
+        const newState = createInitialState(mapConfig);
+        Object.assign(gameState, newState);
+        gameState.players = currentPlayers;
+        gameState.seats = currentSeats;
+        Object.keys(currentPlayers).forEach(id => {
+          gameState.heroPlayed[id] = false;
+          gameState.heroPlayedCount[id] = 0;
+          if (gameState.players[id]) {
+            gameState.players[id].discardFinished = false;
+            gameState.players[id].hand = [];
+          }
+        });
+        io.emit('init', gameState);
+      }
+    },
+    draw_card: (socket: any) => {
+      // This is a simple draw card to hand
+      const player = gameState.players[socket.id];
+      if (!player) return;
+      
+      if (gameState.decks.action.length > 0) {
+        player.hand.push(gameState.decks.action.pop()!);
+        io.emit('state_update', gameState);
+      } else if (gameState.discardPiles.action.length > 0) {
+        gameState.decks.action = [...gameState.discardPiles.action].sort(() => Math.random() - 0.5);
+        gameState.discardPiles.action = [];
+        if (gameState.decks.action.length > 0) {
+          player.hand.push(gameState.decks.action.pop()!);
+          io.emit('state_update', gameState);
+        }
+      }
+    },
+    shuffle_deck: (socket: any, deckType: string) => {
+      let deck;
+      if (deckType === 'discard_action') {
+        deck = gameState.discardPiles.action;
+      } else {
+        deck = (gameState.decks as any)[deckType];
+      }
+      if (deck) {
+        deck.sort(() => Math.random() - 0.5);
+        io.emit('state_update', gameState);
+      }
+    },
+    take_card_to_hand: (socket: any, cardId: string) => {
+      const player = gameState.players[socket.id];
+      if (!player) return;
+
+      let cardIndex = gameState.tableCards.findIndex((c: any) => c.id === cardId);
+      if (cardIndex !== -1) {
+        const card = gameState.tableCards.splice(cardIndex, 1)[0];
+        player.hand.push(card);
+        io.emit('state_update', gameState);
+        return;
+      }
+      cardIndex = gameState.hireAreaCards.findIndex((c: any) => c.id === cardId);
+      if (cardIndex !== -1) {
+        const card = gameState.hireAreaCards.splice(cardIndex, 1)[0];
+        player.hand.push(card);
+        alignHireArea();
+        io.emit('state_update', gameState);
+        return;
+      }
+      if (gameState.playAreaCards) {
+        cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === cardId);
+        if (cardIndex !== -1) {
+          const card = gameState.playAreaCards.splice(cardIndex, 1)[0];
+          player.hand.push(card);
+          io.emit('state_update', gameState);
+          return;
+        }
+      }
+    },
+    move_item: (socket: any, { type, id, x, y }: any) => {
+      let item;
+      if (type === 'token') item = gameState.tokens.find((t: any) => t.id === id);
+      if (type === 'card') {
+        item = gameState.tableCards.find((c: any) => c.id === id);
+        if (!item) item = gameState.hireAreaCards.find((c: any) => c.id === id);
+        if (!item && gameState.playAreaCards) item = gameState.playAreaCards.find((c: any) => c.id === id);
+      }
+      if (type === 'counter') item = gameState.counters.find((c: any) => c.id === id);
+
+      if (item) {
+        if (x > 800 && y > 400) {
+          if (type === 'token') gameState.tokens = gameState.tokens.filter((t: any) => t.id !== id);
+          if (type === 'card') {
+            gameState.tableCards = gameState.tableCards.filter((c: any) => c.id !== id);
+            gameState.hireAreaCards = gameState.hireAreaCards.filter((c: any) => c.id !== id);
+            if (gameState.playAreaCards) gameState.playAreaCards = gameState.playAreaCards.filter((c: any) => c.id !== id);
+          }
+          if (type === 'counter') gameState.counters = gameState.counters.filter((c: any) => c.id !== id);
+          io.emit('state_update', gameState);
+          return;
+        }
+
+        if (type === 'card' && x > 100 && y < -350) {
+          const cardIndex = gameState.tableCards.findIndex((c: any) => c.id === id);
+          if (cardIndex !== -1) {
+            const card = gameState.tableCards.splice(cardIndex, 1)[0];
+            gameState.hireAreaCards.push(card);
+            alignHireArea();
+            io.emit('state_update', gameState);
+            return;
+          }
+        }
+
+        if (type === 'card' && gameState.phase === 'discard') {
+          socket.emit('error_message', '弃牌阶段无法移动卡牌。');
+          return;
+        }
+
+        const dx = x - item.x;
+        const dy = y - item.y;
+        item.x = x;
+        item.y = y;
+        socket.broadcast.emit('item_moved', { type, id, x, y });
+
+        if (type === 'card') {
+          gameState.counters.filter((c: any) => c.boundToCardId === id).forEach((c: any) => {
+            c.x += dx;
+            c.y += dy;
+            io.emit('item_moved', { type: 'counter', id: c.id, x: c.x, y: c.y });
+          });
+          gameState.tokens.filter((t: any) => t.boundToCardId === id).forEach((t: any) => {
+            t.x += dx;
+            t.y += dy;
+            io.emit('item_moved', { type: 'token', id: t.id, x: t.x, y: t.y });
+          });
+        }
+      }
+    },
+    disconnect: (socket: any) => {
+      console.log('User disconnected:', socket.id);
+      const existingIndex = gameState.seats.indexOf(socket.id);
+      if (existingIndex !== -1) {
+        gameState.seats[existingIndex] = null;
+      }
+      // Do not delete player data to allow reconnection by name
+      io.emit('state_update', gameState);
+    },
+    leave_seat: (socket: any) => {
+      if (!gameState.gameStarted) {
+        const existingIndex = gameState.seats.indexOf(socket.id);
+        if (existingIndex !== -1) {
+          gameState.seats[existingIndex] = null;
+          io.emit('state_update', gameState);
+        }
+      }
+    },
+    join_seat: (socket: any, { seatIndex, name, isBot }: any) => {
+      const existingIndex = gameState.seats.indexOf(socket.id);
+      if (existingIndex !== -1) {
+        gameState.seats[existingIndex] = null;
+      }
+
+      gameState.seats[seatIndex] = socket.id;
+      gameState.players[socket.id] = {
+        id: socket.id,
+        name: name || `玩家 ${seatIndex + 1}`,
+        hand: [],
+        discardFinished: false,
+        isBot: isBot || false
+      };
+      
+      gameState.heroPlayed[socket.id] = false;
+      gameState.heroPlayedCount[socket.id] = 0;
+
+      io.emit('state_update', gameState);
+      
+      const allSeatsFilled = gameState.seats.every(s => s !== null);
+      if (allSeatsFilled && !gameState.gameStarted) {
+        gameState.gameStarted = true;
+        gameState.round = 1;
+        gameState.phase = 'action_play';
+        gameState.activePlayerIndex = gameState.firstPlayerIndex;
+        
+        gameState.seats.forEach(sid => {
+          if (sid) {
+            createActionTokensForPlayer(sid);
+            drawCards(sid, 5);
+          }
+        });
+        
+        addLog('游戏开始！', -1);
+        io.emit('init', gameState);
+        checkBotTurn();
+      }
+    },
+    finish_resolve: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (gameState.phase === 'action_resolve' && playerIndex === gameState.activePlayerIndex) {
+        if (gameState.selectedOption === 'seize') {
+          gameState.firstPlayerIndex = playerIndex;
+          gameState.hasSeizedInitiative = true;
+          addLog(`玩家${playerIndex + 1}抢占了先手`, playerIndex);
+        } else if (gameState.selectedOption === 'spy') {
+          const opponentIndex = 1 - playerIndex;
+          const opponentId = gameState.seats?.[opponentIndex];
+          if (opponentId) {
+            const opponent = gameState.players[opponentId];
+            if (opponent && opponent.hand.length > 0) {
+              const randomIndex = Math.floor(Math.random() * opponent.hand.length);
+              const discarded = opponent.hand.splice(randomIndex, 1)[0];
+              gameState.discardPiles.action.push(discarded);
+              addLog(`玩家${playerIndex + 1}发动了间谍，弃掉了对手的一张手牌`, playerIndex);
+            }
+          }
+        } else if (gameState.selectedOption === 'heal') {
+          const heroId = gameState.selectedTargetId;
+          const card = gameState.tableCards.find((c: any) => c.id === heroId);
+          if (card) {
+            card.damage = 0;
+            const counter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === heroId);
+            if (counter) counter.value = 0;
+            addLog(`玩家${playerIndex + 1}回复了${card.heroClass}的生命`, playerIndex);
+          }
+        } else if (gameState.selectedOption === 'evolve') {
+          const heroId = gameState.selectedTargetId;
+          const card = gameState.tableCards.find((c: any) => c.id === heroId);
+          if (card && card.level < 3) {
+            const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === card.id);
+            const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
+            const levelData = heroData?.levels?.[card.level.toString()];
+            const expNeeded = levelData?.xp;
+            if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
+              expCounter.value -= expNeeded;
+              card.level += 1;
+              card.frontImage = getHeroCardImage(card.heroClass, card.level);
+              card.backImage = getHeroBackImage(card.level);
+              const token = gameState.tokens.find((t: any) => t.boundToCardId === card.id);
+              if (token) {
+                token.lv = card.level;
+                token.label = `${card.heroClass} Lv${card.level}`;
+              }
+              addLog(`玩家${playerIndex + 1}进化了${card.heroClass}到Lv${card.level}`, playerIndex);
+            }
+          }
+        } else if (gameState.selectedOption === 'hire') {
+          // Handled by hire_hero event, but we might need to close the resolve phase
+        }
+
+        // @ts-ignore
+        handlers.finish_action(socket);
+      }
+    },
+    finish_discard: (socket: any) => {
+      const player = gameState.players[socket.id];
+      if (!player || gameState.phase !== 'discard' || player.discardFinished) return;
+
+      if (player.hand.length > 5) {
+        socket.emit('error_message', `你还需要弃掉 ${player.hand.length - 5} 张牌。`);
+        return;
+      }
+
+      player.discardFinished = true;
+      player.discardHistory = []; // Clear history after finishing
+      addLog(`玩家 ${player.name} 完成了弃牌`, -1);
+
+      const allFinished = gameState.seats
+        .filter(id => id !== null)
+        .every(id => gameState.players[id!].discardFinished);
+
+      if (allFinished) {
+        // @ts-ignore
+        handlers.startShopPhase();
+      } else {
+        broadcastState();
+      }
+    },
+    end_resolve_attack: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
+        const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+        const targetId = gameState.selectedTargetId;
+        const targetToken = gameState.tokens.find((t: any) => t.id === targetId);
+        const targetCard = gameState.tableCards.find((c: any) => c.id === targetId);
+        
+        const defenseCard = gameState.playAreaCards.find((c: any) => c.name === '防御' || c.name === '闪避');
+        const isDefended = !!defenseCard;
+
+        if (targetToken && targetCard) {
+          if (isDefended) {
+            addLog(`${targetCard.heroClass} 使用了 ${defenseCard.name}，攻击被抵消`, 1 - playerIndex);
+          } else {
+            const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
+            const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === attackerCard?.heroClass);
+            const levelData = heroData?.levels?.[attackerCard?.level || 1];
+            let damage = levelData?.atk || 1;
+            
+            const enhancementCard = gameState.activeEnhancementCardId 
+              ? (gameState.playAreaCards.find((c: any) => c.id === gameState.activeEnhancementCardId) || 
+                 gameState.discardPiles.action.find((c: any) => c.id === gameState.activeEnhancementCardId))
+              : null;
+            damage += getAttackDamageBonusFromEnhancement(enhancementCard?.name);
+
+            targetCard.damage = (targetCard.damage || 0) + damage;
+            let damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === targetCard.id);
+            if (!damageCounter) {
+              damageCounter = { id: generateId(), type: 'damage', x: targetToken.x, y: targetToken.y, value: 0, boundToCardId: targetCard.id };
+              gameState.counters.push(damageCounter);
+            }
+            damageCounter.value = targetCard.damage;
+
+            addLog(`${attackerCard?.heroClass} 对 ${targetCard.heroClass} 造成了 ${damage} 点伤害`, playerIndex);
+
+            const targetHeroData = heroesDatabase?.heroes?.find((h: any) => h.name === targetCard.heroClass);
+            const targetMaxHP = targetHeroData?.levels?.[targetCard.level || 1]?.hp || 1;
+            if (targetCard.damage >= targetMaxHP) {
+              addLog(`${targetCard.heroClass} 阵亡了！`, 1 - playerIndex);
+              gameState.tokens = gameState.tokens.filter((t: any) => t.id !== targetToken.id);
+              gameState.counters.push({ id: generateId(), type: 'time', x: targetToken.x, y: targetToken.y, value: 0, boundToCardId: targetCard.id });
+              addReputation(playerIndex, REWARDS.KILL_HERO.REP, "击杀英雄");
+            }
+          }
+        } else if (targetId && targetId.startsWith('monster_')) {
+          const monster = gameState.map?.monsters?.find((m: any) => `monster_${m.q}_${m.r}` === targetId);
+          if (monster) {
+            addLog(`击败了等级 ${monster.level} 的怪物`, playerIndex);
+            const goldCounter = gameState.counters.find((c: any) => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
+            if (goldCounter) goldCounter.value += REWARDS.MONSTER[monster.level as 1|2|3].GOLD;
+            addReputation(playerIndex, REWARDS.MONSTER[monster.level as 1|2|3].REP, "击杀怪物");
+            
+            const pos = hexToPixel(monster.q, monster.r);
+            gameState.counters.push({ id: generateId(), type: 'time', x: pos.x, y: pos.y, value: 0 });
+          }
+        } else if (targetId && targetId.startsWith('castle_')) {
+          const castleIndex = parseInt(targetId.split('_')[1]);
+          gameState.castleHP[castleIndex as 0|1] -= 1;
+          addLog(`对王城 ${castleIndex + 1} 造成了 1 点伤害`, playerIndex);
+          addReputation(playerIndex, REWARDS.ATTACK_CASTLE.REP, "攻击王城");
+          
+          if (gameState.castleHP[castleIndex as 0|1] <= 0) {
+            gameState.notification = `游戏结束！玩家 ${playerIndex + 1} 攻陷了王城，获得胜利！`;
+            gameState.gameStarted = false;
+          }
+        }
+
+        // @ts-ignore
+        handlers.finish_action(socket);
+      }
+    },
+    end_resolve_attack_counter: (socket: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const isPlayer2 = gameState.seats?.[1] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      
+      if (gameState.phase === 'action_resolve_attack_counter' && playerIndex === gameState.activePlayerIndex) {
+        const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+        const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
+        const defenderCard = gameState.tableCards.find((c: any) => c.id === gameState.selectedTargetId);
+        const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
+
+        if (attackerToken && attackerCard && defenderCard && defenderToken) {
+          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === defenderCard.heroClass);
+          const levelData = heroData?.levels?.[defenderCard.level || 1];
+          const damage = levelData?.atk || 1;
+
+          attackerCard.damage = (attackerCard.damage || 0) + damage;
+          let damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === attackerCard.id);
+          if (!damageCounter) {
+            damageCounter = { id: generateId(), type: 'damage', x: attackerToken.x, y: attackerToken.y, value: 0, boundToCardId: attackerCard.id };
+            gameState.counters.push(damageCounter);
+          }
+          damageCounter.value = attackerCard.damage;
+
+          addLog(`${defenderCard.heroClass} 对 ${attackerCard.heroClass} 进行了反击，造成了 ${damage} 点伤害`, playerIndex);
+
+          const attackerHeroData = heroesDatabase?.heroes?.find((h: any) => h.name === attackerCard.heroClass);
+          const attackerMaxHP = attackerHeroData?.levels?.[attackerCard.level || 1]?.hp || 1;
+          if (attackerCard.damage >= attackerMaxHP) {
+            addLog(`${attackerCard.heroClass} 阵亡了！`, 1 - playerIndex);
+            gameState.tokens = gameState.tokens.filter((t: any) => t.id !== attackerToken.id);
+            gameState.counters.push({ id: generateId(), type: 'time', x: attackerToken.x, y: attackerToken.y, value: 0, boundToCardId: attackerCard.id });
+            addReputation(1 - playerIndex, REWARDS.KILL_HERO.REP, "反击击杀英雄");
+          }
+        }
+
+        // @ts-ignore
+        handlers.finish_action(socket);
+      }
+    },
+    end_resolve_counter: (socket: any) => {
+      // @ts-ignore
+      handlers.end_resolve_attack_counter(socket);
+    },
+    hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
+      const isPlayer1 = gameState.seats?.[0] === socket.id;
+      const playerIndex = isPlayer1 ? 0 : 1;
+      
+      const result = HeroEngine.hireHero(gameState, playerIndex, cardId, goldAmount, targetCastleIndex, {
+        addLog,
+        checkBotTurn,
+        generateId,
+        getHeroTokenImage,
+        broadcastState
+      });
+
+      if (!result.success) {
+        socket.emit('error_message', result.reason);
+        return;
+      }
+
+      broadcastState();
+      checkBotTurn();
+    },
+    cancel_play_card: (socket: any) => {
+      const player = gameState.players[socket.id];
+      if (!player || !gameState.lastPlayedCardId) return;
+
+      const cardId = gameState.lastPlayedCardId;
+      let cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === cardId);
+      let card;
+      if (cardIndex !== -1) {
+        card = gameState.playAreaCards.splice(cardIndex, 1)[0];
+      } else {
+        cardIndex = gameState.tableCards.findIndex((c: any) => c.id === cardId);
+        if (cardIndex !== -1) {
+          card = gameState.tableCards.splice(cardIndex, 1)[0];
+        }
+      }
+
+      if (card) {
+        player.hand.push(card);
+        gameState.lastPlayedCardId = null;
+        gameState.phase = 'action_play';
+        broadcastState();
+      }
+    },
   };
+
+  return handlers;
 };

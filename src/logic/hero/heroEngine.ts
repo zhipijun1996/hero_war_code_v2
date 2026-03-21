@@ -143,17 +143,29 @@ export class HeroEngine {
         if (token) token.used = true;
         gameState.activeActionTokenId = null;
       }
+
       gameState.phase = 'action_play';
       gameState.selectedOption = null;
       gameState.selectedTargetId = null;
+      gameState.selectedHireCost = null;
       gameState.lastPlayedCardId = null;
       gameState.selectedTokenId = null;
       gameState.remainingMv = 0;
       gameState.reachableCells = [];
       gameState.globalMovementMovedTokens = [];
+      gameState.canHire = false;
       gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+
       helpers.checkAllTokensUsed();
     } else {
+      gameState.selectedOption = null;
+      gameState.selectedTargetId = null;
+      gameState.selectedHireCost = null;
+      gameState.lastPlayedCardId = null;
+      gameState.selectedTokenId = null;
+      gameState.remainingMv = 0;
+      gameState.reachableCells = [];
+      gameState.canHire = false;
       gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
     }
 
