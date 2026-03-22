@@ -8,6 +8,9 @@ import { HEROES_DATABASE } from '../shared/config/heroes.ts';
 import { HEX_SIZE, hexToPixel, pixelToHex, hexRound } from '../shared/utils/hexUtils';
 import { ZoomIn, ZoomOut, Maximize, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getPhasePrompt } from './tabletop/getPhasePrompt';
+import { ActionPanel } from './tabletop/ActionPanel';
+import { handleHexClickLogic, handleTokenClickLogic, handleCardClickLogic } from './tabletop/targetClickHandlers';
 
 interface TabletopProps {
   socket: Socket;
@@ -913,155 +916,13 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
   const isActivePlayer = playerIndex === gameState.activePlayerIndex;
 
   const getPromptText = () => {
-    if (gameState.phase === 'setup') {
-      const playedCount = gameState.heroPlayedCount[playerId] || 0;
-      if (playerIndex !== -1 && playedCount < 2) {
-        if (selectedHeroCardId) {
-          return "准备阶段：请点击地图上的王城🏰以部署英雄";
-        }
-        return `准备阶段：请从手牌选择第 ${playedCount + 1} 个初始英雄`;
-      } else if (playerIndex !== -1 && playedCount >= 2) {
-        return "准备阶段：等待对手选择初始英雄";
-      }
-      return "准备阶段：等待双方选择初始英雄";
-    }
-
-    const activePlayerStr = `玩家${gameState.activePlayerIndex + 1}`;
-    const inactivePlayerStr = `玩家${1 - gameState.activePlayerIndex + 1}`;
-    
-    if (gameState.phase === 'action_play') {
-      return `行动阶段：请${activePlayerStr}点击行动Token`;
-    }
-    if (gameState.phase === 'action_options') {
-      return `请选择行动方式 (Select action type)`;
-    }
-    if (gameState.phase === 'action_common') {
-      return `请选择通用动作 (Select common action)`;
-    }
-    if (gameState.phase === 'action_select_card') {
-      return `请选择一张手牌进行行动 (Select a card for action)`;
-    }
-    if (gameState.phase === 'action_select_hero') {
-      return `请选择一个英雄进行行动 (Select a hero for action)`;
-    }
-    if (gameState.phase === 'action_select_action') {
-      return `请选择英雄的行动 (Select hero action)`;
-    }
-    if (gameState.phase === 'action_play_enhancement') {
-      return `请打出一张强化卡或跳过 (Play an enhancement card or pass)`;
-    }
-    if (gameState.phase === 'action_select_substitute') {
-      return `请选择替身英雄 (Select substitute hero)`;
-    }
-    if (gameState.phase === 'action_resolve') {
-      if (gameState.activePlayerIndex !== playerIndex) return `等待对方结算行动 (Waiting for opponent to resolve action)`;
-      if (gameState.activeActionType === 'move') {
-        return `请选择移动目标格子 (Select target hex for movement)`;
-      } else if (gameState.activeActionType === 'attack') {
-        return `请选择攻击目标 (Select attack target)`;
-      } else if (gameState.activeActionType === 'skill') {
-        return `请结算技能 (Resolve skill)`;
-      } else if (gameState.activeActionType === 'evolve') {
-        return `请结算进化 (Resolve evolve)`;
-      }
-      return `请结算行动 (Resolve action)`;
-    }
-    if (gameState.phase === 'action_select_option') {
-      if (gameState.activePlayerIndex !== playerIndex) return `等待对方选择行动 (Waiting for opponent to select action)`;
-      if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-        if (!gameState.selectedTokenId) return "请选择一个英雄Token进行移动 (Select a hero token to move)";
-        const token = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
-        return `正在移动 ${token?.label || '英雄'} (剩余移动力: ${gameState.remainingMv}) | Moving ${token?.label || 'Hero'} (Remaining MV: ${gameState.remainingMv})`;
-      }
-      if (!gameState.selectedOption) {
-        return `请选择行动选项 (Select Action Option)`;
-      } else if (gameState.selectedOption === 'heal') {
-        if (!gameState.selectedTargetId) {
-          return `回复：请在桌面上选择一个要回复的英雄 (Heal: Select a hero on the table)`;
-        } else {
-          return `已选择回复目标，请点击完成结算 (Target selected, click Finish Resolve)`;
-        }
-      } else if (gameState.selectedOption === 'evolve') {
-        if (!gameState.selectedTargetId) {
-          return `进化：请在桌面上选择一个要进化的英雄 (Evolve: Select a hero on the table)`;
-        } else {
-          return `已选择进化目标，请点击完成结算 (Target selected, click Finish Resolve)`;
-        }
-      } else if (gameState.selectedOption === 'spy') {
-        return `间谍：点击完成结算以随机弃掉对手一张手牌 (Spy: Click Finish Resolve to discard opponent's card)`;
-      } else if (gameState.selectedOption === 'seize') {
-        return `抢先手：点击完成结算以获得下回合先手 (Seize: Click Finish Resolve to get initiative)`;
-      } else if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-        if (gameState.selectedTokenId) {
-          return `已选择英雄，请点击高亮的格子以移动 (Hero selected, click a highlighted cell to move)`;
-        }
-        return `移动：请选择一个己方英雄 (Move: Select a hero)`;
-      } else if (gameState.selectedOption === 'attack') {
-        if (gameState.selectedTokenId) {
-          return `已选择英雄，请点击高亮的攻击目标 (Hero selected, click a highlighted target)`;
-        }
-        return `攻击：请选择一个己方英雄 (Attack: Select a hero)`;
-      } else if (gameState.selectedOption === 'buy') {
-        return `购买：请点击商店区的装备卡进行购买 (Buy: Click an equipment card in the shop area)`;
-      } else if (gameState.selectedOption === 'hire') {
-        if (gameState.selectedTargetId && gameState.selectedHireCost) {
-          return "请点击地图上的王城🏰以部署雇佣的英雄";
-        }
-        return `雇佣：请选择一个英雄并支付金币 (Hire: Select a hero and pay gold)`;
-      } else if (gameState.selectedOption === 'chant') {
-        return `咏唱：请选择在魔法阵上的己方英雄 (Chant: Select a hero on a magic circle)`;
-      } else if (gameState.selectedOption === 'fire') {
-        return `开火：请选择正在咏唱的己方英雄 (Fire: Select a chanting hero)`;
-      } else if (gameState.selectedOption === 'turret_attack') {
-        if (gameState.selectedTokenId) {
-          return `已选择英雄，请点击高亮的攻击目标 (Hero selected, click a highlighted target)`;
-        }
-        return `炮台攻击：请选择在炮台上的己方英雄 (Turret Attack: Select a hero on a turret)`;
-      }
-      return `结算阶段：请${activePlayerStr}结算场面`;
-    }
-    if (gameState.phase === 'action_defend') {
-      const hasDefenseCard = gameState.playAreaCards.some(c => c.name === '防御' || c.name === '闪避');
-      if (hasDefenseCard) {
-        return `防御阶段：已打出防御卡，请选择确认防御或反击 (Defense card played, choose Confirm or Counter)`;
-      }
-      return `防御阶段：请${activePlayerStr}打出防御卡或Pass (Play a defense card or Pass)`;
-    }
-    if (gameState.phase === 'action_resolve_attack') {
-      return `攻击结算：请${activePlayerStr}结算攻击`;
-    }
-    if (gameState.phase === 'action_resolve_attack_counter') {
-      return `攻击结算：请${activePlayerStr}结算攻击 (Settle attack)`;
-    }
-    if (gameState.phase === 'action_resolve_counter') {
-      return `反击结算：请${activePlayerStr}结算反击 (Settle counter-attack)`;
-    }
-    if (gameState.phase === 'shop') {
-      if ((selectedHireCardId || gameState.selectedTargetId) && gameState.selectedHireCost) {
-        return "请点击地图上的王城🏰以部署雇佣的英雄";
-      } else if (selectedHireCardId || gameState.selectedTargetId) {
-        return "请选择雇佣成本 (Select hire cost)";
-      }
-      return `商店阶段：请${activePlayerStr}购买装备或雇佣英雄`;
-    }
-    if (gameState.phase === 'revival') {
-      const pending = gameState.pendingRevivals?.find(r => r.playerIndex === playerIndex);
-      if (pending) {
-        const hero = gameState.tableCards.find(c => c.id === pending.heroCardId);
-        return `复活阶段：请点击地图上的王城🏰以复活 ${hero?.heroClass || '英雄'}`;
-      }
-      return `复活阶段：等待对方复活英雄...`;
-    }
-    if (gameState.phase === 'supply') {
-      return `补给阶段：双方抽取卡牌（英雄数+1）`;
-    }
-    if (gameState.phase === 'discard') {
-      return `弃牌阶段：请检查手牌并弃掉多余卡牌`;
-    }
-    if (gameState.phase === 'end') {
-      return `结束阶段：时间计数+1`;
-    }
-    return "";
+    return getPhasePrompt({
+      gameState,
+      playerIndex,
+      playerId,
+      selectedHeroCardId,
+      selectedHireCardId
+    });
   };
 
   const getPromptButtons = () => {
@@ -1228,7 +1089,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
             <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
               撤回
             </button>
-            <button onClick={() => socket.emit('finish_resolve')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
+            <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
               结束结算
             </button>
           </div>
@@ -1334,7 +1195,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
             <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
               撤回
             </button>
-            <button onClick={() => socket.emit('finish_resolve')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
+            <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
               完成结算
             </button>
           </div>
@@ -1608,169 +1469,23 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
     return null;
   };
 
+  const clickHandlerParams = {
+    gameState,
+    playerIndex,
+    isActivePlayer,
+    socket,
+    selectedHeroCardId,
+    setSelectedHeroCardId,
+    selectedHireCardId,
+    setSelectedHireCardId
+  };
+
   const handleHexClick = (q: number, r: number) => {
-    if (gameState.phase === 'setup' && isActivePlayer) {
-      if (selectedHeroCardId) {
-        const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
-        const castleIdx = playerCastles.findIndex(c => c.q === q && c.r === r);
-        if (castleIdx !== -1) {
-          socket.emit('play_card', { cardId: selectedHeroCardId, targetCastleIndex: castleIdx });
-          setSelectedHeroCardId(null);
-        }
-      }
-      return;
-    }
-
-    if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
-      if ((gameState.phase === 'shop' && (selectedHireCardId || gameState.selectedTargetId) && gameState.selectedHireCost) || 
-          (gameState.phase === 'action_select_option' && gameState.selectedOption === 'hire' && gameState.selectedTargetId && gameState.selectedHireCost)) {
-        const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
-        const castleIdx = playerCastles.findIndex(c => c.q === q && c.r === r);
-        if (castleIdx !== -1) {
-          const hireCardId = selectedHireCardId || gameState.selectedTargetId;
-          const goldAmount = gameState.selectedHireCost;
-          socket.emit('hire_hero', { cardId: hireCardId, goldAmount, targetCastleIndex: castleIdx });
-          if (gameState.phase === 'shop') setSelectedHireCardId(null);
-          return;
-        }
-      }
-      if (gameState.phase === 'shop') return;
-    }
-
-    if (gameState.phase === 'revival' && isActivePlayer) {
-      const pending = gameState.pendingRevivals?.find(r => r.playerIndex === playerIndex);
-      if (pending) {
-        const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
-        const castleIdx = playerCastles.findIndex(c => c.q === q && c.r === r);
-        if (castleIdx !== -1) {
-          socket.emit('revive_hero', { heroCardId: pending.heroCardId, targetCastleIndex: castleIdx });
-        }
-      }
-      return;
-    }
-
-    if (gameState.phase === 'action_resolve' && isActivePlayer && gameState.activeActionType === 'move' && gameState.selectedTokenId) {
-      socket.emit('move_token_to_cell', { q, r });
-      return;
-    }
-
-    if (gameState.phase === 'action_resolve' && isActivePlayer && gameState.activeActionType === 'attack' && gameState.selectedTokenId) {
-      console.log(`handleHexClick (attack): q=${q}, r=${r}`);
-      // Find target at this hex
-      const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
-      if (monster) {
-        console.log(`Emitting select_target for monster at ${q},${r}`);
-        socket.emit('select_target', `monster_${monster.q}_${monster.r}`);
-        return;
-      }
-
-      const isCastle = gameState.map ? 
-        (gameState.map.castles[0]?.some((c: any) => c.q === q && c.r === r) || gameState.map.castles[1]?.some((c: any) => c.q === q && c.r === r)) :
-        ((q === 0 && r === 4) || (q === 4 && r === 0) || (q === 0 && r === -4) || (q === -4 && r === 0));
-      
-      if (isCastle) {
-        console.log(`Emitting select_target for castle at ${q},${r}`);
-        socket.emit('select_target', `castle_${q}_${r}`);
-        return;
-      }
-
-      const targetToken = gameState.tokens.find(t => {
-        const hex = pixelToHex(t.x, t.y);
-        return hex.q === q && hex.r === r;
-      });
-      if (targetToken && targetToken.boundToCardId) {
-        console.log(`Emitting select_target for token ${targetToken.id} (card ${targetToken.boundToCardId})`);
-        socket.emit('select_target', targetToken.boundToCardId);
-      } else {
-        const targetCard = gameState.tableCards.find(c => {
-          const hex = pixelToHex(c.x, c.y);
-          return hex.q === q && hex.r === r;
-        });
-        if (targetCard) {
-          console.log(`Emitting select_target for card ${targetCard.id}`);
-          socket.emit('select_target', targetCard.id);
-        }
-      }
-      return;
-    }
-
-    if (gameState.phase === 'action_select_option' && isActivePlayer && gameState.selectedTokenId) {
-      if (gameState.selectedOption === 'attack' || gameState.selectedOption === 'turret_attack') {
-        console.log(`handleHexClick (attack option): q=${q}, r=${r}`);
-        // Find target at this hex
-        const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
-        if (monster) {
-          console.log(`Emitting select_target for monster at ${q},${r}`);
-          socket.emit('select_target', `monster_${monster.q}_${monster.r}`);
-          return;
-        }
-
-        const isCastle = gameState.map ? 
-          (gameState.map.castles[0]?.some((c: any) => c.q === q && c.r === r) || gameState.map.castles[1]?.some((c: any) => c.q === q && c.r === r)) :
-          ((q === 0 && r === 4) || (q === 4 && r === 0) || (q === 0 && r === -4) || (q === -4 && r === 0));
-        
-        if (isCastle) {
-          console.log(`Emitting select_target for castle at ${q},${r}`);
-          socket.emit('select_target', `castle_${q}_${r}`);
-          return;
-        }
-
-        const targetToken = gameState.tokens.find(t => {
-          const hex = pixelToHex(t.x, t.y);
-          return hex.q === q && hex.r === r;
-        });
-        if (targetToken && targetToken.boundToCardId) {
-          console.log(`Emitting select_target for token ${targetToken.id} (card ${targetToken.boundToCardId})`);
-          socket.emit('select_target', targetToken.boundToCardId);
-        } else {
-          const targetCard = gameState.tableCards.find(c => {
-            const hex = pixelToHex(c.x, c.y);
-            return hex.q === q && hex.r === r;
-          });
-          if (targetCard) {
-            console.log(`Emitting select_target for card ${targetCard.id}`);
-            socket.emit('select_target', targetCard.id);
-          }
-        }
-      } else {
-        socket.emit('move_token_to_cell', { q, r });
-      }
-    }
+    handleHexClickLogic(q, r, clickHandlerParams);
   };
 
   const handleTokenClick = (id: string) => {
-    if (isActivePlayer) {
-      if (gameState.phase === 'action_select_hero' || gameState.phase === 'action_select_substitute') {
-        socket.emit('select_hero_for_action', id);
-        return;
-      }
-      if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
-        const token = gameState.tokens.find(t => t.id === id);
-        if (token && token.boundToCardId) {
-          console.log(`handleTokenClick (attack): token ${id}, card ${token.boundToCardId}`);
-          socket.emit('select_target', token.boundToCardId);
-          return;
-        }
-      }
-      if (gameState.phase === 'action_select_option') {
-        if ((gameState.selectedOption === 'attack' || gameState.selectedOption === 'turret_attack') && gameState.selectedTokenId) {
-          const token = gameState.tokens.find(t => t.id === id);
-          if (token && token.boundToCardId) {
-            const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
-            const isEnemy = card && ((playerIndex === 0 && card.y < 0) || (playerIndex === 1 && card.y > 0));
-            if (isEnemy) {
-              console.log(`handleTokenClick (attack option): emitting select_target for enemy token ${id}, card ${token.boundToCardId}`);
-              socket.emit('select_target', token.boundToCardId);
-              return;
-            }
-          }
-        }
-
-        if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint' || gameState.selectedOption === 'attack' || gameState.selectedOption === 'chant' || gameState.selectedOption === 'fire' || gameState.selectedOption === 'turret_attack') {
-          socket.emit('select_token', id);
-        }
-      }
-    }
+    handleTokenClickLogic(id, clickHandlerParams);
   };
 
   return (
@@ -1810,7 +1525,13 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               </div>
               {!gameState.notification && (
                 <div className="flex gap-4 mt-2">
-                  {getPromptButtons()}
+                  <ActionPanel 
+                    gameState={gameState}
+                    playerIndex={playerIndex}
+                    socket={socket}
+                    playerId={playerId}
+                    selectedHireCardId={selectedHireCardId}
+                  />
                 </div>
               )}
             </div>
@@ -2051,11 +1772,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               socket={socket} 
               onContextMenu={handleCardContextMenu} 
               onZoom={setZoomedCard} 
-              onClick={(id) => {
-                if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
-                  socket.emit('select_target', id);
-                }
-              }}
+              onClick={(id) => handleCardClickLogic(id, 'table', clickHandlerParams)}
               isSelected={gameState.selectedTargetId === card.id}
               lastEvolvedId={gameState.lastEvolvedId}
             />
@@ -2068,17 +1785,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               socket={socket} 
               onContextMenu={handleCardContextMenu} 
               onZoom={setZoomedCard} 
-              onClick={(id) => {
-                if (gameState.phase === 'shop' && isActivePlayer) {
-                  if (gameState.selectedOption === 'hire') {
-                    socket.emit('select_target', id);
-                  } else {
-                    setSelectedHireCardId(id === selectedHireCardId ? null : id);
-                  }
-                } else if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
-                  socket.emit('select_target', id);
-                }
-              }}
+              onClick={(id) => handleCardClickLogic(id, 'hire', clickHandlerParams)}
               isSelected={gameState.selectedTargetId === card.id || selectedHireCardId === card.id}
               lastEvolvedId={gameState.lastEvolvedId}
             />
@@ -2091,11 +1798,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               socket={socket} 
               onContextMenu={handleCardContextMenu} 
               onZoom={setZoomedCard} 
-              onClick={(id) => {
-                if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
-                  socket.emit('select_target', id);
-                }
-              }}
+              onClick={(id) => handleCardClickLogic(id, 'play', clickHandlerParams)}
               isSelected={gameState.selectedTargetId === card.id}
               lastEvolvedId={gameState.lastEvolvedId}
             />

@@ -166,6 +166,7 @@ export interface HeroLevelData {
   ar: number;
   mv: number;
   xp: number;
+  atk?: number;
   skills: Skill[];
 }
 

@@ -11,7 +11,6 @@ import { HEROES_DATABASE } from './src/shared/config/heroes.ts';
 import { Hex, hexRound, hexToPixel, pixelToHex, getHexDistance, HEX_DIRECTIONS } from './src/shared/utils/hexUtils.ts';
 import { isTargetInAttackRange, getNeighbors, getRecoilHex, getPathDist, isHexInEnemyAttackRange, getReachableHexes, resolveTileEffect, getAttackableHexes } from './src/logic/map/mapLogic.ts';
 import { getHeroStat, canHeroEvolve, getRespawnTime, getHeroCurrentHP } from './src/logic/hero/heroLogic.ts';
-import { calculateDamage, isHeroDead, getCombatRewards } from './src/logic/combat/combatLogic.ts';
 import { PhaseManager } from './src/logic/phase/phaseLogic.ts';
 import { CardLogic } from './src/logic/card/cardLogic.ts';
 import { HeroEngine } from './src/logic/hero/heroEngine.ts';
@@ -454,9 +453,6 @@ const broadcastState = () => {
             break;
           case 'finish_action':
             migratedHandlers.finish_action(botSocket);
-            break;            
-          case 'finish_resolve':
-            migratedHandlers.finish_resolve(botSocket);
             break;
           case 'none':
             if (gameState.phase === 'action_play') {
@@ -581,8 +577,8 @@ const broadcastState = () => {
   };
 
   const createActionTokensForPlayer = (playerId: string) => {
-    const isPlayer1 = gameState.seats?.[0] === playerId;
-    const playerIndex = isPlayer1 ? 0 : 1;
+    const playerIndex = getPlayerIndex(playerId);
+    const isPlayer1 = playerIndex === 0;
     const playerHeroes = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)));
     
     const baseY = isPlayer1 ? 350 : -450;
@@ -737,10 +733,19 @@ const broadcastState = () => {
     setPhase,
     checkAndResetChanting: (tokenId) => migratedHandlers.checkAndResetChanting(tokenId),
     addReputation,
-    finish_resolve: (socket) => migratedHandlers.finish_resolve(socket),
-    end_resolve_attack: (socket) => migratedHandlers.end_resolve_attack(socket),
     checkAllTokensUsed: () => checkAllTokensUsed(),
     updateAvailableActions: (playerIndex) => updateAvailableActions(playerIndex),
+    discardOpponentCard: (playerIndex) => {
+      const opponentId = gameState.seats?.[1 - playerIndex];
+      if (opponentId) {
+        const opponent = gameState.players[opponentId];
+        if (opponent && opponent.hand.length > 0) {
+          const randomIndex = Math.floor(Math.random() * opponent.hand.length);
+          const discarded = opponent.hand.splice(randomIndex, 1)[0];
+          gameState.discardPiles.action.push(discarded);
+        }
+      }
+    },
   };
 
   migratedHandlers = createHandlers({
@@ -865,7 +870,7 @@ const broadcastState = () => {
 
     socket.on('pass_action', () => migratedHandlers.pass_action(socket));
 
-    socket.on('finish_resolve', () => migratedHandlers.finish_resolve(socket));
+    socket.on('finish_action', () => migratedHandlers.finish_action(socket));
 
     socket.on('clear_notification', () => migratedHandlers.clear_notification(socket));
 

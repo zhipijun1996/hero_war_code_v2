@@ -3,6 +3,7 @@ import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { applyEnhancementImmediateEffect } from './enhancementImmediateEffects';
 import { requiresSubstituteSelection } from './enhancementModifiers';
+import { HeroEngine } from '../hero/heroEngine';
 
 /**
  * 卡牌效果引擎
@@ -94,15 +95,30 @@ export class CardLogic {
       }
 
       gameState.heroPlayedCount[resolvedPlayerId] = playedCount + 1;
-      const { tableCard, token, logs } = this.applyHeroCard(card as HeroCard, targetCastleIndex, gameState, playerIndex);
-      logs.forEach(log => helpers.addLog(log, playerIndex));
+      
+      const isPlayer1 = playerIndex === 0;
+      const playerHeroes = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)));
+      const heroCount = playerHeroes.length;
+      const heroX = -50 + (heroCount * 120);
+      const heroY = isPlayer1 ? 550 : -700;
+      
+      const tableCard: TableCard = { ...card, x: heroX, y: heroY, faceUp: true, level: 1 };
+      
+      const castleIdx = (targetCastleIndex !== undefined) ? targetCastleIndex : 0;
+      const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
+      const castleCoord = playerCastles[castleIdx] || playerCastles[0];
+      
+      if (!castleCoord) {
+        return { success: false, reason: '错误：找不到王城坐标' };
+      }
+
+      const { token, counters } = HeroEngine.createHeroToken(tableCard, castleCoord.q, castleCoord.r, gameState);
+      
+      helpers.addLog(`玩家${playerIndex + 1}选择了英雄：${card.heroClass}`, playerIndex);
 
       gameState.tableCards.push(tableCard);
       gameState.tokens.push(token);
-
-      // 生成计数器
-      gameState.counters.push({ id: generateId(), type: 'exp', x: tableCard.x! + 50, y: tableCard.y! - 30, value: 0, boundToCardId: tableCard.id });
-      gameState.counters.push({ id: generateId(), type: 'damage', x: tableCard.x! + 50, y: tableCard.y! + 180, value: 0, boundToCardId: tableCard.id });
+      gameState.counters.push(...counters);
 
       // 检查是否完成初始放置
       if (gameState.heroPlayedCount[resolvedPlayerId] === 2) {
@@ -192,52 +208,6 @@ export class CardLogic {
     }
 
     return { success: true };
-  }
-
-  /**
-   * 执行英雄牌效果
-   */
-  static applyHeroCard(
-    card: HeroCard, 
-    targetCastleIndex: number | undefined, 
-    gameState: GameState, 
-    playerIndex: number
-  ): { tableCard: TableCard; token: Token; logs: string[] } {
-    const isPlayer1 = playerIndex === 0;
-    const logs: string[] = [];
-    
-    logs.push(`玩家${playerIndex + 1}选择了英雄：${card.heroClass}`);
-
-    // 计算英雄牌位置
-    const playerHeroes = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)));
-    const heroCount = playerHeroes.length;
-    const heroX = -50 + (heroCount * 120);
-    const heroY = isPlayer1 ? 550 : -700;
-    
-    const tableCard: TableCard = { ...card, x: heroX, y: heroY, faceUp: true, level: 1 };
-    
-    // 生成 Token
-    const castleIdx = (targetCastleIndex !== undefined) ? targetCastleIndex : 0;
-    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-    const castleCoord = playerCastles[castleIdx] || playerCastles[0];
-    if (!castleCoord) {
-      // Fallback if no castle found
-      return { tableCard, token: { id: generateId(), x: 0, y: 0, image: '', label: '', lv: 1, time: 0 }, logs: [...logs, '错误：找不到王城坐标'] };
-    }
-    const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
-    
-    const token: Token = {
-      id: generateId(),
-      x: castlePos.x,
-      y: castlePos.y,
-      image: getHeroTokenImage(card.heroClass!),
-      label: `${card.heroClass} Lv1`,
-      lv: 1,
-      time: 0,
-      boundToCardId: tableCard.id
-    };
-
-    return { tableCard, token, logs };
   }
 
   /**

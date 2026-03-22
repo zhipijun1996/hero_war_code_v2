@@ -45,9 +45,7 @@ export const createHandlers = (deps: any) => {
 
   const handlers: any = {
     play_card: (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
 
       const result = CardLogic.playCard(
         gameState,
@@ -149,8 +147,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : 1;
+      const playerIndex = getPlayerIndex(socket.id);
       
       const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, {
         addLog,
@@ -166,149 +163,24 @@ export const createHandlers = (deps: any) => {
       checkBotTurn();
     },
     move_token_to_cell: (socket: any, { q, r }: { q: number, r: number }) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
     select_hire_cost: (socket: any, cost: number) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
+      const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === gameState.activePlayerIndex) {
         gameState.selectedHireCost = cost;
         broadcastState();
       }
     },
     select_token: (socket: any, tokenId: string) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex) {
-        const isAction = ['move', 'sprint', 'attack', 'chant', 'fire'].includes(gameState.selectedOption || '');
-        
-        const token = gameState.tokens.find((t: any) => t.id === tokenId);
-        if (token && token.boundToCardId) {
-          const isAlive = !gameState.counters.some((counter: any) => counter.type === 'time' && counter.boundToCardId === token.boundToCardId);
-          if (!isAlive) {
-            socket.emit('error_message', '该英雄正在复活中，无法行动。');
-            return;
-          }
-          const card = gameState.tableCards.find((c: any) => c.id === token.boundToCardId);
-          if (card && ((isPlayer1 && card.y > 0) || (isPlayer2 && card.y < 0))) {
-            
-            if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-              if (!gameState.globalMovementMovedTokens) gameState.globalMovementMovedTokens = [];
-              
-              if (gameState.globalMovementMovedTokens.includes(tokenId)) {
-                socket.emit('error_message', '该英雄本回合已经移动过。');
-                return;
-              }
-              
-              gameState.selectedTokenId = tokenId;
-              const hex = pixelToHex(token.x, token.y);
-              gameState.reachableCells = getReachableHexes(hex, gameState.remainingMv, gameState);
-              broadcastState();
-            } else if (gameState.selectedOption === 'attack') {
-              gameState.selectedTokenId = tokenId;
-              const hex = pixelToHex(token.x, token.y);
-              gameState.reachableCells = getAttackableHexes(hex, card.heroClass, gameState);
-              broadcastState();
-            } else if (gameState.selectedOption === 'chant') {
-              gameState.selectedTokenId = tokenId;
-              const hex = pixelToHex(token.x, token.y);
-              gameState.reachableCells = getNeighbors(hex).filter((h: any) => gameState.magicCircles.some((mc: any) => mc.q === h.q && mc.r === h.r && mc.state === 'idle'));
-              broadcastState();
-            } else if (gameState.selectedOption === 'fire') {
-              gameState.selectedTokenId = tokenId;
-              const hex = pixelToHex(token.x, token.y);
-              // Simple range check for fire
-              gameState.reachableCells = getNeighbors(hex); // Placeholder
-              broadcastState();
-            }
-          }
-        }
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectToken(gameState, playerIndex, tokenId, actionHelpers, socket);
     },
     select_option: (socket: any, option: string) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if ((gameState.phase === 'action_select_option' || gameState.phase === 'shop') && playerIndex === gameState.activePlayerIndex) {
-        if (option === 'heal' && (!gameState.healableHeroIds || gameState.healableHeroIds.length === 0)) {
-          socket.emit('error_message', '没有可以回复的英雄。 (No heroes available to heal.)');
-          return;
-        }
-        if (option === 'evolve' && (!gameState.evolvableHeroIds || gameState.evolvableHeroIds.length === 0)) {
-          socket.emit('error_message', '没有可以进化的英雄。 (No heroes available to evolve.)');
-          return;
-        }
-        if (option === 'hire') {
-          const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-          const anyCastleFree = playerCastles.some((cCoord: any) => {
-            const pos = hexToPixel(cCoord.q, cCoord.r);
-            return !gameState.tokens.some((t: any) => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
-          });
-          
-          if (!anyCastleFree) {
-            socket.emit('error_message', '所有王城均被占用，无法雇佣。 (All castles are occupied, cannot hire.)');
-            return;
-          }
-          const goldCounter = gameState.counters.find((c: any) => c.type === 'gold' && (isPlayer1 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
-          if (!goldCounter || goldCounter.value < 2) {
-            socket.emit('error_message', '金币不足，无法雇佣。 (Not enough gold to hire.)');
-            return;
-          }
-        }
-
-        if (option === 'fire') {
-          const lastCard = gameState.playAreaCards[gameState.playAreaCards.length - 1] || 
-                           gameState.tableCards.find((c: any) => c.id === gameState.lastPlayedCardId);
-          if (!lastCard || lastCard.type !== 'action') {
-            socket.emit('error_message', '只有打出行动卡才能开火。 (Only action cards can trigger fire.)');
-            return;
-          }
-        }
-
-        const optionNames: any = {
-          'move': '移动',
-          'sprint': '冲刺',
-          'attack': '攻击',
-          'heal': '回复',
-          'evolve': '进化',
-          'hire': '雇佣',
-          'spy': '间谍',
-          'seize': '抢先手',
-          'chant': '咏唱',
-          'fire': '开火',
-          'turret_attack': '炮台攻击'
-        };
-        if (optionNames[option]) {
-          addLog(`玩家${playerIndex + 1}选择了${optionNames[option]}`, playerIndex);
-        }
-
-        // Manage action counts if changing option while a token is selected
-        if (gameState.selectedTokenId) {
-          const isPrevAction = ['move', 'sprint', 'attack', 'turret_attack'].includes(gameState.selectedOption || '');
-          if (isPrevAction) {
-            const prevTokenId = gameState.selectedTokenId;
-            if (gameState.roundActionCounts[prevTokenId] > 0) {
-              gameState.roundActionCounts[prevTokenId]--;
-            }
-          }
-        }
-
-        gameState.selectedOption = option;
-        gameState.selectedTokenId = null;
-        gameState.remainingMv = 0;
-        gameState.reachableCells = [];
-        gameState.movementHistory = undefined;
-        broadcastState();
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.selectOption(gameState, playerIndex, option, actionHelpers, socket);
     },
     select_action_category: (socket: any, category: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -387,15 +259,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     select_target: (socket: any, targetId: string) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      console.log(`[DEBUG] Received select_target: ${targetId}`);
-     
-      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedTargetId = targetId;
-        io.emit('state_update', gameState);
-      }
+      const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.resolveTargetSelection(gameState, playerIndex, targetId, actionHelpers, socket);
     },
 
@@ -405,150 +269,25 @@ export const createHandlers = (deps: any) => {
 
     play_enhancement_card: (socket: any, cardId: string) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_play_enhancement') return;
-
-      const player = gameState.players[socket.id];
-      const cardIndex = player.hand.findIndex((c: any) => c.id === cardId);
-      if (cardIndex === -1) return;
-
-      const card = player.hand[cardIndex];
-      
-      if (!isEnhancementCardName(card.name || '')) {
-        socket.emit('error_message', '只能打出增强卡');
-        return;
-      }
-
-      player.hand.splice(cardIndex, 1);
-      gameState.discardPiles.action.push(card);
-      gameState.activeEnhancementCardId = card.id;
-
-      const { logs, nextPhase } = CardLogic.applyActionCard(
-        card as any,
-        gameState,
-        playerIndex,
-        {
-          addLog,
-          discardOpponentCard
-        }
-      );
-
-      logs.forEach((log: string) => addLog(log, playerIndex));
-
-      if (nextPhase) {
-        gameState.phase = nextPhase as any;
-      }
-
-      broadcastState();
-      checkBotTurn();
+      ActionEngine.playEnhancementCard(gameState, playerIndex, cardId, actionHelpers, socket);
     },
 
     pass_enhancement: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_play_enhancement') return;
-
-      // @ts-ignore
-      handlers.resolve_action_start(socket);
-    },
-
-    resolve_action_start: (socket: any) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      const heroToken = gameState.tokens.find((t: any) => t.id === gameState.activeHeroTokenId);
-      if (!heroToken) {
-        // @ts-ignore
-        handlers.finish_action(socket);
-        return;
-      }
-      
-      const heroCard = gameState.tableCards.find((c: any) => c.id === heroToken.boundToCardId);
-      const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard?.heroClass);
-      const levelData = heroData?.levels?.[heroCard?.level || 1];
-
-      const enhancementCard = gameState.activeEnhancementCardId 
-        ? (gameState.playAreaCards.find((c: any) => c.id === gameState.activeEnhancementCardId) || 
-           gameState.discardPiles.action.find((c: any) => c.id === gameState.activeEnhancementCardId))
-        : null;
-
-      if (gameState.activeActionType === 'move') {
-        let mv = levelData?.mv || 1;
-        mv += getMoveBonusFromEnhancement(enhancementCard?.name);
-        
-        const hex = pixelToHex(heroToken.x, heroToken.y);
-        gameState.reachableCells = getReachableHexes(hex, mv, playerIndex, gameState);
-        gameState.selectedTokenId = heroToken.id;
-        gameState.remainingMv = mv;
-        gameState.phase = 'action_resolve';
-        gameState.notification = null;
-      } else if (gameState.activeActionType === 'attack') {
-        let ar = levelData?.ar || 1;
-        ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
-        
-        const hex = pixelToHex(heroToken.x, heroToken.y);
-        gameState.reachableCells = getAttackableHexes(hex.q, hex.r, ar, playerIndex, gameState, heroCard?.level || 1);
-        gameState.selectedTokenId = heroToken.id;
-        gameState.phase = 'action_resolve';
-        gameState.notification = null;
-      } else if (gameState.activeActionType === 'skill') {
-        gameState.selectedTokenId = heroToken.id;
-        gameState.phase = 'action_resolve';
-        gameState.notification = null;
-      } else if (gameState.activeActionType === 'evolve') {
-        if (heroCard && heroCard.level < 3) {
-          const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id);
-          const expNeeded = levelData?.xp;
-          if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
-            expCounter.value -= expNeeded;
-            heroCard.level += 1;
-            heroToken.lv = heroCard.level;
-            heroToken.label = `${heroCard.heroClass} Lv${heroCard.level}`;
-            addLog(`玩家${playerIndex + 1}的英雄 ${heroCard.heroClass} 进化到了 Lv${heroCard.level}`, playerIndex);
-          } else {
-            socket.emit('error_message', '经验不足，无法进化');
-          }
-        }
-        // @ts-ignore
-        handlers.finish_action(socket);
-        return;
-      }
-      broadcastState();
+      ActionEngine.passEnhancement(gameState, playerIndex, actionHelpers, socket);
     },
 
     finish_action: (socket: any) => {
-      const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
-      if (token) token.used = true;
-
-      gameState.activeActionTokenId = null;
-      gameState.activeActionType = null;
-      gameState.activeEnhancementCardId = null;
-      gameState.phase = 'action_play';
-      gameState.selectedOption = null;
-      gameState.selectedTargetId = null;
-      gameState.selectedTokenId = null;
-      gameState.reachableCells = [];
-      gameState.remainingMv = 0;
-      gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-      broadcastState();
-      checkBotTurn();
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.finishAction(gameState, playerIndex, actionHelpers, socket);
     },
-    pass_action: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_play' && playerIndex === gameState.activePlayerIndex) {
-        const availableTokens = gameState.actionTokens.filter((t: any) => t.playerIndex === playerIndex && !t.used);
-        if (availableTokens.length > 0) {
-          socket.emit('error_message', '请选择一个行动Token进行Pass (翻面)');
-          return;
-        }
 
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        checkAllTokensUsed();
-      }
+    pass_action: (socket: any) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.passAction(gameState, playerIndex, actionHelpers, socket);
     },
     pass_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         addLog(`玩家${playerIndex + 1}放弃防御 (Pass Defend)`, playerIndex);
@@ -559,9 +298,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     declare_defend: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         const defenseCard = gameState.playAreaCards.find((c: any) => c.name === '防御' || c.name === '闪避');
@@ -584,9 +321,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     declare_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         const defenseCard = gameState.playAreaCards.find((c: any) => c.name === '防御');
@@ -626,9 +361,7 @@ export const createHandlers = (deps: any) => {
       const player = gameState.players[socket.id];
       if (!player) return;
       
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend' || gameState.phase === 'action_resolve') && playerIndex === gameState.activePlayerIndex) {
         if (gameState.selectedTargetId) {
@@ -773,9 +506,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     steal_first_player: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (playerIndex !== -1 && playerIndex !== gameState.firstPlayerIndex) {
         gameState.firstPlayerIndex = playerIndex;
@@ -787,9 +518,7 @@ export const createHandlers = (deps: any) => {
       broadcastState();
     },
     cancel_defend_or_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if ((gameState.phase === 'action_play_defense' || gameState.phase === 'action_play_counter') && playerIndex === gameState.activePlayerIndex) {
         gameState.phase = 'action_defend';
@@ -799,9 +528,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     next_shop: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'shop' && playerIndex === gameState.activePlayerIndex) {
         gameState.consecutivePasses = 0;
@@ -811,9 +538,7 @@ export const createHandlers = (deps: any) => {
       }
     },
     pass_shop: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
+      const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'shop' && playerIndex === gameState.activePlayerIndex) {
         gameState.consecutivePasses = (gameState.consecutivePasses || 0) + 1;
@@ -1248,212 +973,24 @@ export const createHandlers = (deps: any) => {
         checkBotTurn();
       }
     },
-    finish_resolve: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_resolve' && playerIndex === gameState.activePlayerIndex) {
-        if (gameState.selectedOption === 'seize') {
-          gameState.firstPlayerIndex = playerIndex;
-          gameState.hasSeizedInitiative = true;
-          addLog(`玩家${playerIndex + 1}抢占了先手`, playerIndex);
-        } else if (gameState.selectedOption === 'spy') {
-          const opponentIndex = 1 - playerIndex;
-          const opponentId = gameState.seats?.[opponentIndex];
-          if (opponentId) {
-            const opponent = gameState.players[opponentId];
-            if (opponent && opponent.hand.length > 0) {
-              const randomIndex = Math.floor(Math.random() * opponent.hand.length);
-              const discarded = opponent.hand.splice(randomIndex, 1)[0];
-              gameState.discardPiles.action.push(discarded);
-              addLog(`玩家${playerIndex + 1}发动了间谍，弃掉了对手的一张手牌`, playerIndex);
-            }
-          }
-        } else if (gameState.selectedOption === 'heal') {
-          const heroId = gameState.selectedTargetId;
-          const card = gameState.tableCards.find((c: any) => c.id === heroId);
-          if (card) {
-            card.damage = 0;
-            const counter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === heroId);
-            if (counter) counter.value = 0;
-            addLog(`玩家${playerIndex + 1}回复了${card.heroClass}的生命`, playerIndex);
-          }
-        } else if (gameState.selectedOption === 'evolve') {
-          const heroId = gameState.selectedTargetId;
-          const card = gameState.tableCards.find((c: any) => c.id === heroId);
-          if (card && card.level < 3) {
-            const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === card.id);
-            const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
-            const levelData = heroData?.levels?.[card.level.toString()];
-            const expNeeded = levelData?.xp;
-            if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
-              expCounter.value -= expNeeded;
-              card.level += 1;
-              card.frontImage = getHeroCardImage(card.heroClass, card.level);
-              card.backImage = getHeroBackImage(card.level);
-              const token = gameState.tokens.find((t: any) => t.boundToCardId === card.id);
-              if (token) {
-                token.lv = card.level;
-                token.label = `${card.heroClass} Lv${card.level}`;
-              }
-              addLog(`玩家${playerIndex + 1}进化了${card.heroClass}到Lv${card.level}`, playerIndex);
-            }
-          }
-        } else if (gameState.selectedOption === 'hire') {
-          // Handled by hire_hero event, but we might need to close the resolve phase
-        }
-
-        // @ts-ignore
-        handlers.finish_action(socket);
-      }
-    },
     finish_discard: (socket: any) => {
-      const player = gameState.players[socket.id];
-      if (!player || gameState.phase !== 'discard' || player.discardFinished) return;
-
-      if (player.hand.length > 5) {
-        socket.emit('error_message', `你还需要弃掉 ${player.hand.length - 5} 张牌。`);
-        return;
-      }
-
-      player.discardFinished = true;
-      player.discardHistory = []; // Clear history after finishing
-      addLog(`玩家 ${player.name} 完成了弃牌`, -1);
-
-      const allFinished = gameState.seats
-        .filter(id => id !== null)
-        .every(id => gameState.players[id!].discardFinished);
-
-      if (allFinished) {
-        // @ts-ignore
-        handlers.startShopPhase();
-      } else {
-        broadcastState();
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.finishDiscard(gameState, playerIndex, actionHelpers, socket);
     },
     end_resolve_attack: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
-        const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
-        const targetId = gameState.selectedTargetId;
-        const targetToken = gameState.tokens.find((t: any) => t.id === targetId);
-        const targetCard = gameState.tableCards.find((c: any) => c.id === targetId);
-        
-        const defenseCard = gameState.playAreaCards.find((c: any) => c.name === '防御' || c.name === '闪避');
-        const isDefended = !!defenseCard;
-
-        if (targetToken && targetCard) {
-          if (isDefended) {
-            addLog(`${targetCard.heroClass} 使用了 ${defenseCard.name}，攻击被抵消`, 1 - playerIndex);
-          } else {
-            const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
-            const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === attackerCard?.heroClass);
-            const levelData = heroData?.levels?.[attackerCard?.level || 1];
-            let damage = levelData?.atk || 1;
-            
-            const enhancementCard = gameState.activeEnhancementCardId 
-              ? (gameState.playAreaCards.find((c: any) => c.id === gameState.activeEnhancementCardId) || 
-                 gameState.discardPiles.action.find((c: any) => c.id === gameState.activeEnhancementCardId))
-              : null;
-            damage += getAttackDamageBonusFromEnhancement(enhancementCard?.name);
-
-            targetCard.damage = (targetCard.damage || 0) + damage;
-            let damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === targetCard.id);
-            if (!damageCounter) {
-              damageCounter = { id: generateId(), type: 'damage', x: targetToken.x, y: targetToken.y, value: 0, boundToCardId: targetCard.id };
-              gameState.counters.push(damageCounter);
-            }
-            damageCounter.value = targetCard.damage;
-
-            addLog(`${attackerCard?.heroClass} 对 ${targetCard.heroClass} 造成了 ${damage} 点伤害`, playerIndex);
-
-            const targetHeroData = heroesDatabase?.heroes?.find((h: any) => h.name === targetCard.heroClass);
-            const targetMaxHP = targetHeroData?.levels?.[targetCard.level || 1]?.hp || 1;
-            if (targetCard.damage >= targetMaxHP) {
-              addLog(`${targetCard.heroClass} 阵亡了！`, 1 - playerIndex);
-              gameState.tokens = gameState.tokens.filter((t: any) => t.id !== targetToken.id);
-              gameState.counters.push({ id: generateId(), type: 'time', x: targetToken.x, y: targetToken.y, value: 0, boundToCardId: targetCard.id });
-              addReputation(playerIndex, REWARDS.KILL_HERO.REP, "击杀英雄");
-            }
-          }
-        } else if (targetId && targetId.startsWith('monster_')) {
-          const monster = gameState.map?.monsters?.find((m: any) => `monster_${m.q}_${m.r}` === targetId);
-          if (monster) {
-            addLog(`击败了等级 ${monster.level} 的怪物`, playerIndex);
-            const goldCounter = gameState.counters.find((c: any) => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
-            if (goldCounter) goldCounter.value += REWARDS.MONSTER[monster.level as 1|2|3].GOLD;
-            addReputation(playerIndex, REWARDS.MONSTER[monster.level as 1|2|3].REP, "击杀怪物");
-            
-            const pos = hexToPixel(monster.q, monster.r);
-            gameState.counters.push({ id: generateId(), type: 'time', x: pos.x, y: pos.y, value: 0 });
-          }
-        } else if (targetId && targetId.startsWith('castle_')) {
-          const castleIndex = parseInt(targetId.split('_')[1]);
-          gameState.castleHP[castleIndex as 0|1] -= 1;
-          addLog(`对王城 ${castleIndex + 1} 造成了 1 点伤害`, playerIndex);
-          addReputation(playerIndex, REWARDS.ATTACK_CASTLE.REP, "攻击王城");
-          
-          if (gameState.castleHP[castleIndex as 0|1] <= 0) {
-            gameState.notification = `游戏结束！玩家 ${playerIndex + 1} 攻陷了王城，获得胜利！`;
-            gameState.gameStarted = false;
-          }
-        }
-
-        // @ts-ignore
-        handlers.finish_action(socket);
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.endResolveAttack(gameState, playerIndex, actionHelpers, socket);
     },
     end_resolve_attack_counter: (socket: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const isPlayer2 = gameState.seats?.[1] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : (isPlayer2 ? 1 : -1);
-      
-      if (gameState.phase === 'action_resolve_attack_counter' && playerIndex === gameState.activePlayerIndex) {
-        const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
-        const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
-        const defenderCard = gameState.tableCards.find((c: any) => c.id === gameState.selectedTargetId);
-        const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
-
-        if (attackerToken && attackerCard && defenderCard && defenderToken) {
-          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === defenderCard.heroClass);
-          const levelData = heroData?.levels?.[defenderCard.level || 1];
-          const damage = levelData?.atk || 1;
-
-          attackerCard.damage = (attackerCard.damage || 0) + damage;
-          let damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === attackerCard.id);
-          if (!damageCounter) {
-            damageCounter = { id: generateId(), type: 'damage', x: attackerToken.x, y: attackerToken.y, value: 0, boundToCardId: attackerCard.id };
-            gameState.counters.push(damageCounter);
-          }
-          damageCounter.value = attackerCard.damage;
-
-          addLog(`${defenderCard.heroClass} 对 ${attackerCard.heroClass} 进行了反击，造成了 ${damage} 点伤害`, playerIndex);
-
-          const attackerHeroData = heroesDatabase?.heroes?.find((h: any) => h.name === attackerCard.heroClass);
-          const attackerMaxHP = attackerHeroData?.levels?.[attackerCard.level || 1]?.hp || 1;
-          if (attackerCard.damage >= attackerMaxHP) {
-            addLog(`${attackerCard.heroClass} 阵亡了！`, 1 - playerIndex);
-            gameState.tokens = gameState.tokens.filter((t: any) => t.id !== attackerToken.id);
-            gameState.counters.push({ id: generateId(), type: 'time', x: attackerToken.x, y: attackerToken.y, value: 0, boundToCardId: attackerCard.id });
-            addReputation(1 - playerIndex, REWARDS.KILL_HERO.REP, "反击击杀英雄");
-          }
-        }
-
-        // @ts-ignore
-        handlers.finish_action(socket);
-      }
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
     },
     end_resolve_counter: (socket: any) => {
-      // @ts-ignore
-      handlers.end_resolve_attack_counter(socket);
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
     },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
-      const isPlayer1 = gameState.seats?.[0] === socket.id;
-      const playerIndex = isPlayer1 ? 0 : 1;
+      const playerIndex = getPlayerIndex(socket.id);
       
       const result = HeroEngine.hireHero(gameState, playerIndex, cardId, goldAmount, targetCastleIndex, {
         addLog,

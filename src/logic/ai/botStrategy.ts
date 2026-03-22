@@ -16,7 +16,6 @@ export type BotAction =
   | { type: 'select_option'; payload: { option: string } }
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
-  | { type: 'finish_resolve' }
   | { type: 'finish_action'}
   | { type: 'discard_card'; payload: { cardId: string } }
   | { type: 'finish_discard' }
@@ -61,7 +60,7 @@ export class BotStrategy {
         return { type: 'pass_action' };
 
       case 'action_resolve':
-        return this.decideActionResolveAction(gameState, playerIndex);
+        return { type: 'finish_action' };
 
       case 'action_defend':
         return this.decideActionDefendAction(gameState, botPlayer, playerIndex);
@@ -75,7 +74,7 @@ export class BotStrategy {
       case 'action_resolve_attack':
       case 'action_resolve_attack_counter':
       case 'action_resolve_counter':
-        return { type: 'finish_resolve' };
+        return { type: 'finish_action' };
 
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
@@ -167,7 +166,7 @@ export class BotStrategy {
         if (myHeros.length > 0) {
           return { type: 'select_target', payload: { targetId: myHeros[0].id } };
         } else {
-          return { type: 'finish_resolve' };
+          return { type: 'finish_action' };
         }
       } else if (option === 'evolve') {
         const myHeros = gameState.tableCards.filter(c => {
@@ -181,7 +180,7 @@ export class BotStrategy {
         if (myHeros.length > 0) {
           return { type: 'select_target', payload: { targetId: myHeros[0].id } };
         } else {
-          return { type: 'finish_resolve' };
+          return { type: 'finish_action' };
         }
       } else if (option === 'buy') {
         if (gameState.decks.treasure1.length > 0) {
@@ -191,13 +190,13 @@ export class BotStrategy {
         } else if (gameState.decks.treasure3.length > 0) {
           return { type: 'select_option', payload: { option: 'treasure3' } };
         } else {
-          return { type: 'finish_resolve' };
+          return { type: 'finish_action' };
         }
       } else if (option === 'hire') {
         if (gameState.hireAreaCards.length > 0) {
           return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
         } else {
-          return { type: 'finish_resolve' };
+          return { type: 'finish_action' };
         }
       }
     } else {
@@ -227,7 +226,7 @@ export class BotStrategy {
         }
       }
     }
-    return { type: 'finish_resolve' };
+    return { type: 'finish_action' };
   }
 
   private static decideActionCommonAction(gameState: GameState, playerIndex: number): BotAction {
@@ -333,7 +332,7 @@ export class BotStrategy {
           } else if (cell.targetType === 'castle') {
             if (90 > bestScore) {
               bestScore = 90;
-              bestTargetId = cell.q === 0 && cell.r === -4 ? 'castle_0' : 'castle_1';
+              bestTargetId = `castle_${cell.q}_${cell.r}`;
             }
           }
         }
