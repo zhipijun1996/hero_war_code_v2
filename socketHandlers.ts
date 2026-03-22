@@ -985,10 +985,6 @@ export const createHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
     },
-    end_resolve_counter: (socket: any) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
-    },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       

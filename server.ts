@@ -856,7 +856,7 @@ const broadcastState = () => {
 
     socket.on('end_resolve_attack_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
 
-    socket.on('end_resolve_counter', () => migratedHandlers.end_resolve_counter(socket));
+    socket.on('end_resolve_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
 
     socket.on('select_option', (option: string) => migratedHandlers.select_option(socket, option));
 
@@ -870,8 +870,6 @@ const broadcastState = () => {
 
     socket.on('pass_action', () => migratedHandlers.pass_action(socket));
 
-    socket.on('finish_action', () => migratedHandlers.finish_action(socket));
-
     socket.on('clear_notification', () => migratedHandlers.clear_notification(socket));
 
     socket.on('declare_defend', () => migratedHandlers.declare_defend(socket));
@@ -884,19 +882,12 @@ const broadcastState = () => {
 
     socket.on('end_resolve_attack', () => migratedHandlers.end_resolve_attack(socket));
 
-    socket.on('end_resolve_attack_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
-
-    socket.on('end_resolve_counter', () => migratedHandlers.end_resolve_counter(socket));
-
     socket.on('next_shop', () => migratedHandlers.next_shop(socket));
-
-    socket.on('pass_shop', () => migratedHandlers.pass_shop(socket));
 
     socket.on('proceed_phase', () => migratedHandlers.proceed_phase(socket));
 
     socket.on('hire_hero', ({ cardId, goldAmount, targetCastleIndex }) => migratedHandlers.hire_hero(socket, { cardId, goldAmount, targetCastleIndex }));
     socket.on('revive_hero', ({ heroCardId, targetCastleIndex }) => migratedHandlers.revive_hero(socket, { heroCardId, targetCastleIndex }));
-    socket.on('select_hire_cost', (cost) => migratedHandlers.select_hire_cost(socket, cost));
 
     socket.on('evolve_hero', (cardId) => migratedHandlers.evolve_hero(socket, cardId));
 
