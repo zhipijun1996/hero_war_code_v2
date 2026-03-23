@@ -1,11 +1,7 @@
 import React from 'react';
 import { Group, Circle, Text, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
-
-const BASE_URL = 'https://raw.githubusercontent.com/zhipijun1996/heros_war/main/';
-const getHeroTokenImage = (heroClass: string) => {
-  return `${BASE_URL}token_${encodeURIComponent(heroClass)}.png`;
-};
+import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 
 interface ActionTokenNodeProps {
   token: any;

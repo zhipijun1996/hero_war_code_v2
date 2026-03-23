@@ -91,11 +91,9 @@ export const getPhasePrompt = ({
       } else {
         return `已选择进化目标，请点击完成结算 (Target selected, click Finish Resolve)`;
       }
-    } else if (gameState.selectedOption === 'spy') {
-      return `间谍：点击完成结算以随机弃掉对手一张手牌 (Spy: Click Finish Resolve to discard opponent's card)`;
     } else if (gameState.selectedOption === 'seize') {
       return `抢先手：点击完成结算以获得下回合先手 (Seize: Click Finish Resolve to get initiative)`;
-    } else if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
+    } else if (gameState.selectedOption === 'move') {
       if (gameState.selectedTokenId) {
         return `已选择英雄，请点击高亮的格子以移动 (Hero selected, click a highlighted cell to move)`;
       }

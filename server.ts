@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import type { GameState, Card, TableCard, Token, Counter, Player, ImageConfig, MapConfig, GamePhase } from './src/shared/types/index.ts';
 import { REWARDS } from './src/shared/hex/tileLogic.ts';
 
+import { getHeroTokenImage } from './src/shared/utils/assetUtils.ts';
+
 import { HEROES_DATABASE } from './src/shared/config/heroes.ts';
 import { Hex, hexRound, hexToPixel, pixelToHex, getHexDistance, HEX_DIRECTIONS } from './src/shared/utils/hexUtils.ts';
 import { isTargetInAttackRange, getNeighbors, getRecoilHex, getPathDist, isHexInEnemyAttackRange, getReachableHexes, resolveTileEffect, getAttackableHexes } from './src/logic/map/mapLogic.ts';
@@ -55,9 +57,6 @@ const HERO_PRIORITY: Record<string, number> = {
 };
 
 // --- HERO IMAGES CONFIGURATION ---
-const getHeroTokenImage = (heroClass: string) => {
-  return `${BASE_URL}token_${encodeURIComponent(heroClass)}.png`;
-};
 
 const getHeroCardImage = (heroClass: string, level: number) => {
   if (heroClass === '圣职者' && level === 2) return `${BASE_URL}%E5%9C%A3%E8%81%8C%E8%80%85_LV2.png`;

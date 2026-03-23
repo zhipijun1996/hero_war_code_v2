@@ -60,6 +60,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   }
 
   if (gameState.phase === 'action_resolve') {
+    if (gameState.activeActionType === 'move' || gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
+      return (
+        <div className="flex gap-4">
+          <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+            撤回
+          </button>
+          <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
+            结束结算
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex gap-4 flex-wrap justify-center">
         <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
@@ -123,15 +135,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           
           {playedCard && playedCard.type === 'action' && playedCard.name !== '防御' && (
             <>
-              {playedCard.name === '间谍' ? (
-                <button onClick={() => socket.emit('select_option', 'spy')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">
-                  间谍
-                </button>
-              ) : playedCard.name === '冲刺' ? (
-                <button onClick={() => socket.emit('select_option', 'sprint')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-                  冲刺
-                </button>
-              ) : playedCard.name === '回复' ? (
+              {playedCard.name === '回复' ? (
                 <button onClick={() => socket.emit('select_option', 'heal')} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold">
                   回复
                 </button>
@@ -177,17 +181,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               )}
             </>
           )}
-        </div>
-      );
-    } else if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'move' || gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-      return (
-        <div className="flex gap-4">
-          <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            撤回
-          </button>
-          <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-            结束结算
-          </button>
         </div>
       );
     } else if (gameState.selectedOption === 'evolve') {

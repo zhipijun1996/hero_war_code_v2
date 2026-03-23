@@ -216,7 +216,6 @@ export interface GameState {
   lastPlayedCardId?: string | null;
   selectedOption?: string | null;
   selectedTargetId?: string | null;
-  selectedHeroCardId?: string | null;
   selectedHireCost?: number | null;
   hasSeizedInitiative?: boolean;
   canEvolve?: boolean;
@@ -242,5 +241,4 @@ export interface GameState {
   activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | null;
   activeEnhancementCardId?: string | null;
   activeHeroTokenId?: string | null;
-  selectedActionToken?: string | null;
 }
