@@ -64,25 +64,11 @@ export const createCombatHandlers = (deps: any) => {
     },
     end_resolve_attack: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
-        gameState.phase = 'action_play';
-        gameState.activeActionType = null;
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        addLog(`攻击结算结束 (Attack Resolved)`, -1);
-        broadcastState();
-        checkBotTurn();
-      }
+      ActionEngine.endResolveAttack(gameState, playerIndex, actionHelpers, socket);
     },
     end_resolve_attack_counter: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
-        gameState.phase = 'action_play';
-        gameState.activeActionType = null;
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        addLog(`攻击结算结束 (Attack Resolved)`, -1);
-        broadcastState();
-        checkBotTurn();
-      }
+      ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
     }
   };
 };

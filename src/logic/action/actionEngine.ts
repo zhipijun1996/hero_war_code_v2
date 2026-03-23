@@ -1000,9 +1000,8 @@ export class ActionEngine {
           if (attackerCard) {
             helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 怪物 LV${monster.level} 发起了攻击`, playerIndex);
           }
-          gameState.selectedTargetId = `monster_${monster.q}_${monster.r}`;
-          gameState.phase = 'action_resolve_attack';
-          this.endResolveAttack(gameState, playerIndex, helpers, socket);
+          CombatLogic.resolveMonsterAttack(gameState, playerIndex, monster.q, monster.r, helpers);
+          this.finishAction(gameState, playerIndex, helpers, socket);
           return;
         }
 
@@ -1020,9 +1019,8 @@ export class ActionEngine {
           if (attackerCard) {
             helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 敌方城堡 发起了攻击`, playerIndex);
           }
-          gameState.selectedTargetId = targetId;
-          gameState.phase = 'action_resolve_attack';
-          this.endResolveAttack(gameState, playerIndex, helpers, socket);
+          CombatLogic.resolveCastleAttack(gameState, playerIndex, castleIdx, helpers);
+          this.finishAction(gameState, playerIndex, helpers, socket);
           return;
         }
 
