@@ -29,6 +29,10 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
       socket.emit('play_enhancement_card', cardId);
       return;
     }
+    if (gameState.phase === 'action_defend') {
+      socket.emit('play_card', { cardId, x: 0, y: 0 });
+      return;
+    }
     // Play card to the center of the map (0,0)
     socket.emit('play_card', { cardId, x: 0, y: 0 });
   };

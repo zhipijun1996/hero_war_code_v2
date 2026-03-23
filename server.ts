@@ -24,7 +24,7 @@ const heroesDatabase = HEROES_DATABASE;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+ 
 // --- CONFIGURATION FOR DEVELOPER ---
 const BASE_URL = 'https://raw.githubusercontent.com/zhipijun1996/heros_war/main/';
 
@@ -367,7 +367,14 @@ const broadcastState = () => {
     (gameState as any).canOpenChest = onChest;
   };
 
+  let pendingBotTurnTimeout: NodeJS.Timeout | null = null;
+
   const checkBotTurn = () => {
+    if (pendingBotTurnTimeout) {
+      clearTimeout(pendingBotTurnTimeout);
+      pendingBotTurnTimeout = null;
+    }
+
     if (!gameState.gameStarted) return;
 
     const phase = gameState.phase;
@@ -396,7 +403,9 @@ const broadcastState = () => {
       const botPlayer = gameState.players[activePlayerId];
       if (!botPlayer || !botPlayer.hand) return;
       
-      setTimeout(() => {
+      pendingBotTurnTimeout = setTimeout(() => {
+        pendingBotTurnTimeout = null;
+
         if (!gameState.gameStarted) return;
         const currentActiveId = gameState.seats?.[gameState.activePlayerIndex];
         if (currentActiveId !== activePlayerId) return;

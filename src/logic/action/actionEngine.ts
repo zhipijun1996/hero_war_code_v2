@@ -1009,8 +1009,15 @@ export class ActionEngine {
           const parts = targetId.split('_');
           const cq = parseInt(parts[1]);
           const cr = parseInt(parts[2]);
-          const castleIdx = (cq === 0 && cr === -4) || (gameState.map?.castles?.[0]?.some(c => c.q === cq && c.r === cr)) ? 0 : 1;
+          const isCastle0 = (gameState.map?.castles?.[0]?.some(c => c.q === cq && c.r === cr)) ?? false;
+          const isCastle1 = (gameState.map?.castles?.[1]?.some(c => c.q === cq && c.r === cr)) ?? false;
+          const castleIdx = isCastle0 ? 0 : 1;
           
+          if (!isCastle0 && !isCastle1) {
+            socket.emit('error_message', '城堡目标无效');
+            return;
+          }
+
           if (castleIdx === playerIndex) {
             socket.emit('error_message', '不能攻击自己的城堡');
             return;

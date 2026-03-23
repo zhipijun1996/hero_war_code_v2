@@ -163,7 +163,7 @@ export const createActionHandlers = (deps: any) => {
         if (p2) p2.discardFinished = false;
         
         gameState.round++;
-        gameState.phase = 'prepare';
+        gameState.phase = 'action_play';
         gameState.activePlayerIndex = gameState.firstPlayerIndex;
         addLog(`--- 第 ${gameState.round} 回合开始 (Round ${gameState.round} Starts) ---`, -1);
         
