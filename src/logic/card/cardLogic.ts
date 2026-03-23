@@ -13,7 +13,7 @@ export class CardLogic {
    * 检查是否可以打出卡牌
    */
   static canPlayCard(card: Card, gameState: GameState, playerIndex: number): { canPlay: boolean; reason?: string } {
-    const allowedPhases = ['action_select_card', 'discard', 'setup', 'action_select_option', 'action_defend', 'action_play_defense', 'action_resolve_attack_counter', 'action_play_counter'];
+    const allowedPhases = ['action_play_enhancement', 'discard', 'setup', 'action_select_option', 'action_defend', 'action_play_defense', 'action_resolve_attack_counter', 'action_play_counter'];
     
     if (!allowedPhases.includes(gameState.phase)) {
       return { canPlay: false, reason: '当前阶段不允许打出卡牌。' };
@@ -229,7 +229,6 @@ export class CardLogic {
       logs.push(`玩家${playerIndex + 1}打出了${card.name}`);
       nextPhase = 'action_select_option';
     } else if (
-      gameState.phase === 'action_select_card' ||
       gameState.phase === 'action_play_enhancement'
     ) {
       logs.push(`玩家${playerIndex + 1}打出了增强卡${card.name}`);

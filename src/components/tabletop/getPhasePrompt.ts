@@ -42,9 +42,9 @@ export const getPhasePrompt = ({
   if (gameState.phase === 'action_common') {
     return `请选择通用动作 (Select common action)`;
   }
-  if (gameState.phase === 'action_select_card') {
-    return `请选择一张手牌进行行动 (Select a card for action)`;
-  }
+  //if (gameState.phase === 'action_select_card') {
+  //  return `请选择一张手牌进行行动 (Select a card for action)`;
+  //}
   if (gameState.phase === 'action_select_hero') {
     return `请选择一个英雄进行行动 (Select a hero for action)`;
   }

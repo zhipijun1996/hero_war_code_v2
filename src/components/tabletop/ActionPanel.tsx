@@ -179,7 +179,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           )}
         </div>
       );
-    } else if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
+    } else if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'move' || gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
       return (
         <div className="flex gap-4">
           <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
@@ -298,7 +298,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       );
     }
   }
-  if ((gameState.phase as string) === 'action_select_card') {
+  if ((gameState.phase as string) === 'action_play_enhancement') {
     return (
       <div className="flex flex-col gap-4 items-center">
         <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择一张手牌增强行动 (Select a card to enhance action)</div>

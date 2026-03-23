@@ -326,7 +326,7 @@ export class ActionEngine {
   ): void {
     if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || 
         (gameState.phase !== 'action_play' && gameState.phase !== 'action_options' && 
-         gameState.phase !== 'action_select_hero' && gameState.phase !== 'action_select_card' && 
+         gameState.phase !== 'action_select_hero' && gameState.phase !== 'action_play_enhancement' && 
          gameState.phase !== 'action_select_action')) return;
 
     const token = gameState.actionTokens.find(t => t.id === tokenId);
@@ -366,7 +366,7 @@ export class ActionEngine {
     if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex) return;
     
     // If we were in a sub-phase of an action, go back to action_options
-    const subPhases = ['action_select_card', 'action_select_action', 'action_common', 'action_play_enhancement', 'action_select_substitute'];
+    const subPhases = ['action_select_action', 'action_common', 'action_play_enhancement', 'action_select_substitute'];
     if (subPhases.includes(gameState.phase)) {
       gameState.phase = 'action_options';
       gameState.notification = null;
@@ -549,7 +549,7 @@ export class ActionEngine {
     }
 
     if (category === 'play_card') {
-      gameState.phase = 'action_select_card';
+      gameState.phase = 'action_play_enhancement';
       gameState.notification = null;
     } else if (category === 'direct_action') {
       gameState.phase = 'action_select_action';

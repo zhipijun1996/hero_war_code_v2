@@ -108,7 +108,7 @@ export type GamePhase =
   | 'action_select_category' 
   | 'action_common' 
   | 'action_select_skill'
-  | 'action_select_card';
+  ;
 
 export interface MovementStep {
   tokenId: string;
