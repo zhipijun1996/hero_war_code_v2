@@ -25,12 +25,12 @@ export const createTableHandlers = (deps: any) => {
       }
 
       gameState.gameStarted = true;
-      gameState.phase = 'prepare';
+      gameState.phase = 'setup';
       gameState.round = 1;
       gameState.firstPlayerIndex = Math.random() < 0.5 ? 0 : 1;
       gameState.activePlayerIndex = gameState.firstPlayerIndex;
-      gameState.castleHP = [10, 10];
-      gameState.reputation = [0, 0];
+      gameState.castleHP = {0: 3,  1: 3};
+      gameState.reputation = {0: 0, 1:0 };
       gameState.notification = null;
 
       // Initialize decks
@@ -53,11 +53,15 @@ export const createTableHandlers = (deps: any) => {
       
       if (p1Id && gameState.players[p1Id]) {
         gameState.players[p1Id].hand = [];
-        drawCards(p1Id, 5);
+        for(let i=0;i<4;i++){
+          gameState.players[p1Id].hand.push(gameState.decks.hero.pop()!)
+        }
       }
       if (p2Id && gameState.players[p2Id]) {
         gameState.players[p2Id].hand = [];
-        drawCards(p2Id, 5);
+        for(let i=0;i<4;i++){
+          gameState.players[p2Id].hand.push(gameState.decks.hero.pop()!)
+        }
       }
 
       addLog(`游戏开始！玩家 ${gameState.firstPlayerIndex + 1} 先手 (Game Started! Player ${gameState.firstPlayerIndex + 1} goes first)`, -1);
