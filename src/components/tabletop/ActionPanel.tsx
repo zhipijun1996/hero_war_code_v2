@@ -72,6 +72,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         </div>
       );
     }
+    if (gameState.activeActionType === 'attack' || gameState.selectedOption === 'attack') {
+      return (
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button
+            onClick={() => socket.emit('undo_play')}
+            className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold"
+          >
+            撤回 (Undo)
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex gap-4 flex-wrap justify-center">
         <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
@@ -418,7 +430,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   }
   if (gameState.phase === 'action_defend') {
-    const hasDefenseCard = !!gameState.isDefended;
+    const hasDefenseCard = !!gameState.hasDefenseCard;
+    const canCounterAttack = !!gameState.canCounterAttack;
     if (hasDefenseCard) {
       return (
         <div className="flex gap-4">

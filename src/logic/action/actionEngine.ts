@@ -228,7 +228,11 @@ export class ActionEngine {
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
             gameState.lastPlayedCardId = null;
+            gameState.pendingDefenseCardId = null;
+            gameState.hasDefenseCard = false;
+            gameState.canCounterAttack = false;
             gameState.isCounterAttack = false;
+            gameState.isDefended = false;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
             helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
@@ -308,7 +312,11 @@ export class ActionEngine {
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
             gameState.lastPlayedCardId = null;
+            gameState.pendingDefenseCardId = null;
+            gameState.hasDefenseCard = false;
+            gameState.canCounterAttack = false;
             gameState.isCounterAttack = false;
+            gameState.isDefended = false;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
             helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
@@ -1253,6 +1261,12 @@ export class ActionEngine {
     gameState.phase = 'action_play';
     gameState.selectedOption = null;
     gameState.selectedTargetId = null;
+    gameState.lastPlayedCardId = null;
+    gameState.pendingDefenseCardId = null;
+    gameState.hasDefenseCard = false;
+    gameState.canCounterAttack = false;
+    gameState.isCounterAttack = false;
+    gameState.isDefended = false;
     gameState.selectedTokenId = null;
     gameState.reachableCells = [];
     gameState.remainingMv = 0;

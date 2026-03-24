@@ -2,7 +2,7 @@ import { GameState, TableCard, Token } from '../../shared/types';
 import { getHeroStat } from '../hero/heroLogic';
 import { getAttackDamageBonusFromEnhancement } from '../card/enhancementModifiers';
 import { HEROES_DATABASE } from '../../shared/config/heroes';
-import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
+import { hexToPixel, pixelToHex, generateId } from '../../shared/utils/hexUtils';
 import { REWARDS } from '../../shared/hex/tileLogic';
 import { ActionHelpers } from '../action/actionEngine';
 
@@ -25,7 +25,7 @@ export class CombatLogic {
 
     if (targetToken && targetCard) {
       if (isDefended) {
-        helpers.addLog(`${targetCard.heroClass} 使用了 ${defenseCard.name}，攻击被抵消`, 1 - playerIndex);
+        helpers.addLog(`${targetCard.heroClass} 使用了 ${defenseCard?.name || '防御牌'}，攻击被抵消`, 1 - playerIndex);
       } else {
         const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
         const damage = this.calculateDamage(attackerCard, targetCard, false, gameState);
@@ -282,6 +282,56 @@ export class CombatLogic {
       helpers.checkAndResetChanting(deadHeroToken.id);
     }
   }
+
+  static getHeroAttackRange(card: TableCard): number {
+    const heroData = HEROES_DATABASE?.heroes?.find((h: any) => h.name === card.heroClass);
+    const levelData = heroData?.levels?.[card.level || 1];
+    return levelData?.ar || 1;
+  }
+
+  static getHeroMaxHp(card: TableCard): number {
+    const heroData = HEROES_DATABASE?.heroes?.find((h: any) => h.name === card.heroClass);
+    const levelData = heroData?.levels?.[card.level || 1];
+    return levelData?.hp || 0;
+  }
+
+  static hexDistance(a: { q: number; r: number }, b: { q: number; r: number }): number {
+    return Math.max(
+      Math.abs(a.q - b.q),
+      Math.abs(a.r - b.r),
+      Math.abs((a.q + a.r) - (b.q + b.r))
+    );
+  }
+
+  /**
+   * 计算是否可以反击
+   */
+  static canCounterAttack(gameState: GameState, defenderIndex: number): boolean {
+    const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+    const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
+
+    const defenderCard = gameState.tableCards.find((c: any) => c.id === gameState.selectedTargetId);
+    const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
+
+    if (!attackerToken || !attackerCard || !defenderCard || !defenderToken) return false;
+
+    // 条件1：先吃原始攻击后不能死
+    const incomingDamage = this.calculateDamage(attackerCard, defenderCard, false, gameState);
+    const defenderMaxHp = this.getHeroMaxHp(defenderCard);
+    const defenderCurrentDamage = defenderCard.damage || 0;
+    const survives = defenderCurrentDamage + incomingDamage < defenderMaxHp;
+
+    if (!survives) return false;
+
+    // 条件2：防守方攻击范围能打到原攻击者
+    const defenderRange = this.getHeroAttackRange(defenderCard);
+    const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
+    const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
+    const inRange = this.hexDistance(defenderHex, attackerHex) <= defenderRange;
+
+    return inRange;
+  }
+
 
   /**
    * 计算攻击造成的伤害

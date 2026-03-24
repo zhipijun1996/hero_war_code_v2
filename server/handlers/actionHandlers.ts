@@ -1,6 +1,7 @@
 import { ActionEngine } from '../../src/logic/action/actionEngine.ts';
 import { HeroEngine } from '../../src/logic/hero/heroEngine.ts';
 import { CardLogic } from '../../src/logic/card/cardLogic.ts';
+import { CombatLogic } from '../../src/logic/combat/combatLogic.ts';
 
 export const createActionHandlers = (deps: any) => {
   const {
@@ -76,6 +77,10 @@ export const createActionHandlers = (deps: any) => {
       if (!result.success) {
         socket.emit('error_message', result.reason);
         return;
+      }
+
+      if (gameState.phase === 'action_defend' && gameState.hasDefenseCard) {
+        gameState.canCounterAttack = CombatLogic.canCounterAttack(gameState, playerIndex);
       }
 
       if (gameState.phase === 'action_resolve_attack_counter') {
@@ -233,6 +238,10 @@ export const createActionHandlers = (deps: any) => {
           
           if (gameState.phase === 'action_defend') {
             gameState.isDefended = false;
+            gameState.isCounterAttack = false;
+            gameState.hasDefenseCard = false;
+            gameState.pendingDefenseCardId = null;
+            gameState.canCounterAttack = false;
           }
           
           if (gameState.phase === 'action_select_option') {

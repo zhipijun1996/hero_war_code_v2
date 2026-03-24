@@ -214,6 +214,9 @@ export interface GameState {
   comboState?: 'spy_resolve' | null;
   comboCardId?: string | null;
   lastPlayedCardId?: string | null;
+  pendingDefenseCardId?: string | null;
+  hasDefenseCard?: boolean;
+  canCounterAttack?: boolean;
   selectedOption?: string | null;
   selectedTargetId?: string | null;
   selectedHireCost?: number | null;

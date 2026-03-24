@@ -31,14 +31,8 @@ export class CardLogic {
     }
 
     if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
-      if (card.name !== '防御' && card.name !== '闪避') {
+      if (card.name !== '防御') {
         return { canPlay: false, reason: '只能打出防御卡。' };
-      }
-    }
-
-    if (gameState.phase === 'action_play_counter') {
-      if (card.name !== '行动') {
-        return { canPlay: false, reason: '只能打出攻击卡。' };
       }
     }
 
@@ -172,8 +166,13 @@ export class CardLogic {
       gameState.lastPlayedCardId = tableCard.id;
       
       if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
-        if (card.name === '防御' || card.name === '闪避') {
-          gameState.isDefended = true;
+        if (card.name === '防御') {
+          gameState.hasDefenseCard = true;
+          gameState.pendingDefenseCardId = tableCard.id;
+          gameState.lastPlayedCardId = tableCard.id;
+          gameState.isDefended = false;
+          gameState.isCounterAttack = false;
+          gameState.canCounterAttack = false;
         }
       }
       

@@ -25,31 +25,45 @@ export const createCombatHandlers = (deps: any) => {
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         addLog(`玩家${playerIndex + 1}放弃防御 (Pass Defend)`, playerIndex);
-        // Automate resolution
+        gameState.hasDefenseCard = false;
+        gameState.pendingDefenseCardId = null;
+        gameState.isDefended = false;
+        gameState.isCounterAttack = false;
+        gameState.canCounterAttack = false;
         const attackerIndex = 1 - playerIndex;
         ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
     declare_defend: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      
-      if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
-        addLog(`玩家${playerIndex + 1}声明防御 (Declare Defend)`, playerIndex);
-        // Automate resolution
-        const attackerIndex = 1 - playerIndex;
-        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
+      if (gameState.phase !== 'action_defend' || playerIndex !== gameState.activePlayerIndex) return;
+
+      if (!gameState.hasDefenseCard) {
+        socket.emit('error_message', '请先打出防御牌');
+        return;
       }
+      addLog(`玩家${playerIndex + 1}声明防御 (Declare Defend)`, playerIndex);
+      gameState.isDefended = true;
+      gameState.isCounterAttack = false;
+      const attackerIndex = 1 - playerIndex;
+      ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
     declare_counter: (socket: any) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      
-      if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
-        addLog(`玩家${playerIndex + 1}声明反击 (Declare Counter)`, playerIndex);
-        gameState.isCounterAttack = true;
-        // Automate resolution
-        const attackerIndex = 1 - playerIndex;
-        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
+      const playerIndex = getPlayerIndex(socket.id);      
+      if (gameState.phase !== 'action_defend' || playerIndex !== gameState.activePlayerIndex) return;
+      if (!gameState.hasDefenseCard) {
+        socket.emit('error_message', '请先打出防御牌');
+        return;
       }
+      if (!gameState.canCounterAttack) {
+        socket.emit('error_message', '当前不满足反击条件');
+        return;
+      }
+      addLog(`玩家${playerIndex + 1}声明反击 (Declare Counter)`, playerIndex);
+      gameState.isDefended = false;
+      gameState.isCounterAttack = true;
+      const attackerIndex = 1 - playerIndex;
+      ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
     cancel_defend_or_counter: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
