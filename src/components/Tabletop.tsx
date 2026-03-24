@@ -33,13 +33,11 @@ interface TabletopProps {
   isHistoryVisible: boolean;
   selectedHeroCardId: string | null;
   setSelectedHeroCardId: (id: string | null) => void;
-  selectedHireCardId: string | null;
-  setSelectedHireCardId: (id: string | null) => void;
 }
 
 const BASE_URL = 'https://raw.githubusercontent.com/zhipijun1996/heros_war/main/';
 
-export default function Tabletop({ socket, gameState, setZoomedCard, playerId, isHistoryVisible, selectedHeroCardId, setSelectedHeroCardId, selectedHireCardId, setSelectedHireCardId }: TabletopProps) {
+export default function Tabletop({ socket, gameState, setZoomedCard, playerId, isHistoryVisible, selectedHeroCardId, setSelectedHeroCardId }: TabletopProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -159,8 +157,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
     playerId,
     selectedHeroCardId,
     setSelectedHeroCardId,
-    selectedHireCardId,
-    setSelectedHireCardId,
   });
 
   return (
@@ -177,7 +173,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
         playerIndex={playerIndex}
         playerId={playerId}
         selectedHeroCardId={selectedHeroCardId}
-        selectedHireCardId={selectedHireCardId}
       />
 
       <SpectatorJoinButton 
@@ -224,7 +219,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           selectedOption={gameState.selectedOption}
           magicCircles={gameState.magicCircles}
           selectedHeroCardId={selectedHeroCardId}
-          selectedHireCardId={selectedHireCardId}
           playerIndex={playerIndex}
           phase={gameState.phase}
           pendingRevivals={gameState.pendingRevivals}
@@ -318,7 +312,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               onContextMenu={handleCardContextMenu} 
               onZoom={setZoomedCard} 
               onClick={(id) => handleCardClick(id, 'hire')}
-              isSelected={gameState.selectedTargetId === card.id || selectedHireCardId === card.id}
+              isSelected={gameState.selectedTargetId === card.id}
               lastEvolvedId={gameState.lastEvolvedId}
             />
           ))}

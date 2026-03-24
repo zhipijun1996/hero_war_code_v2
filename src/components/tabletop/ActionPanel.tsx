@@ -9,7 +9,6 @@ interface ActionPanelProps {
   playerIndex: number;
   playerId: string;
   socket: Socket;
-  selectedHireCardId: string | null;
 }
 
 export const ActionPanel: React.FC<ActionPanelProps> = ({
@@ -17,12 +16,65 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   playerIndex,
   playerId,
   socket,
-  selectedHireCardId
 }) => {
   const isActivePlayer = gameState.activePlayerIndex === playerIndex;
   const isPlayer1 = playerIndex === 0;
 
   if (!isActivePlayer && gameState.phase !== 'supply' && gameState.phase !== 'end' && gameState.phase !== 'discard') return null;
+
+  const renderHireUI = () => {
+    const goldY = isPlayer1 ? 550 : -700;
+    const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
+    const maxGold = goldCounter ? goldCounter.value : 0;
+    const costs = [2, 3, 4, 5, 6, 7, 8, 9].filter(c => c <= maxGold);
+    const hireableHeroes = gameState.hireAreaCards;
+
+    const hireCardId = gameState.selectedTargetId;
+
+    return (
+      <div className="flex flex-col gap-4 items-center">
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择雇佣英雄和费用 (Select hero and cost)</div>
+        
+        <div className="flex gap-2 flex-wrap justify-center">
+          {hireableHeroes.map(hero => hero && (
+            <button 
+              key={hero.id}
+              onClick={() => socket.emit('select_target', hero.id)}
+              className={`px-4 py-2 rounded-lg font-bold transition-all ${hireCardId === hero.id ? 'bg-blue-500 text-white scale-110 shadow-lg shadow-blue-500/50' : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'}`}
+            >
+              {hero.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 flex-wrap justify-center">
+          {costs.map(cost => (
+            <button 
+              key={cost}
+              onClick={() => socket.emit('select_hire_cost', cost)}
+              className={`px-4 py-2 rounded-lg font-bold transition-all ${!hireCardId ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : gameState.selectedHireCost === cost ? 'bg-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/50' : 'bg-emerald-900/50 text-emerald-200 hover:bg-emerald-800'}`}
+              disabled={!hireCardId}
+            >
+              {cost} 金币
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-4">
+          <button 
+            onClick={() => socket.emit('hire_hero', { cardId: hireCardId, goldAmount: gameState.selectedHireCost })}
+            className={`px-4 py-2 rounded-lg font-bold transition-all ${(!hireCardId || !gameState.selectedHireCost) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white'}`}
+            disabled={!hireCardId || !gameState.selectedHireCost}
+          >
+            确认雇佣 (Confirm Hire)
+          </button>
+          <button onClick={() => socket.emit('select_option', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+            取消 (Cancel)
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   if (gameState.phase === 'action_play') {
     return (
@@ -64,7 +116,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       return (
         <div className="flex gap-4">
           <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            撤回
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
           </button>
           <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
             结束结算
@@ -79,7 +131,26 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             onClick={() => socket.emit('undo_play')}
             className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold"
           >
-            撤回 (Undo)
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
+          </button>
+        </div>
+      );
+    }
+    if (gameState.activeActionType === 'evolve') {
+      return (
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button
+            onClick={() => socket.emit('undo_play')}
+            className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold"
+          >
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
+          </button>
+          
+          <button
+            onClick={() => socket.emit('finish_action')}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg font-bold"
+          >
+            确认进化
           </button>
         </div>
       );
@@ -87,7 +158,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     return (
       <div className="flex gap-4 flex-wrap justify-center">
         <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-          撤回 (Undo)
+          {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
         </button>
         <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
           完成结算 (Finish Resolve)
@@ -110,7 +181,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       return (
         <div className="flex gap-4 flex-wrap justify-center">
           <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            撤回
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
           </button>
           {canSeize && (
             <button onClick={() => socket.emit('select_option', 'seize')} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg font-bold">
@@ -195,52 +266,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           )}
         </div>
       );
-    } else if (gameState.selectedOption === 'evolve') {
-      const evolvableHeroes = gameState.tableCards.filter(c => c && gameState.evolvableHeroIds?.includes(c.id));
-      
-      return (
-        <div className="flex flex-col gap-4 items-center">
-          <div className="flex gap-2 flex-wrap justify-center">
-            {evolvableHeroes.map(hero => (
-              <button 
-                key={hero.id}
-                onClick={() => socket.emit('select_target', hero.id)}
-                className={`px-4 py-2 rounded-lg font-bold transition-all ${gameState.selectedTargetId === hero.id ? 'bg-blue-500 text-white ring-2 ring-white' : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'}`}
-              >
-                {hero.heroClass} (Lv{hero.level} {'->'} Lv{hero.level! + 1})
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-4 flex-wrap justify-center">
-            <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-              撤回
-            </button>
-          </div>
-        </div>
-      );
     } else if (gameState.selectedOption === 'hire') {
-      return (
-        <div className="flex flex-col gap-4 items-center">
-          <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择雇佣费用 (Select hire cost)</div>
-          <div className="flex gap-2 flex-wrap justify-center">
-            {[2, 3, 4, 5, 6, 7, 8, 9].map(cost => (
-              <button 
-                key={cost}
-                onClick={() => socket.emit('select_hire_cost', cost)}
-                className={`px-4 py-2 rounded-lg font-bold transition-all ${!gameState.selectedTargetId ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : gameState.selectedHireCost === cost ? 'bg-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/50' : 'bg-emerald-900/50 text-emerald-200 hover:bg-emerald-800'}`}
-                disabled={!gameState.selectedTargetId}
-              >
-                {cost} 金币
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-4">
-            <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-              撤回
-            </button>
-          </div>
-        </div>
-      );
+      return renderHireUI();
     } else if (gameState.selectedOption === 'heal') {
       const healableHeroes = gameState.tableCards.filter(c => c && gameState.healableHeroIds?.includes(c.id));
       
@@ -259,7 +286,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           </div>
           <div className="flex gap-4 flex-wrap justify-center">
             <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-              撤回
+              {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
             </button>
           </div>
         </div>
@@ -272,7 +299,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           </div>
           <div className="flex gap-4">
             <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-              撤回
+              {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
             </button>
           </div>
         </div>
@@ -285,7 +312,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           </div>
           <div className="flex gap-4">
             <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-              撤回
+              {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
             </button>
           </div>
         </div>
@@ -294,7 +321,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       return (
         <div className="flex gap-4">
           <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            撤回
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
           </button>
           <button onClick={() => socket.emit('finish_action')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
             完成结算
@@ -329,49 +356,40 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       </div>
     );
   }
-  if ((gameState.phase as string) === 'action_select_hero') {
+
+  if ((gameState.phase as string) === 'action_select_hero' || (gameState.phase as string) === 'action_select_substitute') {
+    const substituteHeroes = gameState.tokens.filter(t => {
+      if (!t.boundToCardId) return false;
+      if (t.id === gameState.activeHeroTokenId) return false;
+      const heroCard = gameState.tableCards.find(c => c.id === t.boundToCardId);
+      if (!heroCard) return false;
+      const isMine =
+        (playerIndex === 0 && heroCard.y > 0) ||
+        (playerIndex === 1 && heroCard.y < 0);
+      const isDead = gameState.counters.some(counter =>
+        counter &&
+        counter.type === 'time' &&
+        counter.boundToCardId === t.boundToCardId
+      );
+      return isMine && !isDead;
+    });
+
     return (
       <div className="flex flex-col gap-4 items-center">
-        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择一个英雄进行行动 (Select a hero)</div>
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择另一个英雄机型行动 (Select a hero)</div>
         <div className="flex gap-2 flex-wrap justify-center">
-          {gameState.tokens
-            .filter(t => t.boundToCardId && ((playerIndex === 0 && t.y > 0) || (playerIndex === 1 && t.y < 0)))
-            .map(hero => {
-              const heroCard = gameState.tableCards.find(c => c.id === hero.boundToCardId);
-              return (
-                <button 
-                  key={hero.id}
-                  onClick={() => socket.emit('select_hero_for_action', hero.id)} 
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold"
-                >
-                  {heroCard?.heroClass || '英雄'}
-                </button>
-              );
-            })}
-          <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg font-bold border border-red-500/30">取消 (Cancel)</button>
-        </div>
-      </div>
-    );
-  }
-  if ((gameState.phase as string) === 'action_select_substitute') {
-    return (
-      <div className="flex flex-col gap-4 items-center">
-        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择另一个英雄替代行动 (Select substitute hero)</div>
-        <div className="flex gap-2 flex-wrap justify-center">
-          {gameState.tokens
-            .filter(t => t.boundToCardId && ((playerIndex === 0 && t.y > 0) || (playerIndex === 1 && t.y < 0)) && t.id !== gameState.activeHeroTokenId)
-            .map(hero => {
-              const heroCard = gameState.tableCards.find(c => c.id === hero.boundToCardId);
-              return (
-                <button 
-                  key={hero.id}
-                  onClick={() => socket.emit('select_hero_for_action', hero.id)} 
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold"
-                >
-                  {heroCard?.heroClass || '英雄'}
-                </button>
-              );
-            })}
+          {substituteHeroes.map(hero => {
+            const heroCard = gameState.tableCards.find(c => c.id === hero.boundToCardId);
+            return (
+              <button 
+                key={hero.id}
+                onClick={() => socket.emit('select_hero_for_action', hero.id)} 
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold"
+              >
+                {heroCard?.heroClass || '英雄'}
+              </button>
+            );
+          })}
           <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg font-bold border border-red-500/30">取消 (Cancel)</button>
         </div>
       </div>
@@ -442,7 +460,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             确认反击
           </button>
           <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            撤回
+            {gameState.lastPlayedCardId ? '撤回 (Undo)' : '返回 (Back)'}
           </button>
         </div>
       );
@@ -471,30 +489,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   }
   if (gameState.phase === 'shop') {
     if (gameState.selectedOption === 'hire') {
-      const goldY = isPlayer1 ? 550 : -700;
-      const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
-      const maxGold = goldCounter ? goldCounter.value : 0;
-      const costs = [2, 3, 4, 5].filter(c => c <= maxGold);
-
-      return (
-        <div className="flex flex-col gap-4 items-center">
-          <div className="text-white font-bold">请选择雇佣成本 (Select hire cost)</div>
-          <div className="flex gap-2">
-            {costs.map(cost => (
-              <button 
-                key={cost} 
-                onClick={() => socket.emit('select_hire_cost', cost)}
-                className={`px-4 py-2 rounded-lg font-bold transition-all ${gameState.selectedHireCost === cost ? 'bg-pink-500 text-white scale-110 shadow-lg shadow-pink-500/50' : 'bg-pink-900/50 text-pink-200 hover:bg-pink-800'}`}
-              >
-                {cost} 金币
-              </button>
-            ))}
-          </div>
-          <button onClick={() => socket.emit('select_option', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-            取消 (Cancel)
-          </button>
-        </div>
-      );
+      return renderHireUI();
     }
     return (
       <div className="flex gap-4">

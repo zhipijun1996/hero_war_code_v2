@@ -15,7 +15,6 @@ export default function App() {
   const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
   const [isHistoryVisible, setIsHistoryVisible] = useState(true);
   const [selectedHeroCardId, setSelectedHeroCardId] = useState<string | null>(null);
-  const [selectedHireCardId, setSelectedHireCardId] = useState<string | null>(null);
   const [showMapEditor, setShowMapEditor] = useState(false);
 
   useEffect(() => {
@@ -130,8 +129,6 @@ export default function App() {
               isHistoryVisible={isHistoryVisible} 
               selectedHeroCardId={selectedHeroCardId}
               setSelectedHeroCardId={setSelectedHeroCardId}
-              selectedHireCardId={selectedHireCardId}
-              setSelectedHireCardId={setSelectedHireCardId}
             />
             
             {/* UI Overlay */}

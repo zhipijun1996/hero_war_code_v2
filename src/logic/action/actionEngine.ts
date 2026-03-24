@@ -385,10 +385,26 @@ export class ActionEngine {
     if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex) return;
     
     // If we were in a sub-phase of an action, go back to action_options
-    const subPhases = ['action_select_action', 'action_common', 'action_play_enhancement', 'action_select_substitute'];
+    const subPhases = [
+      'action_select_action', 
+      'action_common', 
+      'action_play_enhancement', 
+      'action_select_substitute',
+      'action_resolve',
+      'action_select_option',
+      'action_select_skill',
+      'action_select_target'
+    ];
+    
     if (subPhases.includes(gameState.phase)) {
-      gameState.phase = 'action_options';
+      // Reset action-specific state
+      gameState.selectedTokenId = null;
+      gameState.selectedOption = null;
+      gameState.reachableCells = [];
+      gameState.activeActionType = null;
       gameState.notification = null;
+      
+      gameState.phase = 'action_options';
       helpers.broadcastState();
       return;
     }
@@ -473,10 +489,6 @@ export class ActionEngine {
         socket.emit('error_message', '没有可以回复的英雄。 (No heroes available to heal.)');
         return;
       }
-      if (option === 'evolve' && (!gameState.evolvableHeroIds || gameState.evolvableHeroIds.length === 0)) {
-        socket.emit('error_message', '没有可以进化的英雄。 (No heroes available to evolve.)');
-        return;
-      }
       if (option === 'hire') {
         const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
         const anyCastleFree = playerCastles.some((cCoord: any) => {
@@ -534,6 +546,8 @@ export class ActionEngine {
 
       gameState.selectedOption = option;
       gameState.selectedTokenId = null;
+      gameState.selectedTargetId = null;
+      gameState.selectedHireCost = null;
       gameState.remainingMv = 0;
       gameState.reachableCells = [];
       gameState.movementHistory = undefined;
@@ -667,6 +681,8 @@ export class ActionEngine {
         gameState.canHire = true;
         gameState.phase = 'action_select_option';
         gameState.selectedOption = 'hire';
+        gameState.selectedTargetId = null;
+        gameState.selectedHireCost = null;
         gameState.notification = null;
         helpers.broadcastState();
         return;
@@ -796,10 +812,12 @@ export class ActionEngine {
       gameState.phase = 'action_select_skill';
       gameState.notification = '选择技能 (Select skill)';
     } else if (actionType === 'evolve') {
-      gameState.phase = 'action_select_option';
+      gameState.phase = 'action_resolve';
       gameState.selectedOption = 'evolve';
       gameState.selectedTokenId = heroToken.id;
-      gameState.notification = '确认进化 (Confirm evolve)';
+      gameState.selectedOption = null;
+      gameState.selectedTargetId = null;
+      gameState.notification = null;
     }
     helpers.broadcastState();
     helpers.checkBotTurn();
@@ -821,6 +839,9 @@ export class ActionEngine {
         helpers.addLog(`进入弃牌阶段`, -1);
       } else {
         gameState.phase = 'shop';
+        gameState.selectedOption = null;
+        gameState.selectedTargetId = null;
+        gameState.selectedHireCost = null;
         gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
         helpers.updateAvailableActions(gameState.activePlayerIndex);
         helpers.addLog(`进入商店阶段`, -1);
@@ -953,18 +974,6 @@ export class ActionEngine {
         playerIndex === gameState.activePlayerIndex) {
       
       gameState.selectedTargetId = targetId;
-      
-      // Immediate execution for evolve and heal to remove "Confirm" step
-      if (gameState.phase === 'action_select_option') {
-        if (gameState.selectedOption === 'evolve') {
-          this.finishAction(gameState, playerIndex, helpers, socket);
-          return;
-        }
-        if (gameState.selectedOption === 'heal') {
-          this.finishAction(gameState, playerIndex, helpers, socket);
-          return;
-        }
-      }
 
       // If we are in action_resolve and it's an attack, transition to defense phase
       if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') || 
@@ -1236,23 +1245,29 @@ export class ActionEngine {
           if (counter) counter.value = 0;
           helpers.addLog(`玩家${playerIndex + 1}回复了${card.heroClass}的生命`, playerIndex);
         }
-      } else if (gameState.selectedOption === 'evolve') {
-        const heroId = gameState.selectedTargetId;
-        const card = gameState.tableCards.find((c: any) => c.id === heroId);
-        if (card && card.level < 3) {
-          const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === card.id);
-          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
-          const levelData = heroData?.levels?.[card.level.toString()];
+      } else if (gameState.activeActionType === 'evolve') {
+        const heroToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+        const heroCard = gameState.tableCards.find((c: any) => c.id === heroToken?.boundToCardId);
+        if (!heroToken || !heroCard) {
+          socket.emit('error_message', '未找到可进化的英雄');
+        } else if (heroCard.level >= 3) {
+          socket.emit('error_message', '该英雄已达到最高等级');
+        } else {
+          const expCounter = gameState.counters.find(
+            (c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id
+          );
+          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass);
+          const levelData = heroData?.levels?.[heroCard.level.toString()];
           const expNeeded = levelData?.xp;
-          if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
+          if (!expCounter || typeof expNeeded !== 'number' || expCounter.value < expNeeded) {
+            socket.emit('error_message', '经验不足，无法进化');
+          } else {
             expCounter.value -= expNeeded;
-            card.level += 1;
-            const token = gameState.tokens.find((t: any) => t.boundToCardId === card.id);
-            if (token) {
-              token.lv = card.level;
-              token.label = `${card.heroClass} Lv${card.level}`;
-            }
-            helpers.addLog(`玩家${playerIndex + 1}进化了${card.heroClass}到Lv${card.level}`, playerIndex);
+            heroCard.level += 1;
+            heroToken.lv = heroCard.level;
+            heroToken.label = `${heroCard.heroClass} Lv${heroCard.level}`;
+            gameState.lastEvolvedId = heroCard.id;
+            helpers.addLog(`玩家${playerIndex + 1}进化了${heroCard.heroClass}到Lv${heroCard.level}`, playerIndex);
           }
         }
       }
@@ -1345,6 +1360,9 @@ export class ActionEngine {
   static startShopPhase(gameState: GameState, helpers: ActionHelpers): void {
     helpers.setPhase('shop');
     gameState.shopPasses = 0;
+    gameState.selectedOption = null;
+    gameState.selectedTargetId = null;
+    gameState.selectedHireCost = null;
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     helpers.addLog(`进入商店阶段`, -1);
     helpers.broadcastState();

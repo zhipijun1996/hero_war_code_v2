@@ -151,7 +151,6 @@ export class CardLogic {
         gameState.consecutivePasses = 0;
         gameState.round = 1;
       } else {
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
       }
 
       gameState.lastPlayedCardId = tableCard.id;

@@ -12,8 +12,6 @@ interface ClickHandlerParams {
   socket: Socket;
   selectedHeroCardId: string | null;
   setSelectedHeroCardId: (id: string | null) => void;
-  selectedHireCardId: string | null;
-  setSelectedHireCardId: (id: string | null) => void;
 }
 
 export const handleHexClickLogic = (
@@ -21,9 +19,9 @@ export const handleHexClickLogic = (
   r: number, 
   params: ClickHandlerParams
 ) => {
-  const { gameState, playerIndex, isActivePlayer, socket, selectedHeroCardId, setSelectedHeroCardId, selectedHireCardId, setSelectedHireCardId } = params;
+  const { gameState, playerIndex, isActivePlayer, socket, selectedHeroCardId, setSelectedHeroCardId } = params;
 
-  if (gameState.phase === 'setup' && isActivePlayer) {
+  if (gameState.phase === 'setup' && playerIndex !== -1) {
     if (selectedHeroCardId) {
       const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
       const castleIdx = playerCastles.findIndex((c: any) => c.q === q && c.r === r);
@@ -36,18 +34,6 @@ export const handleHexClickLogic = (
   }
 
   if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
-    if ((gameState.phase === 'shop' && (selectedHireCardId || gameState.selectedTargetId) && gameState.selectedHireCost) || 
-        (gameState.phase === 'action_select_option' && gameState.selectedOption === 'hire' && gameState.selectedTargetId && gameState.selectedHireCost)) {
-      const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
-      const castleIdx = playerCastles.findIndex((c: any) => c.q === q && c.r === r);
-      if (castleIdx !== -1) {
-        const hireCardId = selectedHireCardId || gameState.selectedTargetId;
-        const goldAmount = gameState.selectedHireCost;
-        socket.emit('hire_hero', { cardId: hireCardId, goldAmount, targetCastleIndex: castleIdx });
-        if (gameState.phase === 'shop') setSelectedHireCardId(null);
-        return;
-      }
-    }
     if (gameState.phase === 'shop') return;
   }
 
@@ -197,21 +183,17 @@ export const handleCardClickLogic = (
   area: 'table' | 'hire' | 'play',
   params: ClickHandlerParams
 ) => {
-  const { gameState, isActivePlayer, socket, selectedHireCardId, setSelectedHireCardId } = params;
+  const { gameState, isActivePlayer, socket } = params;
 
   if (area === 'table' || area === 'play') {
     if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
       socket.emit('select_target', id);
     }
   } else if (area === 'hire') {
-    if (gameState.phase === 'shop' && isActivePlayer) {
+    if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
       if (gameState.selectedOption === 'hire') {
         socket.emit('select_target', id);
-      } else {
-        setSelectedHireCardId(id === selectedHireCardId ? null : id);
       }
-    } else if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
-      socket.emit('select_target', id);
     }
   }
 };

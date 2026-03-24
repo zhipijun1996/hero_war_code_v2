@@ -8,8 +8,6 @@ interface UseBoardInteractionParams {
   playerId: string;
   selectedHeroCardId: string | null;
   setSelectedHeroCardId: (id: string | null) => void;
-  selectedHireCardId: string | null;
-  setSelectedHireCardId: (id: string | null) => void;
 }
 
 export const useBoardInteraction = ({
@@ -18,8 +16,6 @@ export const useBoardInteraction = ({
   playerId,
   selectedHeroCardId,
   setSelectedHeroCardId,
-  selectedHireCardId,
-  setSelectedHireCardId,
 }: UseBoardInteractionParams) => {
   const isPlayer1 = gameState.seats[0] === playerId;
   const isPlayer2 = gameState.seats[1] === playerId;
@@ -33,8 +29,6 @@ export const useBoardInteraction = ({
     socket,
     selectedHeroCardId,
     setSelectedHeroCardId,
-    selectedHireCardId,
-    setSelectedHireCardId
   };
 
   const handleHexClick = (q: number, r: number) => {

@@ -5,7 +5,6 @@ interface GetPhasePromptParams {
   playerIndex: number;
   playerId: string;
   selectedHeroCardId: string | null;
-  selectedHireCardId: string | null;
 }
 
 export const getPhasePrompt = ({
@@ -13,7 +12,6 @@ export const getPhasePrompt = ({
   playerIndex,
   playerId,
   selectedHeroCardId,
-  selectedHireCardId
 }: GetPhasePromptParams): string => {
   const isActivePlayer = gameState.activePlayerIndex === playerIndex;
 
@@ -139,9 +137,9 @@ export const getPhasePrompt = ({
     return `反击结算：请${activePlayerStr}结算反击 (Settle counter-attack)`;
   }
   if (gameState.phase === 'shop') {
-    if ((selectedHireCardId || gameState.selectedTargetId) && gameState.selectedHireCost) {
+    if (gameState.selectedTargetId && gameState.selectedHireCost) {
       return "请点击地图上的王城🏰以部署雇佣的英雄";
-    } else if (selectedHireCardId || gameState.selectedTargetId) {
+    } else if (gameState.selectedTargetId) {
       return "请选择雇佣成本 (Select hire cost)";
     }
     return `商店阶段：请${activePlayerStr}购买装备或雇佣英雄`;

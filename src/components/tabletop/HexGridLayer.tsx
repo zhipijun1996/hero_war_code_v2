@@ -11,7 +11,6 @@ interface HexGridLayerProps {
   selectedOption?: string | null;
   magicCircles?: { q: number, r: number, state: string }[];
   selectedHeroCardId?: string | null;
-  selectedHireCardId?: string | null;
   playerIndex: number;
   phase?: string;
   pendingRevivals?: any[];
@@ -26,7 +25,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   selectedOption,
   magicCircles,
   selectedHeroCardId,
-  selectedHireCardId,
   playerIndex,
   phase,
   pendingRevivals,
@@ -99,7 +97,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         const isMyCastle = playerCastles?.some((c: any) => c.q === q && c.r === r);
         
         if (isMyCastle) {
-          if (selectedHeroCardId || selectedHireCardId || selectedOption === 'hire') {
+          if (selectedHeroCardId || selectedOption === 'hire') {
             highlightColor = "rgba(168, 85, 247, 0.4)"; // Purple highlight
           } else if (phase === 'revival' && pendingRevivals?.some(r => r.playerIndex === playerIndex)) {
             highlightColor = "rgba(139, 92, 246, 0.6)"; // Violet highlight

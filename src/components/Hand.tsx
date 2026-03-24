@@ -39,6 +39,7 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
 
   const handleCardClick = (cardId: string) => {
     if (gameState.phase === 'discard') {
+      if (hand.length <= 5) { return; }
       socket.emit('discard_card', cardId);
       return;
     }

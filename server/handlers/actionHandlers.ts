@@ -126,6 +126,11 @@ export const createActionHandlers = (deps: any) => {
 
       const cardIndex = player.hand.findIndex((c: any) => c.id === cardId);
       if (cardIndex !== -1 && gameState.phase === 'discard' && !player.discardFinished) {
+        if (player.hand.length <= 5) {
+          socket.emit('error_message', '你的手牌已经不超过 5 张，不能继续弃牌。');
+          return;
+        }
+        
         const card = player.hand.splice(cardIndex, 1)[0];
         gameState.discardPiles.action.push(card);
         // Save state for undo
@@ -228,12 +233,12 @@ export const createActionHandlers = (deps: any) => {
       const player = gameState.players[socket.id];
       if (!player) return;
 
-      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend') && playerIndex === gameState.activePlayerIndex && gameState.lastPlayedCardId) {
+      // Case 1: Undoing a card play
+      if (gameState.lastPlayedCardId) {
         const cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
         if (cardIndex !== -1) {
           const card = gameState.playAreaCards.splice(cardIndex, 1)[0];
           player.hand.push(card);
-          
           gameState.lastPlayedCardId = null;
           
           if (gameState.phase === 'action_defend') {
@@ -242,25 +247,35 @@ export const createActionHandlers = (deps: any) => {
             gameState.hasDefenseCard = false;
             gameState.pendingDefenseCardId = null;
             gameState.canCounterAttack = false;
+            broadcastState();
+            return;
           }
           
-          if (gameState.phase === 'action_select_option') {
+          // If we were in action_select_option or action_resolve, go back to action_play_enhancement or action_play
+          if (gameState.activeActionTokenId) {
+            gameState.phase = 'action_play_enhancement';
+          } else {
             gameState.phase = 'action_play';
-            gameState.selectedOption = null;
-            gameState.selectedTokenId = null;
-            gameState.reachableCells = [];
-            
-            if (gameState.activeActionTokenId) {
-              const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
-              if (token) token.used = false;
-              gameState.activeActionTokenId = null;
-            }
           }
+          gameState.selectedOption = null;
+          gameState.selectedTokenId = null;
+          gameState.reachableCells = [];
           
           addLog(`玩家${playerIndex + 1}撤回了出牌 (Player ${playerIndex + 1} undid card play)`, playerIndex);
           broadcastState();
+          return;
         }
       }
+
+      // Case 2: Undoing action selection (no card played)
+      if (gameState.phase === 'action_resolve' || gameState.phase === 'action_select_option' || gameState.phase === 'action_select_skill' || gameState.phase === 'action_select_target') {
+        if (gameState.activeActionTokenId) {
+          ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
+          return;
+        }
+      }
+      
+      broadcastState();
     },
     cancel_play_card: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -269,24 +284,22 @@ export const createActionHandlers = (deps: any) => {
       const player = gameState.players[socket.id];
       if (!player) return;
 
-      if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex && gameState.lastPlayedCardId) {
+      if (gameState.lastPlayedCardId) {
         const cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
         if (cardIndex !== -1) {
           const card = gameState.playAreaCards.splice(cardIndex, 1)[0];
           player.hand.push(card);
-          
           gameState.lastPlayedCardId = null;
-          gameState.phase = 'action_play';
+          
+          if (gameState.activeActionTokenId) {
+            gameState.phase = 'action_play_enhancement';
+          } else {
+            gameState.phase = 'action_play';
+          }
           gameState.selectedOption = null;
           gameState.selectedTokenId = null;
           gameState.reachableCells = [];
           
-          if (gameState.activeActionTokenId) {
-            const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
-            if (token) token.used = false;
-            gameState.activeActionTokenId = null;
-          }
-
           addLog(`玩家${playerIndex + 1}撤回了出牌 (Player ${playerIndex + 1} undid card play)`, playerIndex);
           broadcastState();
         }

@@ -10,7 +10,6 @@ interface PhaseUIProps {
   playerIndex: number;
   playerId: string;
   selectedHeroCardId: string | null;
-  selectedHireCardId: string | null;
 }
 
 export const PhaseUI: React.FC<PhaseUIProps> = ({
@@ -19,7 +18,6 @@ export const PhaseUI: React.FC<PhaseUIProps> = ({
   playerIndex,
   playerId,
   selectedHeroCardId,
-  selectedHireCardId,
 }) => {
   const [isPromptHidden, setIsPromptHidden] = useState(false);
 
@@ -31,7 +29,6 @@ export const PhaseUI: React.FC<PhaseUIProps> = ({
       playerIndex,
       playerId,
       selectedHeroCardId,
-      selectedHireCardId
     });
   };
 
@@ -68,7 +65,6 @@ export const PhaseUI: React.FC<PhaseUIProps> = ({
                 playerIndex={playerIndex}
                 socket={socket}
                 playerId={playerId}
-                selectedHireCardId={selectedHireCardId}
               />
             </div>
           )}

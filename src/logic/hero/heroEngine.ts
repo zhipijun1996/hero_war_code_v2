@@ -82,12 +82,28 @@ export class HeroEngine {
 
     // 3. 检查位置
     const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-    const castleCoord = playerCastles[targetCastleIndex] || playerCastles[0];
+    let castleCoord = playerCastles[targetCastleIndex];
+    let castlePos = castleCoord ? hexToPixel(castleCoord.q, castleCoord.r) : null;
+    let castleOccupied = castlePos ? gameState.tokens.some(t => Math.abs(t.x - castlePos!.x) < 10 && Math.abs(t.y - castlePos!.y) < 10) : true;
+
+    if (!castleCoord || castleOccupied) {
+      // Find first empty castle
+      for (let i = 0; i < playerCastles.length; i++) {
+        const coord = playerCastles[i];
+        const pos = hexToPixel(coord.q, coord.r);
+        const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+        if (!occupied) {
+          castleCoord = coord;
+          castlePos = pos;
+          castleOccupied = false;
+          break;
+        }
+      }
+    }
+
     if (!castleCoord) return { success: false, reason: '雇佣失败：找不到王城坐标。' };
-    const castlePos = hexToPixel(castleCoord.q, castleCoord.r);
-    const castleOccupied = gameState.tokens.some(t => Math.abs(t.x - castlePos.x) < 10 && Math.abs(t.y - castlePos.y) < 10);
     if (castleOccupied) {
-      return { success: false, reason: '雇佣失败：所选王城中已经有英雄了。' };
+      return { success: false, reason: '雇佣失败：所有王城中已经有英雄了。' };
     }
 
     // 4. 检查金币

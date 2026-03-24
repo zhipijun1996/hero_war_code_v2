@@ -82,9 +82,9 @@ export const createShopHandlers = (deps: any) => {
         broadcastState();
         checkBotTurn();
       } else {
-        gameState.phase = 'discard';
+        gameState.phase = 'end';
         gameState.activePlayerIndex = gameState.firstPlayerIndex;
-        addLog(`--- 弃牌阶段开始 (Discard Phase Starts) ---`, -1);
+        addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
         broadcastState();
       }
     },
