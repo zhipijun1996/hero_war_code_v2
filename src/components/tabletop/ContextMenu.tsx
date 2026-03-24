@@ -8,10 +8,9 @@ interface ContextMenuProps {
   playerId: string;
   socket: Socket;
   setMenu: (menu: any) => void;
-  setHirePopup: (popup: any) => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ menu, gameState, playerId, socket, setMenu, setHirePopup }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ menu, gameState, playerId, socket, setMenu }) => {
   if (!menu) return null;
 
   const isPlayer1 = gameState.seats[0] === playerId;
@@ -72,24 +71,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ menu, gameState, playerId, so
                   onClick={() => { socket.emit('select_option', 'move'); socket.emit('select_target', menu.targetId); setMenu(null); }}
                 >
                   移动 (Move)
-                </button>
-              );
-            }
-            return null;
-          })()}
-          {(() => {
-            const isHireArea = (gameState.hireAreaCards || []).filter(Boolean).some(c => c && c.id === menu.targetId);
-            const tokenY = playerIndex === 0 ? 311.7 : -311.7;
-            const castleHasHero = gameState.tokens.some(t => Math.abs(t.x) < 10 && Math.abs(t.y - tokenY) < 10);
-            const isCorrectPhase = ['shop', 'action_select_option'].includes(gameState.phase);
-
-            if (isHireArea && isPlayer && !castleHasHero && isMyTurn && isCorrectPhase) {
-              return (
-                <button 
-                  className="w-full text-left px-4 py-2 text-sm text-emerald-400 hover:bg-zinc-700 font-bold"
-                  onClick={() => { setHirePopup({ cardId: menu.targetId }); setMenu(null); }}
-                >
-                  雇佣 (Hire)
                 </button>
               );
             }

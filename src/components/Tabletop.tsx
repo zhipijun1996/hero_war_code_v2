@@ -382,7 +382,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
         playerId={playerId} 
         socket={socket} 
         setMenu={setMenu} 
-        setHirePopup={setHirePopup} 
       />
 
       {/* Hire Popup */}
