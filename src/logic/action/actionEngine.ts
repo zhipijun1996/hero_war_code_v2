@@ -227,12 +227,14 @@ export class ActionEngine {
 
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
+            gameState.notification = null;
             gameState.lastPlayedCardId = null;
             gameState.pendingDefenseCardId = null;
             gameState.hasDefenseCard = false;
             gameState.canCounterAttack = false;
             gameState.isCounterAttack = false;
             gameState.isDefended = false;
+            gameState.attackInitiatorIndex = playerIndex;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
             helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
@@ -311,12 +313,14 @@ export class ActionEngine {
 
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
+            gameState.notification = null;
             gameState.lastPlayedCardId = null;
             gameState.pendingDefenseCardId = null;
             gameState.hasDefenseCard = false;
             gameState.canCounterAttack = false;
             gameState.isCounterAttack = false;
             gameState.isDefended = false;
+            gameState.attackInitiatorIndex = playerIndex;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
             helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
@@ -1059,9 +1063,11 @@ export class ActionEngine {
         const targetToken = gameState.tokens.find(t => t.boundToCardId === targetCard!.id);
         gameState.selectedTargetId = targetToken ? targetToken.boundToCardId || null : targetCard!.id;
         gameState.phase = 'action_defend';
+        gameState.notification = null;
         gameState.lastPlayedCardId = null;
         gameState.isCounterAttack = false;
         gameState.isDefended = false;
+        gameState.attackInitiatorIndex = playerIndex;
         gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
         gameState.reachableCells = [];
         helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
@@ -1270,7 +1276,12 @@ export class ActionEngine {
     gameState.selectedTokenId = null;
     gameState.reachableCells = [];
     gameState.remainingMv = 0;
-    gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+    if (gameState.attackInitiatorIndex !== undefined && gameState.attackInitiatorIndex !== null) {
+      gameState.activePlayerIndex = 1 - gameState.attackInitiatorIndex;
+    } else {
+      gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+    }
+    gameState.attackInitiatorIndex = null;
     helpers.broadcastState();
     helpers.checkBotTurn();
   }

@@ -17,7 +17,7 @@ export class CombatLogic {
   ): void {
     const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
     const targetId = gameState.selectedTargetId;
-    const targetToken = gameState.tokens.find((t: any) => t.id === targetId);
+    const targetToken = gameState.tokens.find((t: any) => t.boundToCardId  === targetId);
     const targetCard = gameState.tableCards.find((c: any) => c.id === targetId);
     
     const isDefended = !!gameState.isDefended;

@@ -30,7 +30,7 @@ export const createCombatHandlers = (deps: any) => {
         gameState.isDefended = false;
         gameState.isCounterAttack = false;
         gameState.canCounterAttack = false;
-        const attackerIndex = 1 - playerIndex;
+        const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
         ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
@@ -45,7 +45,7 @@ export const createCombatHandlers = (deps: any) => {
       addLog(`玩家${playerIndex + 1}声明防御 (Declare Defend)`, playerIndex);
       gameState.isDefended = true;
       gameState.isCounterAttack = false;
-      const attackerIndex = 1 - playerIndex;
+      const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
       ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
     declare_counter: (socket: any) => {
@@ -62,7 +62,7 @@ export const createCombatHandlers = (deps: any) => {
       addLog(`玩家${playerIndex + 1}声明反击 (Declare Counter)`, playerIndex);
       gameState.isDefended = false;
       gameState.isCounterAttack = true;
-      const attackerIndex = 1 - playerIndex;
+      const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
       ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
     cancel_defend_or_counter: (socket: any) => {

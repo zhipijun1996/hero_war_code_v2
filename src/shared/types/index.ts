@@ -217,6 +217,7 @@ export interface GameState {
   pendingDefenseCardId?: string | null;
   hasDefenseCard?: boolean;
   canCounterAttack?: boolean;
+  attackInitiatorIndex?: number | null;
   selectedOption?: string | null;
   selectedTargetId?: string | null;
   selectedHireCost?: number | null;
