@@ -20,8 +20,8 @@ export class CombatLogic {
     const targetToken = gameState.tokens.find((t: any) => t.id === targetId);
     const targetCard = gameState.tableCards.find((c: any) => c.id === targetId);
     
-    const defenseCard = gameState.playAreaCards.find((c: any) => c.name === '防御' || c.name === '闪避');
-    const isDefended = !!defenseCard;
+    const isDefended = !!gameState.isDefended;
+    const defenseCard = isDefended ? gameState.playAreaCards.find((c: any) => c.id === gameState.lastPlayedCardId) : null;
 
     if (targetToken && targetCard) {
       if (isDefended) {

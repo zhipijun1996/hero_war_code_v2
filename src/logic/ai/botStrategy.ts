@@ -60,7 +60,7 @@ export class BotStrategy {
         return { type: 'pass_action' };
 
       case 'action_resolve':
-        return { type: 'finish_action' };
+        return this.decideActionResolveAction(gameState, playerIndex);
 
       case 'action_defend':
         return this.decideActionDefendAction(gameState, botPlayer, playerIndex);
@@ -277,6 +277,26 @@ export class BotStrategy {
         if (isTargetInAttackRange(hex, enemyHex, ar, gameState)) {
           canAttack = true;
           break;
+        }
+      }
+      
+      if (!canAttack && gameState.map?.monsters) {
+        for (const monster of gameState.map.monsters) {
+          if (isTargetInAttackRange(hex, { q: monster.q, r: monster.r }, ar, gameState)) {
+            canAttack = true;
+            break;
+          }
+        }
+      }
+      
+      if (!canAttack) {
+        const enemyIndex = 1 - playerIndex;
+        const enemyCastles = gameState.map?.castles?.[enemyIndex as 0 | 1] || [];
+        for (const castle of enemyCastles) {
+          if (isTargetInAttackRange(hex, { q: castle.q, r: castle.r }, ar, gameState)) {
+            canAttack = true;
+            break;
+          }
         }
       }
       

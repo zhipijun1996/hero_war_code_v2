@@ -78,8 +78,12 @@ export const createActionHandlers = (deps: any) => {
         return;
       }
 
-      broadcastState();
-      checkBotTurn();
+      if (gameState.phase === 'action_resolve_attack_counter') {
+        ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
+      } else {
+        broadcastState();
+        checkBotTurn();
+      }
     },
     discard_card: (socket: any, cardId: string) => {
       const player = gameState.players?.[socket.id];
@@ -143,44 +147,7 @@ export const createActionHandlers = (deps: any) => {
     },
     finish_discard: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      const player = gameState.players?.[socket.id];
-      if (!player || gameState.phase !== 'discard') return;
-
-      const handLimit = 5;
-      if (player.hand.length > handLimit) {
-        socket.emit('error_message', `手牌上限为${handLimit}张，请继续弃牌 (Hand limit is ${handLimit}, please discard more)`);
-        return;
-      }
-
-      player.discardFinished = true;
-      addLog(`玩家${playerIndex + 1}完成弃牌 (Player ${playerIndex + 1} finished discarding)`, playerIndex);
-
-      const p1 = gameState.players?.[gameState.seats[0]];
-      const p2 = gameState.players?.[gameState.seats[1]];
-
-      if ((!p1 || p1.discardFinished) && (!p2 || p2.discardFinished)) {
-        if (p1) p1.discardFinished = false;
-        if (p2) p2.discardFinished = false;
-        
-        gameState.round++;
-        gameState.phase = 'action_play';
-        gameState.activePlayerIndex = gameState.firstPlayerIndex;
-        addLog(`--- 第 ${gameState.round} 回合开始 (Round ${gameState.round} Starts) ---`, -1);
-        
-        // Reset action tokens
-        gameState.actionTokens = [];
-        createActionTokensForPlayer(0);
-        createActionTokensForPlayer(1);
-        
-        // Draw cards
-        if (gameState.seats[0]) drawCards(gameState.seats[0], 1);
-        if (gameState.seats[1]) drawCards(gameState.seats[1], 1);
-        
-        broadcastState();
-        checkBotTurn();
-      } else {
-        broadcastState();
-      }
+      ActionEngine.finishDiscard(gameState, playerIndex, actionHelpers, socket);
     },
     revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -256,24 +223,31 @@ export const createActionHandlers = (deps: any) => {
       const player = gameState.players[socket.id];
       if (!player) return;
 
-      if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex && gameState.lastPlayedCardId) {
+      if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_defend') && playerIndex === gameState.activePlayerIndex && gameState.lastPlayedCardId) {
         const cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
         if (cardIndex !== -1) {
           const card = gameState.playAreaCards.splice(cardIndex, 1)[0];
           player.hand.push(card);
           
           gameState.lastPlayedCardId = null;
-          gameState.phase = 'action_play';
-          gameState.selectedOption = null;
-          gameState.selectedTokenId = null;
-          gameState.reachableCells = [];
           
-          if (gameState.activeActionTokenId) {
-            const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
-            if (token) token.used = false;
-            gameState.activeActionTokenId = null;
+          if (gameState.phase === 'action_defend') {
+            gameState.isDefended = false;
           }
-
+          
+          if (gameState.phase === 'action_select_option') {
+            gameState.phase = 'action_play';
+            gameState.selectedOption = null;
+            gameState.selectedTokenId = null;
+            gameState.reachableCells = [];
+            
+            if (gameState.activeActionTokenId) {
+              const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
+              if (token) token.used = false;
+              gameState.activeActionTokenId = null;
+            }
+          }
+          
           addLog(`玩家${playerIndex + 1}撤回了出牌 (Player ${playerIndex + 1} undid card play)`, playerIndex);
           broadcastState();
         }

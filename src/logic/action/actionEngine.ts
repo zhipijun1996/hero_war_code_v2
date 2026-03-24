@@ -46,13 +46,16 @@ export class ActionEngine {
         gameState.selectedTokenId) {
       
       const token = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
+      console.log(`[moveTokenToCell] token found: ${!!token}, reachable: ${gameState.reachableCells.some(c => c.q === q && c.r === r)}, q: ${q}, r: ${r}`);
       if (token && gameState.reachableCells.some(c => c.q === q && c.r === r)) {
+        console.log(`[moveTokenToCell] selectedOption: ${gameState.selectedOption}, activeActionType: ${gameState.activeActionType}`);
         if (gameState.selectedOption === 'move' || 
             gameState.selectedOption === 'sprint' || 
             (gameState.phase === 'action_resolve' && gameState.activeActionType === 'move')) {
           
           const currentHex = pixelToHex(token.x, token.y);
           const dist = getPathDist(currentHex, { q, r }, gameState);
+          console.log(`[moveTokenToCell] dist: ${dist}, remainingMv: ${gameState.remainingMv}`);
           
           if (dist <= gameState.remainingMv!) {
             if (!gameState.movementHistory) gameState.movementHistory = [];
@@ -225,8 +228,10 @@ export class ActionEngine {
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
             gameState.lastPlayedCardId = null;
+            gameState.isCounterAttack = false;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
+            helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
             helpers.broadcastState();
             helpers.checkBotTurn();
             return;
@@ -303,8 +308,10 @@ export class ActionEngine {
             gameState.selectedTargetId = targetToken.boundToCardId || null;
             gameState.phase = 'action_defend';
             gameState.lastPlayedCardId = null;
+            gameState.isCounterAttack = false;
             gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
             gameState.reachableCells = [];
+            helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
             helpers.broadcastState();
             helpers.checkBotTurn();
             return;
@@ -1045,8 +1052,11 @@ export class ActionEngine {
         gameState.selectedTargetId = targetToken ? targetToken.boundToCardId || null : targetCard!.id;
         gameState.phase = 'action_defend';
         gameState.lastPlayedCardId = null;
+        gameState.isCounterAttack = false;
+        gameState.isDefended = false;
         gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
         gameState.reachableCells = [];
+        helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
         helpers.broadcastState();
         helpers.checkBotTurn();
         return;
@@ -1386,13 +1396,22 @@ export class ActionEngine {
    */
   static endResolveAttack(
     gameState: GameState,
-    playerIndex: number,
+    attackerIndex: number,
     helpers: ActionHelpers,
     socket: any
   ): void {
-    if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
-      CombatLogic.resolveAttack(gameState, playerIndex, helpers);
-      this.finishAction(gameState, playerIndex, helpers, socket);
+    if (gameState.phase === 'action_defend') {
+      // Transition to resolve phase
+      gameState.phase = 'action_resolve_attack';
+      CombatLogic.resolveAttack(gameState, attackerIndex, helpers);
+      
+      if (gameState.isCounterAttack) {
+        // Automate counter-attack resolution
+        gameState.phase = 'action_resolve_attack_counter';
+        this.endResolveAttackCounter(gameState, attackerIndex, helpers, socket);
+      } else {
+        this.finishAction(gameState, attackerIndex, helpers, socket);
+      }
     }
   }
 
@@ -1401,13 +1420,15 @@ export class ActionEngine {
    */
   static endResolveAttackCounter(
     gameState: GameState,
-    playerIndex: number,
+    attackerIndex: number,
     helpers: ActionHelpers,
     socket: any
   ): void {
-    if (gameState.phase === 'action_resolve_attack_counter' && playerIndex === gameState.activePlayerIndex) {
-      CombatLogic.resolveCounterAttack(gameState, playerIndex, helpers);
-      this.finishAction(gameState, playerIndex, helpers, socket);
+    if (gameState.phase === 'action_resolve_attack_counter') {
+      // The original defender is performing the counter attack
+      const defenderIndex = 1 - attackerIndex;
+      CombatLogic.resolveCounterAttack(gameState, defenderIndex, helpers);
+      this.finishAction(gameState, attackerIndex, helpers, socket);
     }
   }
 }

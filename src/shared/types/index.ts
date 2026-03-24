@@ -241,4 +241,6 @@ export interface GameState {
   activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | null;
   activeEnhancementCardId?: string | null;
   activeHeroTokenId?: string | null;
+  isCounterAttack?: boolean;
+  isDefended?: boolean;
 }

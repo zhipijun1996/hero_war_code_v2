@@ -23,6 +23,13 @@ export class CardLogic {
       return { canPlay: false, reason: '请先完成当前卡牌的结算。' };
     }
 
+    if (gameState.phase === 'action_play_enhancement') {
+      const isEnhancement = card.name === '近战强化' || card.name === '远程强化' || card.name === '移动强化' || card.name === '替身术';
+      if (!isEnhancement) {
+        return { canPlay: false, reason: '只能打出增强卡。' };
+      }
+    }
+
     if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
       if (card.name !== '防御' && card.name !== '闪避') {
         return { canPlay: false, reason: '只能打出防御卡。' };
@@ -163,6 +170,12 @@ export class CardLogic {
       const tableCard: TableCard = { ...card, x: playAreaX + offset, y: playAreaY, faceUp: true };
       gameState.playAreaCards.push(tableCard);
       gameState.lastPlayedCardId = tableCard.id;
+      
+      if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
+        if (card.name === '防御' || card.name === '闪避') {
+          gameState.isDefended = true;
+        }
+      }
       
       // 清理移动历史
       gameState.movedTokens = undefined;

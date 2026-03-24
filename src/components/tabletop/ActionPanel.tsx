@@ -418,7 +418,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   }
   if (gameState.phase === 'action_defend') {
-    const hasDefenseCard = gameState.playAreaCards.some(c => c.name === '防御' || c.name === '闪避');
+    const hasDefenseCard = !!gameState.isDefended;
     if (hasDefenseCard) {
       return (
         <div className="flex gap-4">
@@ -436,40 +436,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     }
     return (
       <div className="flex gap-4">
-        <button onClick={() => socket.emit('declare_defend')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-          防御
-        </button>
         <button onClick={() => socket.emit('pass_defend')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">
-          Pass
+          放弃防御 (Pass)
         </button>
       </div>
     );
   }
-  if (gameState.phase === 'action_play_defense' || gameState.phase === 'action_play_counter') {
+  if (gameState.phase === 'action_play_defense') {
     return (
       <button onClick={() => socket.emit('cancel_defend_or_counter')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
         撤回 (Cancel)
       </button>
     );
   }
-  if (gameState.phase === 'action_resolve_attack') {
+  if (gameState.phase === 'action_play_counter') {
     return (
-      <button onClick={() => socket.emit('end_resolve_attack')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-        结束结算
-      </button>
-    );
-  }
-  if (gameState.phase === 'action_resolve_attack_counter') {
-    return (
-      <button onClick={() => socket.emit('end_resolve_attack_counter')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-        结束结算
-      </button>
-    );
-  }
-  if (gameState.phase === 'action_resolve_counter') {
-    return (
-      <button onClick={() => socket.emit('end_resolve_counter')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
-        结束结算
+      <button onClick={() => socket.emit('cancel_defend_or_counter')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+        放弃反击 (Pass Counter)
       </button>
     );
   }

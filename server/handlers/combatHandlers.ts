@@ -25,10 +25,9 @@ export const createCombatHandlers = (deps: any) => {
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         addLog(`玩家${playerIndex + 1}放弃防御 (Pass Defend)`, playerIndex);
-        gameState.phase = 'action_resolve_attack';
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        broadcastState();
-        checkBotTurn();
+        // Automate resolution
+        const attackerIndex = 1 - playerIndex;
+        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
     declare_defend: (socket: any) => {
@@ -36,10 +35,9 @@ export const createCombatHandlers = (deps: any) => {
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         addLog(`玩家${playerIndex + 1}声明防御 (Declare Defend)`, playerIndex);
-        gameState.phase = 'action_resolve_attack';
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        broadcastState();
-        checkBotTurn();
+        // Automate resolution
+        const attackerIndex = 1 - playerIndex;
+        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
     declare_counter: (socket: any) => {
@@ -47,19 +45,21 @@ export const createCombatHandlers = (deps: any) => {
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
         addLog(`玩家${playerIndex + 1}声明反击 (Declare Counter)`, playerIndex);
-        gameState.phase = 'action_resolve_attack';
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        broadcastState();
-        checkBotTurn();
+        gameState.isCounterAttack = true;
+        // Automate resolution
+        const attackerIndex = 1 - playerIndex;
+        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
     cancel_defend_or_counter: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (gameState.phase === 'action_resolve_attack' && playerIndex === gameState.activePlayerIndex) {
-        addLog(`玩家${playerIndex + 1}取消了防御/反击声明 (Canceled Defend/Counter)`, playerIndex);
-        gameState.phase = 'action_defend';
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        broadcastState();
+      if (gameState.phase === 'action_play_counter' && playerIndex === gameState.activePlayerIndex) {
+        addLog(`玩家${playerIndex + 1}放弃了反击 (Canceled Counter)`, playerIndex);
+        
+        const originalAttackerIndex = 1 - playerIndex;
+        // Revert activePlayerIndex to the attacker so finishAction flips it correctly to the defender
+        gameState.activePlayerIndex = originalAttackerIndex;
+        ActionEngine.finishAction(gameState, originalAttackerIndex, actionHelpers, socket);
       }
     },
     end_resolve_attack: (socket: any) => {
