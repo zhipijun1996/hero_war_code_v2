@@ -60,7 +60,7 @@ export class HeroEngine {
     playerIndex: number,
     cardId: string,
     goldAmount: number,
-    targetCastleIndex: number,
+    targetCastleIndex: number = 0,
     helpers: { 
       addLog: (msg: string, pIdx: number) => void; 
       alignHireArea: () => void;
@@ -71,7 +71,9 @@ export class HeroEngine {
     const goldY = isPlayer1 ? 550 : -700;
     
     // 1. 检查阶段
-    if (!['shop', 'action_select_option'].includes(gameState.phase) || playerIndex !== gameState.activePlayerIndex) {
+    const isShopHire = gameState.phase === 'shop';
+    const isActionHire = gameState.phase === 'action_select_option' && gameState.selectedOption === 'hire';
+    if ((!isShopHire && !isActionHire) || playerIndex !== gameState.activePlayerIndex) {
       return { success: false, reason: '现在不是你的雇佣时机。' };
     }
 
@@ -163,7 +165,6 @@ export class HeroEngine {
       gameState.phase = 'action_play';
       gameState.selectedOption = null;
       gameState.selectedTargetId = null;
-      gameState.selectedHireCost = null;
       gameState.lastPlayedCardId = null;
       gameState.selectedTokenId = null;
       gameState.remainingMv = 0;
@@ -176,7 +177,6 @@ export class HeroEngine {
     } else {
       gameState.selectedOption = null;
       gameState.selectedTargetId = null;
-      gameState.selectedHireCost = null;
       gameState.lastPlayedCardId = null;
       gameState.selectedTokenId = null;
       gameState.remainingMv = 0;

@@ -858,8 +858,6 @@ const broadcastState = () => {
 
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
 
-    socket.on('select_hire_cost', (cost: number) => migratedHandlers.select_hire_cost(socket, cost));
-
     socket.on('pass_shop', () => migratedHandlers.pass_shop(socket));
 
     socket.on('end_resolve_attack_counter', () => migratedHandlers.end_resolve_attack_counter(socket));

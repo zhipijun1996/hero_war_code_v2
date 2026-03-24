@@ -489,24 +489,7 @@ export class ActionEngine {
         socket.emit('error_message', '没有可以回复的英雄。 (No heroes available to heal.)');
         return;
       }
-      if (option === 'hire') {
-        const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-        const anyCastleFree = playerCastles.some((cCoord: any) => {
-          const pos = hexToPixel(cCoord.q, cCoord.r);
-          return !gameState.tokens.some((t: any) => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
-        });
-        
-        if (!anyCastleFree) {
-          socket.emit('error_message', '所有王城均被占用，无法雇佣。 (All castles are occupied, cannot hire.)');
-          return;
-        }
-        const goldCounter = gameState.counters.find((c: any) => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
-        if (!goldCounter || goldCounter.value < 2) {
-          socket.emit('error_message', '金币不足，无法雇佣。 (Not enough gold to hire.)');
-          return;
-        }
-      }
-
+      
       if (option === 'fire') {
         const lastCard = gameState.playAreaCards[gameState.playAreaCards.length - 1] || 
                          gameState.tableCards.find((c: any) => c.id === gameState.lastPlayedCardId);
@@ -547,7 +530,6 @@ export class ActionEngine {
       gameState.selectedOption = option;
       gameState.selectedTokenId = null;
       gameState.selectedTargetId = null;
-      gameState.selectedHireCost = null;
       gameState.remainingMv = 0;
       gameState.reachableCells = [];
       gameState.movementHistory = undefined;
@@ -682,7 +664,6 @@ export class ActionEngine {
         gameState.phase = 'action_select_option';
         gameState.selectedOption = 'hire';
         gameState.selectedTargetId = null;
-        gameState.selectedHireCost = null;
         gameState.notification = null;
         helpers.broadcastState();
         return;
@@ -841,7 +822,6 @@ export class ActionEngine {
         gameState.phase = 'shop';
         gameState.selectedOption = null;
         gameState.selectedTargetId = null;
-        gameState.selectedHireCost = null;
         gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
         helpers.updateAvailableActions(gameState.activePlayerIndex);
         helpers.addLog(`进入商店阶段`, -1);

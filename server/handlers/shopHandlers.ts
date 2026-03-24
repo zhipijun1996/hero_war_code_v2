@@ -13,13 +13,6 @@ export const createShopHandlers = (deps: any) => {
   } = deps;
 
   return {
-    select_hire_cost: (socket: any, cost: number) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      if (playerIndex === gameState.activePlayerIndex) {
-        gameState.selectedHireCost = cost;
-        broadcastState();
-      }
-    },
     next_shop: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;
@@ -89,6 +82,8 @@ export const createShopHandlers = (deps: any) => {
       }
     },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
+      if (!cardId) { socket.emit('error_message', '缺少雇佣英雄'); return; }
+      if (goldAmount < 2) { socket.emit('error_message', '雇佣至少需要2金币'); return; }
       const playerIndex = getPlayerIndex(socket.id);
       const result = HeroEngine.hireHero(gameState, playerIndex, cardId, goldAmount, targetCastleIndex, {
         addLog,

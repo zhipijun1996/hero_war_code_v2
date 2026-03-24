@@ -180,7 +180,7 @@ export const handleTokenClickLogic = (
 
 export const handleCardClickLogic = (
   id: string,
-  area: 'table' | 'hire' | 'play',
+  area: 'table' | 'play',
   params: ClickHandlerParams
 ) => {
   const { gameState, isActivePlayer, socket } = params;
@@ -189,11 +189,5 @@ export const handleCardClickLogic = (
     if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
       socket.emit('select_target', id);
     }
-  } else if (area === 'hire') {
-    if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
-      if (gameState.selectedOption === 'hire') {
-        socket.emit('select_target', id);
-      }
-    }
-  }
+  } 
 };
