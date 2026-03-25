@@ -13,6 +13,13 @@ export const createShopHandlers = (deps: any) => {
   } = deps;
 
   return {
+    select_hire_cost: (socket: any, cost: number) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      if (playerIndex === gameState.activePlayerIndex) {
+        gameState.selectedHireCost = cost;
+        broadcastState();
+      }
+    },
     next_shop: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;
@@ -94,6 +101,34 @@ export const createShopHandlers = (deps: any) => {
       if (!result.success) {
         socket.emit('error_message', result.reason);
         return;
+      }
+
+      // Handle turn transition
+      if (gameState.phase === 'shop') {
+        if (playerIndex === gameState.firstPlayerIndex) {
+          // First player finished shop turn, move to second player
+          gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
+          // Draw 3 new cards for the next player
+          gameState.discardPiles.action.push(...gameState.hireAreaCards);
+          gameState.hireAreaCards = [];
+          for (let i = 0; i < 3; i++) {
+            if (gameState.decks.hero.length > 0) {
+              gameState.hireAreaCards.push(gameState.decks.hero.pop()!);
+            }
+          }
+          alignHireArea();
+          addLog(`--- 玩家${gameState.activePlayerIndex + 1}的商店阶段 ---`, -1);
+        } else {
+          // Second player finished shop turn, end shop phase
+          gameState.phase = 'end';
+          gameState.activePlayerIndex = gameState.firstPlayerIndex;
+          addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
+        }
+      } else {
+        // From action phase
+        gameState.activePlayerIndex = 1 - playerIndex;
+        gameState.phase = 'action_common';
+        checkAllTokensUsed(gameState);
       }
 
       broadcastState();

@@ -154,36 +154,14 @@ export class HeroEngine {
       y: baseY
     });
 
-    // 如果是在行动阶段雇佣，结束当前行动
-    if (gameState.phase === 'action_select_option') {
-      if (gameState.activeActionTokenId) {
-        const token = gameState.actionTokens.find(t => t.id === gameState.activeActionTokenId);
-        if (token) token.used = true;
-        gameState.activeActionTokenId = null;
-      }
-
-      gameState.phase = 'action_play';
-      gameState.selectedOption = null;
-      gameState.selectedTargetId = null;
-      gameState.lastPlayedCardId = null;
-      gameState.selectedTokenId = null;
-      gameState.remainingMv = 0;
-      gameState.reachableCells = [];
-      gameState.globalMovementMovedTokens = [];
-      gameState.canHire = false;
-      gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-
-      helpers.checkAllTokensUsed();
-    } else {
-      gameState.selectedOption = null;
-      gameState.selectedTargetId = null;
-      gameState.lastPlayedCardId = null;
-      gameState.selectedTokenId = null;
-      gameState.remainingMv = 0;
-      gameState.reachableCells = [];
-      gameState.canHire = false;
-      gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-    }
+    
+    gameState.selectedOption = null;
+    gameState.selectedTargetId = null;
+    gameState.lastPlayedCardId = null;
+    gameState.selectedTokenId = null;
+    gameState.hireSource = null;
+    gameState.remainingMv = 0;
+    gameState.reachableCells = [];
 
     return { success: true };
   }

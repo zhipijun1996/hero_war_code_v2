@@ -660,12 +660,7 @@ export class ActionEngine {
     } else if (action === 'recruit') {
       const gold = gameState.counters.find(c => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
       if (gold && gold.value >= 2) {
-        gameState.canHire = true;
-        gameState.phase = 'action_select_option';
-        gameState.selectedOption = 'hire';
-        gameState.selectedTargetId = null;
-        gameState.notification = null;
-        helpers.broadcastState();
+        ActionEngine.startHireSelection(gameState, 'action_common', helpers);
         return;
       } else {
         socket.emit('error_message', '金币不足 (需要2金币)');
@@ -678,6 +673,38 @@ export class ActionEngine {
     gameState.activePlayerIndex = 1 - playerIndex;
     gameState.phase = 'action_play';
     helpers.checkAllTokensUsed();
+  }
+
+  static cancelHireSelection(gameState, playerIndex, helpers) {
+    if (playerIndex !== gameState.activePlayerIndex) return;
+
+    gameState.selectedOption = null;
+    gameState.selectedTargetId = null;
+    gameState.selectedHireCost = null;
+    gameState.notification = null;
+
+    if (gameState.hireSource === 'action_common') {
+      gameState.phase = 'action_common';
+    } else {
+      gameState.phase = 'shop';
+    }
+
+    gameState.hireSource = null;
+    helpers.broadcastState();
+  }
+
+  static startHireSelection(
+    gameState: GameState,
+    source: 'shop' | 'action_common',
+    helpers: ActionHelpers
+  ) {
+    gameState.selectedOption = 'hire';
+    gameState.selectedTargetId = null;
+    gameState.selectedHireCost = null;
+    gameState.notification = null;
+    gameState.hireSource = source;
+    gameState.phase = source === 'shop' ? 'shop' : 'action_select_option';
+    helpers.broadcastState();
   }
 
   /**

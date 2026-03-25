@@ -233,6 +233,13 @@ export const createActionHandlers = (deps: any) => {
       const player = gameState.players[socket.id];
       if (!player) return;
 
+      // Case 0: Undoing hire selection
+      if (gameState.selectedOption === 'hire') {
+        ActionEngine.cancelHireSelection(gameState, playerIndex, actionHelpers);
+        broadcastState();
+        return;
+      }
+
       // Case 1: Undoing a card play
       if (gameState.lastPlayedCardId) {
         const cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
@@ -305,6 +312,12 @@ export const createActionHandlers = (deps: any) => {
         }
       }
     },
+
+    cancel_hire_selection: (socket: any) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      ActionEngine.cancelHireSelection(gameState, playerIndex, actionHelpers);
+    },
+
     checkAndResetChanting: (tokenId: string) => {
       const magicCircle = gameState.magicCircles.find((mc: any) => mc.state === 'chanting' && mc.chantingTokenId === tokenId);
       if (magicCircle) {
@@ -321,3 +334,7 @@ export const createActionHandlers = (deps: any) => {
     }
   };
 };
+
+
+
+

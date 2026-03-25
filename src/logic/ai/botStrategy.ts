@@ -116,14 +116,16 @@ export class BotStrategy {
 
   private static decideSetupAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
     const activePlayerId = gameState.seats[playerIndex];
-    const playedCount = gameState.heroPlayedCount[activePlayerId!] || 0;
+    if (!activePlayerId) return { type: 'none' };
+    
+    const playedCount = Number(gameState.heroPlayedCount[activePlayerId] || 0);
     if (playedCount < 2) {
-      const heroCards = botPlayer.hand.filter((c: Card) => c.type === 'hero');
+      const heroCards = (botPlayer.hand || []).filter((c: Card) => c && c.type === 'hero');
       if (heroCards.length > 0) {
         // Prioritize hero with largest AR
         const sortedHeroes = [...heroCards].sort((a, b) => {
-          const arA = getHeroStat(a.heroClass!, 1, 'ar');
-          const arB = getHeroStat(b.heroClass!, 1, 'ar');
+          const arA = getHeroStat(a.heroClass || '', 1, 'ar');
+          const arB = getHeroStat(b.heroClass || '', 1, 'ar');
           return arB - arA;
         });
         const heroCard = sortedHeroes[0];
@@ -134,7 +136,7 @@ export class BotStrategy {
         for (let i = 0; i < playerCastles.length; i++) {
           const cCoord = playerCastles[i];
           const pos = hexToPixel(cCoord.q, cCoord.r);
-          const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+          const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
           if (!occupied) {
             freeCastleIdx = i;
             break;
@@ -219,8 +221,6 @@ export class BotStrategy {
           return { type: 'select_option', payload: { option: 'heal' } };
         } else if (gameState.canEvolve) {
           return { type: 'select_option', payload: { option: 'evolve' } };
-        } else if (gameState.canHire) {
-          return { type: 'select_option', payload: { option: 'hire' } };
         } else {
           return { type: 'select_option', payload: { option: 'spy' } };
         }
@@ -438,15 +438,7 @@ export class BotStrategy {
         break;
       }
     }
-    
-    if (gameState.canHire && freeCastleIdx !== -1 && gameState.hireAreaCards.length > 0) {
-      const bestHero = gameState.hireAreaCards[0];
-      const goldY = isPlayer1 ? 550 : -700;
-      const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
-      const maxGold = goldCounter ? goldCounter.value : 2;
-      return { type: 'hire_hero', payload: { cardId: bestHero.id, goldAmount: maxGold, targetCastleIndex: freeCastleIdx } };
-    }
-    
+       
     if (gameState.canEvolve && gameState.evolvableHeroIds?.length > 0) {
       return { type: 'select_option', payload: { option: 'evolve' } };
     }

@@ -73,9 +73,7 @@ const getHeroBackImage = (level: number) => {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 const getPlayerIndex = (socketId: string) => {
-  if (gameState.seats?.[0] === socketId) return 0;
-  if (gameState.seats?.[1] === socketId) return 1;
-  return -1;
+  return gameState.seats.indexOf(socketId);
 };
 
 const T1_CARDS = ['冲刺卷轴', '治疗药水', '移动号角', '经验卷轴', '远程战术', '防御符文'].map(n => `${BASE_URL}t1_${encodeURIComponent(n)}.png`);
@@ -175,7 +173,7 @@ const createInitialState = (mapConfig: MapConfig = DEFAULT_MAP): GameState => {
   const state: GameState = {
     map: mapConfig,
     gameStarted: false,
-    seats: [null, null, null, null],
+    seats: [null, null],
     players: {},
     tokens: [],
     tableCards: [],
@@ -341,19 +339,6 @@ const broadcastState = () => {
     // Check heal condition
     const healableHeroIds = playerHeroes.filter(h => (h.damage || 0) > 0).map(h => h.id);
     gameState.healableHeroIds = healableHeroIds;
-
-    // Check hire condition
-    const goldCounter = gameState.counters.find(c => c.type === 'gold' && (isPlayer1 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
-    const totalHeroes = playerHeroes.length;
-    
-    // Check if any castle is free
-    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-    const anyCastleFree = playerCastles.some(cPos => {
-      const pos = hexToPixel(cPos.q, cPos.r);
-      return !gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
-    });
-    
-    gameState.canHire = (goldCounter && goldCounter.value >= 2 && gameState.hireAreaCards.length > 0 && totalHeroes < 4 && anyCastleFree);
 
     // Check chest condition
     const playerTokens = gameState.tokens.filter(t => {
@@ -857,6 +842,9 @@ const broadcastState = () => {
     socket.on('pass_enhancement', () => migratedHandlers.pass_enhancement(socket));
 
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
+
+    socket.on('select_hire_cost', (cost: number) => migratedHandlers.select_hire_cost(socket, cost));
+    socket.on('cancel_hire_selection', () => migratedHandlers.cancel_hire_selection(socket));
 
     socket.on('pass_shop', () => migratedHandlers.pass_shop(socket));
 

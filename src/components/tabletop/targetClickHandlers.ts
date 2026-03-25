@@ -34,6 +34,14 @@ export const handleHexClickLogic = (
   }
 
   if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
+    if (gameState.selectedOption === 'hire' && gameState.selectedTargetId && gameState.selectedHireCost) {
+      const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
+      const castleIdx = playerCastles.findIndex((c: any) => c.q === q && c.r === r);
+      if (castleIdx !== -1) {
+        socket.emit('hire_hero', { cardId: gameState.selectedTargetId, goldAmount: gameState.selectedHireCost, targetCastleIndex: castleIdx });
+        return;
+      }
+    }
     if (gameState.phase === 'shop') return;
   }
 
@@ -180,7 +188,7 @@ export const handleTokenClickLogic = (
 
 export const handleCardClickLogic = (
   id: string,
-  area: 'table' | 'play',
+  area: 'table' | 'hire' | 'play',
   params: ClickHandlerParams
 ) => {
   const { gameState, isActivePlayer, socket } = params;
@@ -189,5 +197,9 @@ export const handleCardClickLogic = (
     if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
       socket.emit('select_target', id);
     }
-  } 
+  } else if (area === 'hire') {
+    if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer && gameState.selectedOption === 'hire') {
+      socket.emit('select_target', id);
+    }
+  }
 };

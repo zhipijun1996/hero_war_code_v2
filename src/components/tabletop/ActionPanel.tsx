@@ -28,8 +28,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     const maxGold = goldCounter ? goldCounter.value : 0;
     const costs = [2, 3, 4, 5, 6, 7, 8, 9].filter(c => c <= maxGold);
     const hireableHeroes = gameState.hireAreaCards;
-
     const hireCardId = gameState.selectedTargetId;
+    const canConfirmHire = !!gameState.selectedHireCost && !!gameState.selectedTargetId;
 
     return (
       <div className="flex flex-col gap-4 items-center">
@@ -42,7 +42,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               onClick={() => socket.emit('select_target', hero.id)}
               className={`px-4 py-2 rounded-lg font-bold transition-all ${hireCardId === hero.id ? 'bg-blue-500 text-white scale-110 shadow-lg shadow-blue-500/50' : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'}`}
             >
-              {hero.name}
+              {hero.heroClass || hero.name}
             </button>
           ))}
         </div>
@@ -68,7 +68,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           >
             确认雇佣 (Confirm Hire)
           </button>
-          <button onClick={() => socket.emit('select_option', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+          <button onClick={() => socket.emit('cancel_hire_selection')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
             取消 (Cancel)
           </button>
         </div>
@@ -191,11 +191,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           {gameState.canEvolve && (
             <button onClick={() => socket.emit('select_option', 'evolve')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
               进化
-            </button>
-          )}
-          {gameState.canHire && (
-            <button onClick={() => socket.emit('select_option', 'hire')} className="px-4 py-2 bg-pink-600 hover:bg-pink-600 text-white rounded-lg font-bold">
-              雇佣
             </button>
           )}
           <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">

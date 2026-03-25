@@ -15,7 +15,6 @@ import { CounterNode } from './tabletop/CounterNode';
 import { HistoryLogGroup } from './tabletop/HistoryLogGroup';
 
 import ContextMenu from './tabletop/ContextMenu';
-import HirePopup from './tabletop/HirePopup';
 import ZoomControls from './tabletop/ZoomControls';
 import ExplosionEffect from './tabletop/ExplosionEffect';
 
@@ -56,7 +55,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
   } = useStageInteraction(window.innerWidth, window.innerHeight);
 
   const [menu, setMenu] = useState<{ x: number, y: number, type: 'deck' | 'card' | 'hex', targetId: string, targetX?: number, targetY?: number } | null>(null);
-  const [hirePopup, setHirePopup] = useState<{ cardId: string } | null>(null);
   const [showExplosion, setShowExplosion] = useState<{ x: number, y: number } | null>(null);
   const [historyPos, setHistoryPos] = useState({ x: -850, y: -450 });
 
@@ -382,13 +380,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
         playerId={playerId} 
         socket={socket} 
         setMenu={setMenu} 
-      />
-
-      {/* Hire Popup */}
-      <HirePopup 
-        hirePopup={hirePopup} 
-        setHirePopup={setHirePopup} 
-        socket={socket} 
       />
 
       {/* Withdraw Card Button */}

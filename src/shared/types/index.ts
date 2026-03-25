@@ -221,6 +221,7 @@ export interface GameState {
   selectedOption?: string | null;
   selectedTargetId?: string | null;
   selectedHireCost?: number | null;
+  hireSource?: 'shop' | 'action_common' | null;
   hasSeizedInitiative?: boolean;
   canEvolve?: boolean;
   evolvableHeroIds?: string[];
@@ -232,7 +233,6 @@ export interface GameState {
   movedTokens?: Record<string, { x: number, y: number }>;
   lastEvolvedId?: string | null;
   movementHistory?: MovementStep[];
-  canHire?: boolean;
   castleHP: Record<number, number>;
   reputation: Record<number, number>;
   roundActionCounts: Record<string, number>;

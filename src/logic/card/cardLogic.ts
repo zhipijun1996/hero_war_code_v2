@@ -151,6 +151,12 @@ export class CardLogic {
         gameState.consecutivePasses = 0;
         gameState.round = 1;
       } else {
+        // 轮到下一个玩家
+        let nextIndex = (gameState.activePlayerIndex + 1) % gameState.seats.length;
+        while (!gameState.seats[nextIndex] && nextIndex !== gameState.activePlayerIndex) {
+          nextIndex = (nextIndex + 1) % gameState.seats.length;
+        }
+        gameState.activePlayerIndex = nextIndex;
       }
 
       gameState.lastPlayedCardId = tableCard.id;

@@ -24,6 +24,8 @@ export const createSeatHandlers = (deps: any) => {
         isBot: true,
         difficulty
       };
+      gameState.heroPlayed[botId] = false;
+      gameState.heroPlayedCount[botId] = 0;
       
       addLog(`AI加入了座位 ${seatIndex + 1} (AI joined seat ${seatIndex + 1})`, -1);
       broadcastState();
@@ -60,6 +62,8 @@ export const createSeatHandlers = (deps: any) => {
       } else {
         gameState.players[socket.id].name = playerName || gameState.players[socket.id].name;
       }
+      gameState.heroPlayed[socket.id] = false;
+      gameState.heroPlayedCount[socket.id] = 0;
       
       addLog(`${gameState.players[socket.id].name} 坐下了 (sat down)`, seatIndex);
       broadcastState();
@@ -87,6 +91,8 @@ export const createSeatHandlers = (deps: any) => {
           isBot: true,
           difficulty: 1
         };
+        gameState.heroPlayed[botId] = false;
+        gameState.heroPlayedCount[botId] = 0;
       } else {
         gameState.seats[seatIndex] = socket.id;
         if (!gameState.players[socket.id]) {
@@ -98,6 +104,8 @@ export const createSeatHandlers = (deps: any) => {
             discardFinished: false
           };
         }
+        gameState.heroPlayed[socket.id] = false;
+        gameState.heroPlayedCount[socket.id] = 0;
       }
       broadcastState();
     },
