@@ -1,6 +1,7 @@
 import { GameState, TableCard, Token, HeroCard, Counter } from '../../shared/types';
 import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
+import { ActionEngine, ActionHelpers } from '../action/actionEngine.ts';
 
 /**
  * 英雄生命周期引擎
@@ -174,7 +175,7 @@ export class HeroEngine {
     playerIndex: number,
     heroCardId: string,
     targetCastleIndex: number,
-    helpers: { addLog: (msg: string, pIdx: number) => void; checkBotTurn: () => void }
+    helpers: ActionHelpers
   ): { success: boolean; reason?: string } {
     if (gameState.phase !== 'revival') return { success: false, reason: '当前不是复活阶段。' };
 
@@ -204,6 +205,8 @@ export class HeroEngine {
 
     // 检查是否所有复活都已完成
     if (gameState.pendingRevivals.length === 0) {
+      ActionEngine.beginNextRound(gameState,helpers);
+
       gameState.round += 1;
       gameState.roundActionCounts = {};
       gameState.phase = 'action_play';

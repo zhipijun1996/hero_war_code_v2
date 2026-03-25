@@ -856,111 +856,7 @@ export class ActionEngine {
       helpers.broadcastState();
       helpers.checkBotTurn();
     } else if (gameState.phase === 'end') {
-      // Reputation scoring for end of round
-      gameState.tokens.forEach(token => {
-        const hex = pixelToHex(token.x, token.y);
-        const isMagicCircle = gameState.magicCircles.some(mc => mc.q === hex.q && mc.r === hex.r);
-        const isCrystal = hex.q === 0 && hex.r === 0;
-        
-        if (isMagicCircle || isCrystal) {
-          const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
-          if (card) {
-            const playerIdx = card.y > 0 ? 0 : 1;
-            helpers.addReputation(playerIdx, 1, isCrystal ? "占领水晶" : "占领魔法阵");
-          }
-        }
-      });
-
-      // Execute end round logic
-      if (gameState.playAreaCards.length > 0) {
-        gameState.discardPiles.action.push(...gameState.playAreaCards);
-        gameState.playAreaCards = [];
-      }
-      
-      const countersToRemove: string[] = [];
-      const pendingRevivals: any[] = [];
-      const freeCastlesCount = { 0: 0, 1: 0 };
-      
-      // Count free castles for each player
-      for (let pIdx = 0; pIdx < 2; pIdx++) {
-        const playerCastles = gameState.map?.castles?.[pIdx as 0 | 1] || [];
-        for (const cCoord of playerCastles) {
-          const pos = hexToPixel(cCoord.q, cCoord.r);
-          const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
-          if (!occupied) {
-            freeCastlesCount[pIdx as 0 | 1]++;
-          }
-        }
-      }
-      
-      gameState.counters.forEach(counter => {
-        if (counter.type === 'time') {
-          counter.value += 1;
-          
-          if (counter.boundToCardId) {
-            const heroCard = gameState.tableCards.find(c => c.id === counter.boundToCardId);
-            if (heroCard && heroCard.type === 'hero') {
-              if (counter.value >= 3) {
-                const isPlayer1 = heroCard.y > 0;
-                const playerIndex = isPlayer1 ? 0 : 1;
-                
-                if (freeCastlesCount[playerIndex as 0 | 1] > 0) {
-                  pendingRevivals.push({ heroCardId: heroCard.id, playerIndex });
-                  countersToRemove.push(counter.id);
-                  freeCastlesCount[playerIndex as 0 | 1]--;
-                } else {
-                  counter.value = 2; // Keep it at 2 so it tries again next round
-                  gameState.notification = (gameState.notification ? gameState.notification + ' ' : '') + `${heroCard.heroClass} 等待复活，但所有王城都被占用。 (Hero waiting to revive, but all castles are occupied.)`;
-                }
-              }
-              return;
-            }
-          }
-          
-          // Refresh monsters/chests/traps
-          const hex = pixelToHex(counter.x, counter.y);
-          const isTrap = gameState.map?.traps?.some(t => t.q === hex.q && t.r === hex.r);
-          if (isTrap) {
-            if (counter.value >= 2) {
-              countersToRemove.push(counter.id);
-              gameState.notification = (gameState.notification ? gameState.notification + ' ' : '') + `陷阱已重置！ (Trap reset!)`;
-            }
-          } else if (counter.value >= 3) {
-            const isOccupied = gameState.tokens.some(t => Math.abs(t.x - counter.x) < 10 && Math.abs(t.y - counter.y) < 10);
-            if (!isOccupied) {
-              countersToRemove.push(counter.id);
-              gameState.notification = (gameState.notification ? gameState.notification + ' ' : '') + `地图资源已刷新！ (Map resources refreshed!)`;
-            }
-          }
-        }
-      });
-      
-      if (countersToRemove.length > 0) {
-        gameState.counters = gameState.counters.filter(c => !countersToRemove.includes(c.id));
-      }
-
-      if (pendingRevivals.length > 0) {
-        gameState.pendingRevivals = pendingRevivals;
-        gameState.phase = 'revival';
-        gameState.activePlayerIndex = pendingRevivals[0].playerIndex;
-        helpers.addLog(`进入复活阶段`, -1);
-        helpers.broadcastState();
-        helpers.checkBotTurn();
-        return;
-      }
-      
-      gameState.round += 1;
-      gameState.roundActionCounts = {};
-      gameState.phase = 'action_play';
-      gameState.activePlayerIndex = gameState.firstPlayerIndex;
-      gameState.consecutivePasses = 0;
-      gameState.hasSeizedInitiative = false;
-      
-      // Reset discardFinished for next round
-      Object.values(gameState.players).forEach(p => p.discardFinished = false);
-      
-      helpers.broadcastState();
-      helpers.checkBotTurn();
+      this.resolveEndPhase(gameState, helpers, socket);
     }
   }
 
@@ -1381,61 +1277,169 @@ export class ActionEngine {
    */
   static startEndPhase(gameState: GameState, helpers: ActionHelpers): void {
     helpers.setPhase('end');
-    helpers.addLog(`进入回合结束阶段`, -1);
-    
-    // 1. Time counters +1
-    gameState.counters.forEach(c => {
-      if (c.type === 'time') {
-        c.value += 1;
-      }
+    gameState.activePlayerIndex = gameState.firstPlayerIndex;
+    gameState.consecutivePasses = 0;
+    gameState.hasSeizedInitiative = false;
+    gameState.selectedOption = null;
+    gameState.selectedTargetId = null;
+    gameState.selectedTokenId = null;
+    gameState.selectedHireCost = null;
+    gameState.activeActionType = null;
+    gameState.reachableCells = [];
+    gameState.notification = null;
+    helpers.addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
+    helpers.broadcastState();
+    helpers.checkBotTurn();
+  }
+
+  static scoreEndPhaseReputation(
+    gameState: GameState,
+    helpers: ActionHelpers
+  ): void {
+    gameState.tokens.forEach(token => {
+      const hex = pixelToHex(token.x, token.y);
+      const isMagicCircle = gameState.magicCircles.some(
+        mc => mc.q === hex.q && mc.r === hex.r
+      );
+      const isCrystal = hex.q === 0 && hex.r === 0;
+
+      if (!isMagicCircle && !isCrystal) return;
+
+      const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
+      if (!card) return;
+
+      const playerIdx = card.y > 0 ? 0 : 1;
+      helpers.addReputation(
+        playerIdx,
+        1,
+        isCrystal ? '占领水晶' : '占领魔法阵'
+      );
     });
+  }
 
-    // 2. Reset action tokens
-    gameState.actionTokens.forEach(t => t.used = false);
+  static advanceEndPhaseTimers(
+    gameState: GameState
+  ): { pendingRevivals: Array<{ heroCardId: string; playerIndex: 0 | 1 }> } {
+    const countersToRemove = new Set<string>();
+    const pendingRevivals: Array<{ heroCardId: string; playerIndex: 0 | 1 }> = [];
+    const freeCastlesCount: Record<0 | 1, number> = { 0: 0, 1: 0 };
 
-    // 3. Check respawn (time=1) and refresh (time=3)
-    const countersToRemove: string[] = [];
-    gameState.counters.forEach(counter => {
-      if (counter.type === 'time') {
-        if (counter.value === 1 && counter.boundToCardId) {
-          // Respawn logic
-          const heroCard = gameState.tableCards.find(c => c.id === counter.boundToCardId);
-          if (heroCard) {
-            const playerIndex = heroCard.y > 0 ? 0 : 1;
-            const castles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-            const freeCastle = castles.find(hex => !gameState.tokens.some(t => {
-              const tHex = pixelToHex(t.x, t.y);
-              return tHex.q === hex.q && tHex.r === hex.r;
-            }));
-            
-            if (freeCastle) {
-              const pos = hexToPixel(freeCastle.q, freeCastle.r);
-              const token = gameState.tokens.find(t => t.boundToCardId === heroCard.id);
-              if (token) {
-                token.x = pos.x;
-                token.y = pos.y;
-                countersToRemove.push(counter.id);
-                helpers.addLog(`${heroCard.heroClass} 在王城复活了`, playerIndex);
-              }
-            }
-          }
-        } else if (counter.value >= 3) {
-          // Refresh logic
-          countersToRemove.push(counter.id);
-          // Add logic to refresh monster/chest if needed
+    // 统计双方空王城数
+    for (let pIdx: 0 | 1 = 0; pIdx <= 1; pIdx = (pIdx + 1) as 0 | 1) {
+      const playerCastles = gameState.map?.castles?.[pIdx] || [];
+      for (const castleHex of playerCastles) {
+        const pos = hexToPixel(castleHex.q, castleHex.r);
+        const occupied = gameState.tokens.some(
+          t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10
+        );
+        if (!occupied) {
+          freeCastlesCount[pIdx]++;
         }
       }
+    }
+
+    for (const counter of gameState.counters) {
+      if (counter.type !== 'time') continue;
+      counter.value += 1;
+
+      // 英雄死亡计时 -> 待复活
+      if (counter.boundToCardId) {
+        const heroCard = gameState.tableCards.find(c => c.id === counter.boundToCardId);
+        if (heroCard?.type === 'hero') {
+          if (counter.value >= 2) {
+            const playerIndex: 0 | 1 = heroCard.y > 0 ? 0 : 1;
+            if (freeCastlesCount[playerIndex] > 0) {
+              pendingRevivals.push({
+                heroCardId: heroCard.id,
+                playerIndex
+              });
+              countersToRemove.add(counter.id);
+              freeCastlesCount[playerIndex]--;
+            } else {
+              gameState.notification =
+                (gameState.notification ? gameState.notification + ' ' : '') +
+                `${heroCard.heroClass} 等待复活，但所有王城都被占用。 (Hero waiting to revive, but all castles are occupied.)`;
+            }
+          }
+          continue;
+        }
+      }
+
+      // 地图 time counter：陷阱 2 回合刷新，其它 3 回合刷新
+      const hex = pixelToHex(counter.x, counter.y);
+      const isTrap = gameState.map?.traps?.some(t => t.q === hex.q && t.r === hex.r);
+      if (isTrap) {
+        if (counter.value >= 2) {
+          countersToRemove.add(counter.id);
+          gameState.notification =
+            (gameState.notification ? gameState.notification + ' ' : '') +
+            `陷阱已重置！ (Trap reset!)`;
+        }
+        continue;
+      }
+      if (counter.value >= 3) {
+        const isOccupied = gameState.tokens.some(
+          t => Math.abs(t.x - counter.x) < 10 && Math.abs(t.y - counter.y) < 10
+        );
+        if (!isOccupied) {
+          countersToRemove.add(counter.id);
+          gameState.notification =
+            (gameState.notification ? gameState.notification + ' ' : '') +
+            `地图资源已刷新！ (Map resources refreshed!)`;
+        }
+      }
+    }
+    if (countersToRemove.size > 0) {
+      gameState.counters = gameState.counters.filter(c => !countersToRemove.has(c.id));
+    }
+    return { pendingRevivals };
+  }
+
+  static beginNextRound(
+    gameState: GameState,
+    helpers: ActionHelpers
+  ): void {
+    // 把行动 token 翻回可用
+    gameState.actionTokens.forEach(t => {
+      t.used = false;
     });
-
-    gameState.counters = gameState.counters.filter(c => !countersToRemove.includes(c.id));
-
     gameState.round += 1;
+    gameState.roundActionCounts = {};
     gameState.phase = 'action_play';
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     gameState.consecutivePasses = 0;
     gameState.hasSeizedInitiative = false;
-    
+    gameState.notification = null;
+    Object.values(gameState.players).forEach((p: any) => {
+      if (p) {
+        p.discardFinished = false;
+      }
+    });
+    helpers.addLog(`--- 第 ${gameState.round} 回合开始 ---`, -1);
     helpers.broadcastState();
+    helpers.checkBotTurn();
+  }
+
+  static resolveEndPhase(
+    gameState: GameState,
+    helpers: ActionHelpers
+  ): void {
+    this.scoreEndPhaseReputation(gameState, helpers);
+    if (gameState.playAreaCards.length > 0) {
+      gameState.discardPiles.action.push(...gameState.playAreaCards);
+      gameState.playAreaCards = [];
+    }
+    const { pendingRevivals } = this.advanceEndPhaseTimers(gameState);
+    if (pendingRevivals.length > 0) {
+      gameState.pendingRevivals = pendingRevivals;
+      gameState.phase = 'revival';
+      gameState.activePlayerIndex = pendingRevivals[0].playerIndex;
+      helpers.addLog(`进入复活阶段`, -1);
+      helpers.broadcastState();
+      helpers.checkBotTurn();
+      return;
+    }
+    this.beginNextRound(gameState, helpers);    
   }
 
   /**

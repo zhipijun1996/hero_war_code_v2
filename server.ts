@@ -19,6 +19,7 @@ import { HeroEngine } from './src/logic/hero/heroEngine.ts';
 import { BotStrategy, BotAction } from './src/logic/ai/botStrategy.ts';
 import { ActionEngine, ActionHelpers } from './src/logic/action/actionEngine.ts';
 import { createHandlers } from './socketHandlers.ts';
+import { dispatchGameCommand } from './server/dispatchGameCommand.ts';
 
 const heroesDatabase = HEROES_DATABASE;
 
@@ -403,60 +404,11 @@ const broadcastState = () => {
 
         console.log(`[BotTurn] Action: ${action.type}`, action);
 
-        switch (action.type) {
-          case 'play_card':
-            migratedHandlers.play_card(botSocket, action.payload);
-            break;
-          case 'revive_hero':
-            migratedHandlers.revive_hero(botSocket, action.payload);
-            break;
-          case 'hire_hero':
-            migratedHandlers.hire_hero(botSocket, action.payload);
-            break;
-          case 'move_token_to_cell':
-            migratedHandlers.move_token_to_cell(botSocket, action.payload);
-            break;
-          case 'click_action_token':
-            migratedHandlers.click_action_token(botSocket, action.payload.tokenId);
-            break;
-          case 'select_action_category':
-            migratedHandlers.select_action_category(botSocket, action.payload.category as any);
-            break;
-          case 'select_common_action':
-            migratedHandlers.select_common_action(botSocket, action.payload.action as any);
-            break;
-          case 'select_hero_for_action':
-            migratedHandlers.select_hero_for_action(botSocket, action.payload.tokenId);
-            break;
-          case 'select_hero_action':
-            migratedHandlers.select_hero_action(botSocket, action.payload.action as any);
-            break;
-          case 'select_option':
-            migratedHandlers.select_option(botSocket, action.payload.option);
-            break;
-          case 'select_target':
-            migratedHandlers.select_target(botSocket, action.payload.targetId);
-            break;
-          case 'pass_action':
-            if (gameState.phase === 'action_play_enhancement') {
-              migratedHandlers.pass_enhancement(botSocket);
-            } else {
-              migratedHandlers.pass_action(botSocket);
-            }
-            break;
-          case 'finish_action':
-            migratedHandlers.finish_action(botSocket);
-            break;
-          case 'none':
-            if (gameState.phase === 'action_play') {
-              migratedHandlers.pass_action(botSocket);
-            } else if (gameState.phase === 'shop') {
-              migratedHandlers.pass_shop(botSocket);
-            } else if (gameState.phase === 'supply' || gameState.phase === 'end') {
-              migratedHandlers.proceed_phase(botSocket);
-            }
-            break;
-        }
+        dispatchGameCommand(botSocket, action, {
+          migratedHandlers,
+          gameState
+        });
+
       }, 1000);
     }
   };
@@ -656,65 +608,6 @@ const broadcastState = () => {
     gameState.shopPasses = 0;
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     addLog(`进入商店阶段`, -1);
-  }
-
-  function startEndPhase() {
-    setPhase('end');
-    addLog(`进入回合结束阶段`, -1);
-    
-    // 1. Time counters +1
-    gameState.counters.forEach(c => {
-      if (c.type === 'time') {
-        c.value += 1;
-      }
-    });
-
-    // 2. Reset action tokens
-    gameState.actionTokens.forEach(t => t.used = false);
-
-    // 3. Check respawn (time=1) and refresh (time=3)
-    const countersToRemove: string[] = [];
-    gameState.counters.forEach(counter => {
-      if (counter.type === 'time') {
-        if (counter.value === 1 && counter.boundToCardId) {
-          // Respawn logic
-          const heroCard = gameState.tableCards.find(c => c.id === counter.boundToCardId);
-          if (heroCard) {
-            const playerIndex = heroCard.y > 0 ? 0 : 1;
-            const castles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-            const freeCastle = castles.find(hex => !gameState.tokens.some(t => {
-              const tHex = pixelToHex(t.x, t.y);
-              return tHex.q === hex.q && tHex.r === hex.r;
-            }));
-            
-            if (freeCastle) {
-              const pos = hexToPixel(freeCastle.q, freeCastle.r);
-              const token = gameState.tokens.find(t => t.boundToCardId === heroCard.id);
-              if (token) {
-                token.x = pos.x;
-                token.y = pos.y;
-                countersToRemove.push(counter.id);
-                addLog(`${heroCard.heroClass} 在王城复活了`, playerIndex);
-              }
-            }
-          }
-        } else if (counter.value >= 3) {
-          // Refresh logic
-          countersToRemove.push(counter.id);
-          // Add logic to refresh monster/chest if needed
-        }
-      }
-    });
-
-    gameState.counters = gameState.counters.filter(c => !countersToRemove.includes(c.id));
-
-    gameState.round += 1;
-    gameState.phase = 'action_play';
-    gameState.activePlayerIndex = gameState.firstPlayerIndex;
-    gameState.consecutivePasses = 0;
-    gameState.hasSeizedInitiative = false;
-    
-    broadcastState();
   }
 
   let migratedHandlers: any;

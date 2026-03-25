@@ -1,4 +1,5 @@
 import { HeroEngine } from '../../src/logic/hero/heroEngine.ts';
+import { ActionEngine } from '../../src/logic/action/actionEngine.ts';
 
 export const createShopHandlers = (deps: any) => {
   const {
@@ -9,7 +10,8 @@ export const createShopHandlers = (deps: any) => {
     broadcastState,
     getPlayerIndex,
     alignHireArea,
-    checkAllTokensUsed
+    checkAllTokensUsed,
+    actionHelpers
   } = deps;
 
   return {
@@ -82,10 +84,7 @@ export const createShopHandlers = (deps: any) => {
         broadcastState();
         checkBotTurn();
       } else {
-        gameState.phase = 'end';
-        gameState.activePlayerIndex = gameState.firstPlayerIndex;
-        addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
-        broadcastState();
+        ActionEngine.startEndPhase(gameState, actionHelpers);
       }
     },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
@@ -119,10 +118,7 @@ export const createShopHandlers = (deps: any) => {
           alignHireArea();
           addLog(`--- 玩家${gameState.activePlayerIndex + 1}的商店阶段 ---`, -1);
         } else {
-          // Second player finished shop turn, end shop phase
-          gameState.phase = 'end';
-          gameState.activePlayerIndex = gameState.firstPlayerIndex;
-          addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
+          ActionEngine.startEndPhase(gameState, actionHelpers);
         }
       } else {
         // From action phase

@@ -16,9 +16,15 @@ export type BotAction =
   | { type: 'select_option'; payload: { option: string } }
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
+  | { type: 'select_hire_cost'; payload: { cost: number } }
+  | { type: 'next_shop' }
+  | { type: 'pass_shop' }  
   | { type: 'finish_action'}
   | { type: 'discard_card'; payload: { cardId: string } }
   | { type: 'finish_discard' }
+  | { type: 'declare_defend' }
+  | { type: 'declare_counter' }
+  | { type: 'pass_defend' }  
   | { type: 'none' };
 
 export class BotStrategy {
@@ -334,6 +340,8 @@ export class BotStrategy {
         let bestScore = -1;
         
         for (const cell of gameState.reachableCells) {
+          let candidateTargetId: string | null = null;
+          const score = this.getCellScore(cell);
           if (cell.targetType === 'hero') {
             const targetToken = gameState.tokens.find(t => {
               const tHex = pixelToHex(t.x, t.y);
@@ -342,18 +350,17 @@ export class BotStrategy {
             if (targetToken) {
               const targetCard = gameState.tableCards.find(tc => tc.id === targetToken.boundToCardId);
               if (targetCard) {
-                const score = 100 + (targetCard.level || 1) * 10;
-                if (score > bestScore) {
-                  bestScore = score;
-                  bestTargetId = targetCard.id;
-                }
+                candidateTargetId = targetCard.id;
               }
             }
           } else if (cell.targetType === 'castle') {
-            if (90 > bestScore) {
-              bestScore = 90;
-              bestTargetId = `castle_${cell.q}_${cell.r}`;
-            }
+            candidateTargetId = `castle_${cell.q}_${cell.r}`;
+          } else if (cell.targetType === 'monster') {
+            candidateTargetId = `monster_${cell.q}_${cell.r}`;
+          }
+          if (candidateTargetId && score > bestScore) {
+            bestScore = score;
+            bestTargetId = candidateTargetId;
           }
         }
         
@@ -412,21 +419,29 @@ export class BotStrategy {
             const ar = getHeroStat(defenderCard.heroClass!, defenderCard.level, 'ar');
             
             if (isTargetInAttackRange(defenderHex, attackerHex, ar, gameState) && defenderHP >= 1) {
-              return { type: 'select_option', payload: { option: 'counter' } };
+              return { type: 'declare_counter'};
             }
           }
-          return { type: 'select_option', payload: { option: 'defend' } };
+          return { type: 'declare_defend'};
         } else if (hasDefenseInHand) {
           const defenseCard = botPlayer.hand.find((c: Card) => c.name === '防御' || c.name === '闪避');
           return { type: 'play_card', payload: { cardId: defenseCard.id } };
         }
       }
     }
-    return { type: 'pass_action' };
+    return { type: 'pass_defend' };
   }
 
   private static decideShopAction(gameState: GameState, playerIndex: number): BotAction {
-    const isPlayer1 = playerIndex === 0;
+    const activePlayerId = gameState.seats[playerIndex];
+    if (!activePlayerId) return { type: 'pass_shop' };
+    const player = gameState.players[activePlayerId];
+    if (!player) return { type: 'pass_shop' };
+    const goldCounter = gameState.counters.find(
+      c => c.type === 'gold' && c.boundToCardId === activePlayerId
+    );
+    const gold = goldCounter ? goldCounter.value : 0;
+
     const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
     let freeCastleIdx = -1;
     for (let i = 0; i < playerCastles.length; i++) {
@@ -439,11 +454,34 @@ export class BotStrategy {
       }
     }
        
-    if (gameState.canEvolve && gameState.evolvableHeroIds?.length > 0) {
-      return { type: 'select_option', payload: { option: 'evolve' } };
+    if (gameState.selectedOption === 'hire') {
+      if (!gameState.selectedHireCost) {
+        return { type: 'select_hire_cost', payload: { cost: 2 } };
+      }
+      if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
+        return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
+      }
+      if (gameState.selectedHireCost && gameState.selectedTargetId && freeCastleIdx !== -1) {
+        return {
+          type: 'hire_hero',
+          payload: {
+            cardId: gameState.selectedTargetId,
+            goldAmount: gameState.selectedHireCost,
+            targetCastleIndex: freeCastleIdx
+          }
+        };
+      }
     }
 
-    return { type: 'pass_action' };
+    if (
+      freeCastleIdx !== -1 &&
+      gold >= 2 &&
+      gameState.hireAreaCards.length > 0
+    ) {
+      return { type: 'select_option', payload: { option: 'hire' } };
+    }
+
+    return { type: 'pass_shop' };
   }
 
   private static decideDiscardAction(gameState: GameState, botPlayer: any): BotAction {
