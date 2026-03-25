@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapConfig } from '../shared/types';
-import { DEFAULT_MAP } from '../shared/config/mapConstants';
-
+import { BUILTIN_MAPS } from '../shared/config/maps/mapIndex.ts';
 interface MapSelectorProps {
   onSelect: (map: MapConfig) => void;
 }
@@ -90,16 +89,24 @@ export default function MapSelector({ onSelect }: MapSelectorProps) {
                 <button onClick={() => setIsOpen(false)} className="sm:hidden text-zinc-500 p-1">✕</button>
               </div>
 
-              <button
-                onClick={() => {
-                  onSelect(DEFAULT_MAP);
-                  setIsOpen(false);
-                }}
-                className="w-full text-left px-4 py-4 sm:py-2 text-sm sm:text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors border-b border-zinc-800 flex items-center gap-3"
-              >
-                <span className="text-lg sm:text-base">✨</span>
-                <span>默认地图 (Default)</span>
-              </button>
+              {BUILTIN_MAPS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    onSelect(m.config);
+                    setIsOpen(false);
+                  }}
+                  className="..."
+                >
+                  <span className="text-lg sm:text-base">🗺️</span>
+                  <div className="flex flex-col">
+                    <span>{m.name}</span>
+                    {m.description && (
+                      <span className="text-[10px] text-zinc-500">{m.description}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
               
               <div className="max-h-[50vh] sm:max-h-64 overflow-y-auto">
                 {savedMaps.length === 0 ? (

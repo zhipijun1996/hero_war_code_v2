@@ -2,14 +2,13 @@ import React from 'react';
 import { Layer } from 'react-konva';
 import { HEX_SIZE } from '../../shared/utils/hexUtils';
 import { HexNode } from './HexNode';
-import { DEFAULT_CASTLES, MAP_RADIUS } from '../../shared/config/map';
+import { DEFAULT_CASTLES, MAP_RADIUS } from '../../shared/config/maps/map'; 
 
 interface HexGridLayerProps {
   onHexContextMenu: (e: any, x: number, y: number, clientX?: number, clientY?: number) => void;
   reachableCells?: { q: number, r: number }[];
   onHexClick?: (q: number, r: number) => void;
   selectedOption?: string | null;
-  magicCircles?: { q: number, r: number, state: string }[];
   selectedHeroCardId?: string | null;
   playerIndex: number;
   phase?: string;
@@ -23,7 +22,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   reachableCells,
   onHexClick,
   selectedOption,
-  magicCircles,
   selectedHeroCardId,
   playerIndex,
   phase,
@@ -44,11 +42,9 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       let fill = "#ffffff";
       let icon = "";
       
-      const magicCircle = magicCircles?.find(mc => mc.q === q && mc.r === r);
-      if (magicCircle) {
-        icon = "✨";
-      } else if (mapConfig) {
-        if (mapConfig.crystal && q === mapConfig.crystal.q && r === mapConfig.crystal.r) { fill = "#bfdbfe"; icon = "💎"; } // Crystal
+      if (mapConfig) {
+        if (mapConfig.crystal?.some((t: any) => t.q === q && t.r === r)) { fill = "#bfdbfe"; icon = "💎"; } // Crystal
+        else if (mapConfig.magicCircle[0]?.some((c: any) => c.q === q && c.r === r)) { icon = "✨"; } // magicCircle
         else if (mapConfig.castles[0]?.some((c: any) => c.q === q && c.r === r)) { fill = "#fee2e2"; icon = "🏰"; } // P1 Castle
         else if (mapConfig.castles[1]?.some((c: any) => c.q === q && c.r === r)) { fill = "#dcfce7"; icon = "🏰"; } // P2 Castle
         else if (mapConfig.chests?.some((c: any) => c.q === q && c.r === r)) { fill = "#fef08a"; icon = "📦"; } // Chests

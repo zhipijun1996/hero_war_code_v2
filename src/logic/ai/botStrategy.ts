@@ -1,7 +1,7 @@
 import { GameState, Card, TableCard, Token, HexCoord, ActionToken } from '../../shared/types';
 import { pixelToHex, hexToPixel, generateId, getHexDistance } from '../../shared/utils/hexUtils';
 import { getHeroStat } from '../hero/heroLogic';
-import { isTargetInAttackRange, getReachableHexes } from '../map/mapLogic';
+import { isTargetInAttackRange, getReachableHexes, getAttackableHexes } from '../map/mapLogic';
 
 export type BotAction = 
   | { type: 'play_card'; payload: { cardId: string; targetCastleIndex?: number; targetId?: string } }
@@ -264,55 +264,26 @@ export class BotStrategy {
   }
 
   private static decideActionSelectActionAction(gameState: GameState, playerIndex: number): BotAction {
-    const isPlayer1 = playerIndex === 0;
     const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
-    if (heroToken) {
-      const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
-      const ar = getHeroStat(heroCard?.heroClass || '', heroCard?.level || 1, 'ar');
-      const hex = pixelToHex(heroToken.x, heroToken.y);
-      
-      const enemyTokens = gameState.tokens.filter(t => {
-        const c = gameState.tableCards.find(tc => tc.id === t.boundToCardId);
-        const isAlive = !gameState.counters.some(counter => counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
-        return c && isAlive && ((isPlayer1 && c.y < 0) || (!isPlayer1 && c.y > 0));
-      });
-      
-      let canAttack = false;
-      for (const enemyToken of enemyTokens) {
-        const enemyHex = pixelToHex(enemyToken.x, enemyToken.y);
-        if (isTargetInAttackRange(hex, enemyHex, ar, gameState)) {
-          canAttack = true;
-          break;
-        }
-      }
-      
-      if (!canAttack && gameState.map?.monsters) {
-        for (const monster of gameState.map.monsters) {
-          if (isTargetInAttackRange(hex, { q: monster.q, r: monster.r }, ar, gameState)) {
-            canAttack = true;
-            break;
-          }
-        }
-      }
-      
-      if (!canAttack) {
-        const enemyIndex = 1 - playerIndex;
-        const enemyCastles = gameState.map?.castles?.[enemyIndex as 0 | 1] || [];
-        for (const castle of enemyCastles) {
-          if (isTargetInAttackRange(hex, { q: castle.q, r: castle.r }, ar, gameState)) {
-            canAttack = true;
-            break;
-          }
-        }
-      }
-      
-      if (canAttack) {
-        return { type: 'select_hero_action', payload: { action: 'attack' } };
-      } else {
-        return { type: 'select_hero_action', payload: { action: 'move' } };
-      }
+    if (!heroToken) {
+      return { type: 'pass_action' };
     }
-    return { type: 'pass_action' };
+    const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+    const ar = getHeroStat(heroCard?.heroClass || '', heroCard?.level || 1, 'ar');
+    const hex = pixelToHex(heroToken.x, heroToken.y);
+      
+    const attackableCells = getAttackableHexes(
+      hex.q,
+      hex.r,
+      ar,
+      playerIndex,
+      gameState,
+      heroCard?.level || 1
+    );
+    if (attackableCells.length > 0) {
+      return { type: 'select_hero_action', payload: { action: 'attack' } };
+    } 
+    return { type: 'select_hero_action', payload: { action: 'move' } };
   }
 
   private static decideActionResolveAction(gameState: GameState, playerIndex: number): BotAction {

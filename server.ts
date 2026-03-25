@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { GameState, Card, TableCard, Token, Counter, Player, ImageConfig, MapConfig, GamePhase } from './src/shared/types/index.ts';
 import { REWARDS } from './src/shared/hex/tileLogic.ts';
-
+import { DEFAULT_MAP, BUILTIN_MAPS } from './src/shared/config/maps/mapIndex.ts';
 import { getHeroTokenImage } from './src/shared/utils/assetUtils.ts';
 
 import { HEROES_DATABASE } from './src/shared/config/heroes.ts';
@@ -141,33 +141,6 @@ const createSpecificDeck = (type: string, back: string, urls: string[], copies: 
     }
   });
   return deck.sort(() => Math.random() - 0.5);
-};
-
-const DEFAULT_MAP: MapConfig = {
-  name: 'Default Map',
-  crystal: { q: 0, r: 0 },
-  castles: {
-    0: [{ q: 0, r: 4 }, { q: 4, r: 0 }],
-    1: [{ q: 0, r: -4 }, { q: -4, r: 0 }]
-  },
-  chests: [
-    { q: -1, r: 3, type: 'T1' }, { q: 1, r: -3, type: 'T1' },
-    { q: 1, r: 1, type: 'T2' }, { q: -1, r: -1, type: 'T2' }
-  ],
-  monsters: [
-    { q: -2, r: 4, level: 1 }, { q: 2, r: 2, level: 1 }, { q: -2, r: -2, level: 1 }, { q: 2, r: -4, level: 1 },
-    { q: -3, r: 1, level: 2 }, { q: -1, r: 1, level: 2 }, { q: 3, r: -1, level: 2 }, { q: 1, r: -1, level: 2 },
-    { q: -3, r: 3, level: 3 }, { q: 3, r: -3, level: 3 }
-  ],
-  magicCircles: [
-    { q: -2, r: 1 }, { q: 2, r: -1 }
-  ],
-  traps: [],
-  turrets: [],
-  watchtowers: [],
-  obstacles: [],
-  water: [],
-  bushes: []
 };
 
 const createInitialState = (mapConfig: MapConfig = DEFAULT_MAP): GameState => {

@@ -37,24 +37,6 @@ export const createShopHandlers = (deps: any) => {
       player.gold -= 1;
       addLog(`玩家${playerIndex + 1}花费1金币刷新商店 (Player ${playerIndex + 1} refreshed shop)`, playerIndex);
 
-      // Discard current hire area cards
-      gameState.discardPiles.action.push(...gameState.hireAreaCards);
-      gameState.hireAreaCards = [];
-
-      // Draw 3 new cards
-      for (let i = 0; i < 3; i++) {
-        if (gameState.decks.action.length === 0) {
-          gameState.decks.action = [...gameState.discardPiles.action].sort(() => Math.random() - 0.5);
-          gameState.discardPiles.action = [];
-        }
-        if (gameState.decks.action.length > 0) {
-          const card = gameState.decks.action.pop()!;
-          card.faceUp = true;
-          gameState.hireAreaCards.push(card);
-        }
-      }
-
-      alignHireArea();
       broadcastState();
     },
     pass_shop: (socket: any) => {
@@ -62,25 +44,10 @@ export const createShopHandlers = (deps: any) => {
       if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;
 
       addLog(`玩家${playerIndex + 1}结束商店阶段 (Player ${playerIndex + 1} ended shop phase)`, playerIndex);
-      
-      gameState.discardPiles.action.push(...gameState.hireAreaCards);
-      gameState.hireAreaCards = [];
-      
+           
       if (gameState.activePlayerIndex === gameState.firstPlayerIndex) {
         gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
-        
-        for (let i = 0; i < 3; i++) {
-          if (gameState.decks.action.length === 0) {
-            gameState.decks.action = [...gameState.discardPiles.action].sort(() => Math.random() - 0.5);
-            gameState.discardPiles.action = [];
-          }
-          if (gameState.decks.action.length > 0) {
-            const card = gameState.decks.action.pop()!;
-            card.faceUp = true;
-            gameState.hireAreaCards.push(card);
-          }
-        }
-        alignHireArea();
+        addLog(`玩家${gameState.activePlayerIndex + 1}开始商店阶段`, -1);
         broadcastState();
         checkBotTurn();
       } else {
@@ -105,18 +72,6 @@ export const createShopHandlers = (deps: any) => {
       // Handle turn transition
       if (gameState.phase === 'shop') {
         if (playerIndex === gameState.firstPlayerIndex) {
-          // First player finished shop turn, move to second player
-          gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
-          // Draw 3 new cards for the next player
-          gameState.discardPiles.action.push(...gameState.hireAreaCards);
-          gameState.hireAreaCards = [];
-          for (let i = 0; i < 3; i++) {
-            if (gameState.decks.hero.length > 0) {
-              gameState.hireAreaCards.push(gameState.decks.hero.pop()!);
-            }
-          }
-          alignHireArea();
-          addLog(`--- 玩家${gameState.activePlayerIndex + 1}的商店阶段 ---`, -1);
         } else {
           ActionEngine.startEndPhase(gameState, actionHelpers);
         }

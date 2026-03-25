@@ -1,8 +1,8 @@
-import { MapConfig } from '../types';
+import { MapConfig } from '../../types';
 
-export const DEFAULT_MAP: MapConfig = {
+export const defaultMap: MapConfig = {
   name: 'Default Map',
-  crystal: { q: 0, r: 0 },
+  crystal: [{ q: 0, r: 0 }],
   castles: {
     0: [{ q: 0, r: 4 }, { q: 4, r: 0 }],
     1: [{ q: 0, r: -4 }, { q: -4, r: 0 }]
@@ -17,7 +17,7 @@ export const DEFAULT_MAP: MapConfig = {
     { q: -3, r: 3, level: 3 }, { q: 3, r: -3, level: 3 }
   ],
   magicCircles: [
-    { q: -2, r: 1 }, { q: 2, r: -1 }
+    { q: -2, r: 2 }, { q: 2, r: -2 }
   ],
   traps: [],
   turrets: [],

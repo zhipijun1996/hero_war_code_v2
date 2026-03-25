@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Stage, Layer, RegularPolygon, Text, Group, Line } from 'react-konva';
 import { MapConfig, HexCoord } from '../shared/types';
-import { DEFAULT_MAP } from '../shared/config/mapConstants';
+import { DEFAULT_MAP } from '../shared/config/maps/mapIndex.ts';
 import { HEX_SIZE, hexToPixel, pixelToHex } from '../shared/utils/hexUtils';
 
 type Tool = 'crystal' | 'castle_0' | 'castle_1' | 'chest_t1' | 'chest_t2' | 'monster_1' | 'monster_2' | 'monster_3' | 'magic_circle' | 'trap' | 'turret' | 'watchtower' | 'obstacle' | 'water' | 'bush' | 'eraser';

@@ -140,7 +140,7 @@ export interface HexCoord {
 
 export interface MapConfig {
   name: string;
-  crystal: HexCoord;
+  crystal: HexCoord[];
   castles: { 0: HexCoord[], 1: HexCoord[] };
   chests: { q: number, r: number, type: 'T1' | 'T2' }[];
   monsters: { q: number, r: number, level: number }[];

@@ -1,8 +1,7 @@
 import { Socket } from 'socket.io-client';
 import { GameState } from '../../shared/types';
 import { pixelToHex } from '../../shared/utils/hexUtils';
-import { DEFAULT_MAP } from '../../shared/config/mapConstants';
-
+import { DEFAULT_MAP } from '../../shared/config/maps/mapIndex.ts'; 
 const CASTLES = DEFAULT_MAP.castles;
 
 interface ClickHandlerParams {

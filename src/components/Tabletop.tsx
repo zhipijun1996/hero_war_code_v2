@@ -215,7 +215,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           reachableCells={gameState.reachableCells}
           onHexClick={handleHexClick}
           selectedOption={gameState.selectedOption}
-          magicCircles={gameState.magicCircles}
           selectedHeroCardId={selectedHeroCardId}
           playerIndex={playerIndex}
           phase={gameState.phase}
