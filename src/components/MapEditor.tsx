@@ -99,7 +99,7 @@ export default function MapEditor({ onClose, onSave }: MapEditorProps) {
     const newConfig = { ...mapConfig };
     
     // Remove existing items at this hex
-    if (newConfig.crystal.q === q && newConfig.crystal.r === r) newConfig.crystal = { q: 99, r: 99 }; // Move off-screen
+    newConfig.crystal = newConfig.crystal.filter(c => c.q !== q || c.r !== r);
     newConfig.castles[0] = newConfig.castles[0].filter(c => c.q !== q || c.r !== r);
     newConfig.castles[1] = newConfig.castles[1].filter(c => c.q !== q || c.r !== r);
     newConfig.chests = newConfig.chests.filter(c => c.q !== q || c.r !== r);
@@ -113,7 +113,7 @@ export default function MapEditor({ onClose, onSave }: MapEditorProps) {
     newConfig.bushes = (newConfig.bushes || []).filter(b => b.q !== q || b.r !== r);
 
     // Add new item
-    if (selectedTool === 'crystal') newConfig.crystal = { q, r };
+    if (selectedTool === 'crystal') newConfig.crystal.push({ q, r });
     else if (selectedTool === 'castle_0') newConfig.castles[0].push({ q, r });
     else if (selectedTool === 'castle_1') newConfig.castles[1].push({ q, r });
     else if (selectedTool === 'chest_t1') newConfig.chests.push({ q, r, type: 'T1' });
@@ -142,7 +142,7 @@ export default function MapEditor({ onClose, onSave }: MapEditorProps) {
           let fill = "#27272a"; // Default empty
           let icon = "";
           
-          if (mapConfig.crystal.q === q && mapConfig.crystal.r === r) { fill = "#a78bfa"; icon = "💎"; }
+          if (mapConfig.crystal.some((c: any) => c.q === q && c.r === r)) { fill = "#a78bfa"; icon = "💎"; }
           else if (mapConfig.castles[0].some(c => c.q === q && c.r === r)) { fill = "#60a5fa"; icon = "🏰"; }
           else if (mapConfig.castles[1].some(c => c.q === q && c.r === r)) { fill = "#f87171"; icon = "🏰"; }
           else if (mapConfig.chests.some(c => c.q === q && c.r === r && c.type === 'T1')) { fill = "#fef08a"; icon = "📦"; }

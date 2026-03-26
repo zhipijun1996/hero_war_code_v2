@@ -101,6 +101,10 @@ export function dispatchGameCommand(
       migratedHandlers.pass_shop(socketLike);
       break;
 
+    case 'hire_hero':
+      migratedHandlers.hire_hero(socketLike, action.payload);
+      break;
+
     case 'none':
       if (gameState.phase === 'action_play') {
         migratedHandlers.pass_action(socketLike);

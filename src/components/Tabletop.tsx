@@ -73,21 +73,24 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
   const [showJoinOverlay, setShowJoinOverlay] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        setSize({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight
-        });
-        setStagePos({
-          x: containerRef.current.offsetWidth / 2,
-          y: containerRef.current.offsetHeight / 2
-        });
-      }
-    };
+    const container = containerRef.current;
+    if (!container) return;
 
-    window.addEventListener('resize', handleResize);
-    handleResize();
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setSize({ width, height });
+          setStagePos((prev) => {
+            // Only center if it's the first time or if we want to keep it centered
+            // For now, let's just keep it centered on resize if it was already centered
+            return { x: width / 2, y: height / 2 };
+          });
+        }
+      }
+    });
+
+    resizeObserver.observe(container);
 
     const handleErrorMessage = (msg: string) => {
       setErrorMsg(msg);
@@ -96,7 +99,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
     socket.on('error_message', handleErrorMessage);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       socket.off('error_message', handleErrorMessage);
     };
   }, [socket, setSize, setStagePos]);
@@ -158,7 +161,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
   });
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#1e1e24] relative touch-none" onContextMenu={(e) => e.preventDefault()}>
+    <div ref={containerRef} className="absolute inset-0 bg-[#1e1e24] touch-none" onContextMenu={(e) => e.preventDefault()}>
       {errorMsg && (
         <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-xl shadow-2xl z-[300] font-bold animate-bounce pointer-events-none">
           {errorMsg}
@@ -220,6 +223,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           phase={gameState.phase}
           pendingRevivals={gameState.pendingRevivals}
           mapConfig={gameState.map}
+          magicCircles={gameState.magicCircles}
           activeActionType={gameState.activeActionType}
         />
         

@@ -39,7 +39,7 @@ export const createMockGameState = (): GameState => ({
   actionTokens: [],
   map: {
     name: 'Test Map',
-    crystal: { q: 0, r: 0 },
+    crystal: [{ q: 0, r: 0 }],
     castles: { 
       0: [{ q: -5, r: 0 }], 
       1: [{ q: 5, r: 0 }] 

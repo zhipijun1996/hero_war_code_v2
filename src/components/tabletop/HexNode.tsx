@@ -12,7 +12,6 @@ interface HexNodeProps {
   onContextMenu: (e: any, x: number, y: number, clientX?: number, clientY?: number) => void;
   highlightColor?: string;
   onClick?: (q: number, r: number) => void;
-  magicCircleState?: string;
 }
 
 export const HexNode: React.FC<HexNodeProps> = ({
@@ -24,8 +23,7 @@ export const HexNode: React.FC<HexNodeProps> = ({
   icon,
   onContextMenu,
   highlightColor,
-  onClick,
-  magicCircleState
+  onClick
 }) => {
   const points = [];
   for (let i = 0; i < 6; i++) {
@@ -35,7 +33,7 @@ export const HexNode: React.FC<HexNodeProps> = ({
     points.push(y + HEX_SIZE * Math.sin(angle_rad));
   }
 
-  const isSpecial = fill !== "#ffffff" || magicCircleState !== undefined;
+  const isSpecial = fill !== "#ffffff";
   const timerRef = useRef<any>(null);
   const longPressTriggered = useRef(false);
   const touchStartPos = useRef({ x: 0, y: 0 });
@@ -80,16 +78,6 @@ export const HexNode: React.FC<HexNodeProps> = ({
   let finalFill = highlightColor || fill;
   let finalStroke = highlightColor ? (highlightColor.includes('239') ? "#ef4444" : "#facc15") : "#a1a1aa";
   let finalStrokeWidth = highlightColor ? 4 : 1;
-
-  if (magicCircleState) {
-    if (magicCircleState === 'chanting') {
-      finalFill = "#bfdbfe"; // Highlight blue
-      finalStroke = "#3b82f6";
-      finalStrokeWidth = 4;
-    } else {
-      finalFill = "#e0e7ff"; // Light blue for idle
-    }
-  }
 
   return (
     <Group

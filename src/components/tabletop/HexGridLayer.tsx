@@ -14,6 +14,7 @@ interface HexGridLayerProps {
   phase?: string;
   pendingRevivals?: any[];
   mapConfig?: any;
+  magicCircles?: any[];
   activeActionType?: string;
 }
 
@@ -27,6 +28,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   phase,
   pendingRevivals,
   mapConfig,
+  magicCircles,
   activeActionType
 }) => {
   const hexes = [];
@@ -44,7 +46,15 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       
       if (mapConfig) {
         if (mapConfig.crystal?.some((t: any) => t.q === q && t.r === r)) { fill = "#bfdbfe"; icon = "💎"; } // Crystal
-        else if (mapConfig.magicCircle[0]?.some((c: any) => c.q === q && c.r === r)) { icon = "✨"; } // magicCircle
+        else if (mapConfig.magicCircles?.some((c: any) => c.q === q && c.r === r)) { 
+          const mcState = magicCircles?.find(mc => mc.q === q && mc.r === r);
+          if (mcState?.state === 'chanting') {
+            fill = "#fef3c7"; // Light yellow background for chanting
+            icon = "🔥"; // Fire icon for chanting
+          } else {
+            icon = "✨"; 
+          }
+        } // magicCircle
         else if (mapConfig.castles[0]?.some((c: any) => c.q === q && c.r === r)) { fill = "#fee2e2"; icon = "🏰"; } // P1 Castle
         else if (mapConfig.castles[1]?.some((c: any) => c.q === q && c.r === r)) { fill = "#dcfce7"; icon = "🏰"; } // P2 Castle
         else if (mapConfig.chests?.some((c: any) => c.q === q && c.r === r)) { fill = "#fef08a"; icon = "📦"; } // Chests
@@ -113,7 +123,6 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
           onContextMenu={onHexContextMenu} 
           highlightColor={highlightColor}
           onClick={onHexClick}
-          magicCircleState={magicCircle?.state}
         />
       );
     }

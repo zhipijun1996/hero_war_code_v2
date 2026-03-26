@@ -59,6 +59,9 @@ export class BotStrategy {
       case 'action_select_substitute':
         return this.decideActionSelectHeroAction(gameState, playerIndex);
 
+      case 'revival':
+        return this.decideRevivalAction(gameState, playerIndex);
+
       case 'action_select_action':
         return this.decideActionSelectActionAction(gameState, playerIndex);
 
@@ -179,6 +182,10 @@ export class BotStrategy {
       } else if (option === 'evolve') {
         const myHeros = gameState.tableCards.filter(c => {
           if (c.type !== 'hero' || !((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0))) return false;
+          // Check if hero is alive (has a token)
+          const hasToken = gameState.tokens.some(t => t.boundToCardId === c.id);
+          if (!hasToken) return false;
+          
           const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === c.heroClass);
           const levelData = heroData?.levels?.[c.level || 1];
           const expNeeded = levelData?.xp;
@@ -187,9 +194,8 @@ export class BotStrategy {
         });
         if (myHeros.length > 0) {
           return { type: 'select_target', payload: { targetId: myHeros[0].id } };
-        } else {
-          return { type: 'finish_action' };
         }
+        return { type: 'finish_action' };
       } else if (option === 'buy') {
         if (gameState.decks.treasure1.length > 0) {
           return { type: 'select_option', payload: { option: 'treasure1' } };
@@ -201,11 +207,35 @@ export class BotStrategy {
           return { type: 'finish_action' };
         }
       } else if (option === 'hire') {
-        if (gameState.hireAreaCards.length > 0) {
-          return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
-        } else {
-          return { type: 'finish_action' };
+        const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+        let freeCastleIdx = -1;
+        for (let i = 0; i < playerCastles.length; i++) {
+          const cCoord = playerCastles[i];
+          const pos = hexToPixel(cCoord.q, cCoord.r);
+          const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+          if (!occupied) {
+            freeCastleIdx = i;
+            break;
+          }
         }
+
+        if (!gameState.selectedHireCost) {
+          return { type: 'select_hire_cost', payload: { cost: 2 } };
+        }
+        if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
+          return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
+        }
+        if (gameState.selectedHireCost && gameState.selectedTargetId && freeCastleIdx !== -1) {
+          return {
+            type: 'hire_hero',
+            payload: {
+              cardId: gameState.selectedTargetId,
+              goldAmount: gameState.selectedHireCost,
+              targetCastleIndex: freeCastleIdx
+            }
+          };
+        }
+        return { type: 'finish_action' };
       }
     } else {
       const lastCard = gameState.playAreaCards[gameState.playAreaCards.length - 1];
@@ -236,8 +266,8 @@ export class BotStrategy {
   }
 
   private static decideActionCommonAction(gameState: GameState, playerIndex: number): BotAction {
-    const activePlayerId = gameState.seats[playerIndex];
-    const goldCounter = gameState.counters.find(c => c.type === 'gold' && c.boundToCardId === activePlayerId);
+    const goldY = playerIndex === 0 ? 550 : -700;
+    const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
     const gold = goldCounter ? goldCounter.value : 0;
     
     if (gold >= 2) {
@@ -384,7 +414,11 @@ export class BotStrategy {
 
         if (hasDefenseInPlay) {
           const defenderToken = gameState.tokens.find(t => t.boundToCardId === defenderCard.id);
-          if (defenderToken && hasDefenseCardInPlay?.name === '防御') {
+          const isDefenseCard = hasDefenseCardInPlay?.name === '防御';
+
+          // 修正逻辑: 只有在 defenderToken 存在、打出的防御牌名字是“防御”、
+          // 且 gameState.canCounterAttack 为 true、且目标在反击范围内、且防御者存活时，才尝试反击。
+          if (defenderToken && isDefenseCard && gameState.canCounterAttack === true) {
             const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
             const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
             const ar = getHeroStat(defenderCard.heroClass!, defenderCard.level, 'ar');
@@ -404,13 +438,8 @@ export class BotStrategy {
   }
 
   private static decideShopAction(gameState: GameState, playerIndex: number): BotAction {
-    const activePlayerId = gameState.seats[playerIndex];
-    if (!activePlayerId) return { type: 'pass_shop' };
-    const player = gameState.players[activePlayerId];
-    if (!player) return { type: 'pass_shop' };
-    const goldCounter = gameState.counters.find(
-      c => c.type === 'gold' && c.boundToCardId === activePlayerId
-    );
+    const goldY = playerIndex === 0 ? 550 : -700;
+    const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
     const gold = goldCounter ? goldCounter.value : 0;
 
     const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];

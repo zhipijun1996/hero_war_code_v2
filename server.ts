@@ -345,9 +345,15 @@ const broadcastState = () => {
         if (player?.isBot && !player.discardFinished && player.hand) {
           const botSocket = { id: id!, emit: () => {}, broadcast: { emit: () => {} } };
           let action = BotStrategy.decideNextAction(gameState, gameState.seats.indexOf(id!), HEROES_DATABASE);
-          while (action.type === 'discard_card') {
+          let safetyCounter = 0;
+          while (action.type === 'discard_card' && safetyCounter < 20) {
             migratedHandlers.discard_card(botSocket, action.payload.cardId);
             action = BotStrategy.decideNextAction(gameState, gameState.seats.indexOf(id!), HEROES_DATABASE);
+            safetyCounter++;
+          }
+          if (safetyCounter >= 20) {
+            console.error(`[BotTurn] Safety break triggered for discard_card loop for player ${id}`);
+            migratedHandlers.finish_discard(botSocket);
           }
           if (action.type === 'finish_discard') {
             migratedHandlers.finish_discard(botSocket);
@@ -361,6 +367,10 @@ const broadcastState = () => {
     if (activePlayerId && gameState.players[activePlayerId]?.isBot) {
       const botPlayer = gameState.players[activePlayerId];
       if (!botPlayer || !botPlayer.hand) return;
+
+      if (pendingBotTurnTimeout) {
+        clearTimeout(pendingBotTurnTimeout);
+      }
       
       pendingBotTurnTimeout = setTimeout(() => {
         pendingBotTurnTimeout = null;
@@ -782,6 +792,24 @@ const broadcastState = () => {
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   }
+
+  // API routes
+  app.get('/api/state', (req, res) => {
+    res.json(gameState);
+  });
+
+  app.get('/api/reset', (req, res) => {
+    const newState = createInitialState();
+    Object.assign(gameState, newState);
+    io.emit('state_update', gameState);
+    res.send('Game has been reset. <a href="/">Back to game</a>');
+  });
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('Global Error Handler:', err);
+    res.status(500).send('Something went wrong. <a href="/api/reset">Reset Game</a>');
+  });
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);

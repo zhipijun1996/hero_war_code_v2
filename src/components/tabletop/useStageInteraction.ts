@@ -10,6 +10,14 @@ export const useStageInteraction = (initialWidth: number, initialHeight: number)
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight });
   const [stagePos, setStagePos] = useState({ x: initialWidth / 2, y: initialHeight / 2 });
   const [stageScale, setStageScale] = useState(() => calculateInitialScale(initialWidth, initialHeight));
+
+  // Update scale and position when size changes for the first time from 0
+  useEffect(() => {
+    if (size.width > 0 && size.height > 0 && (initialWidth === 0 || initialHeight === 0)) {
+      setStageScale(calculateInitialScale(size.width, size.height));
+      setStagePos({ x: size.width / 2, y: size.height / 2 });
+    }
+  }, [size.width, size.height]);
   
   const lastCenter = useRef<{ x: number, y: number } | null>(null);
   const lastDist = useRef<number>(0);

@@ -643,6 +643,7 @@ export class ActionEngine {
         gameState.selectedOption = 'buy';
         gameState.notification = null;
         helpers.broadcastState();
+        helpers.checkBotTurn();
         return;
       } else {
         socket.emit('error_message', '金币不足');
@@ -661,6 +662,7 @@ export class ActionEngine {
       const gold = gameState.counters.find(c => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
       if (gold && gold.value >= 2) {
         ActionEngine.startHireSelection(gameState, 'action_common', helpers);
+        helpers.checkBotTurn();
         return;
       } else {
         socket.emit('error_message', '金币不足 (需要2金币)');
@@ -821,11 +823,11 @@ export class ActionEngine {
       gameState.notification = '选择技能 (Select skill)';
     } else if (actionType === 'evolve') {
       gameState.phase = 'action_resolve';
-      gameState.selectedOption = 'evolve';
+      gameState.activeActionType = 'evolve';
       gameState.selectedTokenId = heroToken.id;
-      gameState.selectedOption = null;
       gameState.selectedTargetId = null;
-      gameState.notification = null;
+      gameState.reachableCells = [];
+      gameState.notification = '确认进化 (Confirm evolve)';
     }
     helpers.broadcastState();
     helpers.checkBotTurn();
@@ -837,7 +839,7 @@ export class ActionEngine {
   static proceedPhase(
     gameState: GameState,
     helpers: ActionHelpers,
-    socket: any
+    socket?: any
   ): void {
     gameState.lastEvolvedId = null;
     if (gameState.phase === 'supply') {
@@ -856,7 +858,7 @@ export class ActionEngine {
       helpers.broadcastState();
       helpers.checkBotTurn();
     } else if (gameState.phase === 'end') {
-      this.resolveEndPhase(gameState, helpers, socket);
+      this.resolveEndPhase(gameState, helpers);
     }
   }
 
@@ -877,6 +879,25 @@ export class ActionEngine {
         playerIndex === gameState.activePlayerIndex) {
       
       gameState.selectedTargetId = targetId;
+
+      if (gameState.selectedOption === 'heal') {
+        const heroCard = gameState.tableCards.find(c => c.id === targetId);
+        if (heroCard) {
+          gameState.phase = 'action_resolve';
+          this.finishAction(gameState, playerIndex, helpers, socket);
+          return;
+        }
+      } else if (gameState.selectedOption === 'evolve') {
+        const heroCard = gameState.tableCards.find(c => c.id === targetId);
+        const heroToken = gameState.tokens.find(t => t.boundToCardId === targetId);
+        if (heroCard && heroToken) {
+          gameState.phase = 'action_resolve';
+          gameState.activeActionType = 'evolve';
+          gameState.selectedTokenId = heroToken.id;
+          this.finishAction(gameState, playerIndex, helpers, socket);
+          return;
+        }
+      }
 
       // If we are in action_resolve and it's an attack, transition to defense phase
       if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') || 
@@ -989,6 +1010,7 @@ export class ActionEngine {
       }
       
       helpers.broadcastState();
+      helpers.checkBotTurn();
     }
   }
 
@@ -1280,6 +1302,7 @@ export class ActionEngine {
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     gameState.consecutivePasses = 0;
     gameState.hasSeizedInitiative = false;
+
     gameState.selectedOption = null;
     gameState.selectedTargetId = null;
     gameState.selectedTokenId = null;
@@ -1287,9 +1310,15 @@ export class ActionEngine {
     gameState.activeActionType = null;
     gameState.reachableCells = [];
     gameState.notification = null;
+
     helpers.addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
     helpers.broadcastState();
-    helpers.checkBotTurn();
+    
+    setTimeout(() => {
+      if (gameState.phase === 'end') {
+        this.proceedPhase(gameState, helpers);
+      }
+    }, 50);
   }
 
   static scoreEndPhaseReputation(
@@ -1424,6 +1453,9 @@ export class ActionEngine {
     gameState: GameState,
     helpers: ActionHelpers
   ): void {
+    gameState.actionTokens.forEach(t => {
+      t.used = false;
+    });
     this.scoreEndPhaseReputation(gameState, helpers);
     if (gameState.playAreaCards.length > 0) {
       gameState.discardPiles.action.push(...gameState.playAreaCards);

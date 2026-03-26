@@ -205,18 +205,11 @@ export class HeroEngine {
 
     // 检查是否所有复活都已完成
     if (gameState.pendingRevivals.length === 0) {
-      ActionEngine.beginNextRound(gameState,helpers);
-
-      gameState.round += 1;
-      gameState.roundActionCounts = {};
-      gameState.phase = 'action_play';
-      gameState.activePlayerIndex = gameState.firstPlayerIndex;
-      gameState.consecutivePasses = 0;
-      gameState.hasSeizedInitiative = false;
-      Object.values(gameState.players).forEach(p => p.discardFinished = false);
-      helpers.addLog(`进入第 ${gameState.round} 回合`, -1);
+      ActionEngine.beginNextRound(gameState, helpers);
     } else {
       gameState.activePlayerIndex = gameState.pendingRevivals[0].playerIndex;
+      helpers.broadcastState();
+      helpers.checkBotTurn();
     }
 
     return { success: true };

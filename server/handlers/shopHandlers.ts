@@ -20,6 +20,7 @@ export const createShopHandlers = (deps: any) => {
       if (playerIndex === gameState.activePlayerIndex) {
         gameState.selectedHireCost = cost;
         broadcastState();
+        checkBotTurn();
       }
     },
     next_shop: (socket: any) => {
