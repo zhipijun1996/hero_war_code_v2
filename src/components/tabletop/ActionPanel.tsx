@@ -29,7 +29,14 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     const costs = [2, 3, 4, 5, 6, 7, 8, 9].filter(c => c <= maxGold);
     const hireableHeroes = gameState.hireAreaCards;
     const hireCardId = gameState.selectedTargetId;
-    const canConfirmHire = !!gameState.selectedHireCost && !!gameState.selectedTargetId;
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
+    const freeCastleIdx = playerCastles.map((castle, index) => {
+      const occupied = gameState.tokens.some(token => {
+        const tokenHex = pixelToHex(token.x, token.y);
+        return tokenHex.q === castle.q && tokenHex.r === castle.r;
+      });
+      return occupied ? null : index;
+    }).filter((v): v is number => v !== null)
 
     return (
       <div className="flex flex-col gap-4 items-center">
@@ -60,11 +67,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           ))}
         </div>
 
+        <div className="flex gap-2 flex-wrap justify-center">
+          {freeCastleIdx.map(castle => castle && (
+            <button 
+              key={castle}
+              onClick={() => socket.emit('select_hire_castle', castle)}
+              className={`px-4 py-2 rounded-lg font-bold transition-all ${!hireCardId ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : gameState.selectedHireCastle === castle ? 'bg-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/50' : 'bg-emerald-900/50 text-emerald-200 hover:bg-emerald-800'}`}
+            >
+              王城 {castle}
+            </button>
+          ))}
+        </div>
+
         <div className="flex gap-4">
           <button 
-            onClick={() => socket.emit('hire_hero', { cardId: hireCardId, goldAmount: gameState.selectedHireCost })}
-            className={`px-4 py-2 rounded-lg font-bold transition-all ${(!hireCardId || !gameState.selectedHireCost) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white'}`}
-            disabled={!hireCardId || !gameState.selectedHireCost}
+            onClick={() => socket.emit('hire_hero', { cardId: hireCardId, goldAmount: gameState.selectedHireCost ,targetCastleIndex: gameState.selectedHireCastle})}
+            className={`px-4 py-2 rounded-lg font-bold transition-all ${(!hireCardId || !gameState.selectedHireCost || !gameState.selectedHireCastle) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white'}`}
+            disabled={!hireCardId || !gameState.selectedHireCost || !gameState.selectedHireCastle}
           >
             确认雇佣 (Confirm Hire)
           </button>

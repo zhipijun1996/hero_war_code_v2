@@ -678,6 +678,7 @@ export class ActionEngine {
     gameState.selectedOption = null;
     gameState.selectedTargetId = null;
     gameState.selectedHireCost = null;
+    gameState.selectedHireCastle = null;
     gameState.notification = null;
 
     if (gameState.hireSource === 'action_common') {
@@ -698,6 +699,7 @@ export class ActionEngine {
     gameState.selectedOption = 'hire';
     gameState.selectedTargetId = null;
     gameState.selectedHireCost = null;
+    gameState.selectedHireCastle = null;
     gameState.notification = null;
     gameState.hireSource = source;
     gameState.phase = 'hire';
@@ -1298,6 +1300,7 @@ export class ActionEngine {
     gameState.selectedOption = null;
     gameState.selectedTargetId = null;
     gameState.selectedHireCost = null;
+    gameState.selectedHireCastle = null;
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     helpers.addLog(`进入商店阶段`, -1);
     helpers.broadcastState();
@@ -1317,6 +1320,7 @@ export class ActionEngine {
     gameState.selectedTargetId = null;
     gameState.selectedTokenId = null;
     gameState.selectedHireCost = null;
+    gameState.selectedHireCastle = null;
     gameState.activeActionType = null;
     gameState.reachableCells = [];
     gameState.notification = null;

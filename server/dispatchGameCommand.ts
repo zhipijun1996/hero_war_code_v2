@@ -93,6 +93,10 @@ export function dispatchGameCommand(
       migratedHandlers.select_hire_cost(socketLike, action.payload.cost);
       break;
 
+    case 'select_hire_castle':
+      migratedHandlers.select_hire_castle(socketLike, action.payload.castle);
+      break;
+
     case 'next_shop':
       migratedHandlers.next_shop(socketLike);
       break;

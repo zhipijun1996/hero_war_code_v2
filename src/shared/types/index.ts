@@ -218,6 +218,7 @@ export interface GameState {
   selectedOption?: string | null;
   selectedTargetId?: string | null;
   selectedHireCost?: number | null;
+  selectedHireCastle?: number | null;
   hireSource?: 'shop' | 'action_common' | null;
   buySource?: 'shop' | 'action_common' | null;  
   hasSeizedInitiative?: boolean;

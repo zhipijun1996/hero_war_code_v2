@@ -32,18 +32,6 @@ export const handleHexClickLogic = (
     return;
   }
 
-  if ((gameState.phase === 'hire') && isActivePlayer) {
-    if (gameState.selectedTargetId && gameState.selectedHireCost) {
-      const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
-      const castleIdx = playerCastles.findIndex((c: any) => c.q === q && c.r === r);
-      if (castleIdx !== -1) {
-        socket.emit('hire_hero', { cardId: gameState.selectedTargetId, goldAmount: gameState.selectedHireCost, targetCastleIndex: castleIdx });
-        return;
-      }
-    }
-    return;
-  }
-
   if (gameState.phase === 'revival' && isActivePlayer) {
     const pending = gameState.pendingRevivals?.find(r => r.playerIndex === playerIndex);
     if (pending) {

@@ -23,6 +23,14 @@ export const createShopHandlers = (deps: any) => {
         checkBotTurn();
       }
     },
+    select_hire_castle: (socket: any, castle: number) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      if (playerIndex === gameState.activePlayerIndex) {
+        gameState.selectedHireCastle = castle;
+        broadcastState();
+        checkBotTurn();
+      }
+    },
     next_shop: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;

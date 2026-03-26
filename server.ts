@@ -720,6 +720,7 @@ const broadcastState = () => {
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
 
     socket.on('select_hire_cost', (cost: number) => migratedHandlers.select_hire_cost(socket, cost));
+    socket.on('select_hire_castle', (cost: number) => migratedHandlers.select_hire_castle(socket, castle));
     socket.on('cancel_hire_selection', () => migratedHandlers.cancel_hire_selection(socket));
 
     socket.on('pass_shop', () => migratedHandlers.pass_shop(socket));
