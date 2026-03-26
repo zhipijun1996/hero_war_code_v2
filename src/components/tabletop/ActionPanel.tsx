@@ -68,7 +68,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         </div>
 
         <div className="flex gap-2 flex-wrap justify-center">
-          {freeCastleIdx.map(castle => castle && (
+          {freeCastleIdx.map(castle => castle != null && (
             <button 
               key={castle}
               onClick={() => socket.emit('select_hire_castle', castle)}
@@ -82,8 +82,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <div className="flex gap-4">
           <button 
             onClick={() => socket.emit('hire_hero', { cardId: hireCardId, goldAmount: gameState.selectedHireCost ,targetCastleIndex: gameState.selectedHireCastle})}
-            className={`px-4 py-2 rounded-lg font-bold transition-all ${(!hireCardId || !gameState.selectedHireCost || !gameState.selectedHireCastle) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white'}`}
-            disabled={!hireCardId || !gameState.selectedHireCost || !gameState.selectedHireCastle}
+            className={`px-4 py-2 rounded-lg font-bold transition-all ${(!hireCardId || gameState.selectedHireCost == null || gameState.selectedHireCastle == null) ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-pink-600 hover:bg-pink-500 text-white'}`}
+            disabled={!hireCardId || gameState.selectedHireCost == null || gameState.selectedHireCastle == null}
           >
             确认雇佣 (Confirm Hire)
           </button>
@@ -488,10 +488,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   if (gameState.phase === 'shop') {
     return (
       <div className="flex gap-4">
-        <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
+        <button onClick={() => socket.emit('start_buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
           购买
         </button>
-        <button onClick={() => socket.emit('select_option', 'hire')} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold">
+        <button onClick={() => socket.emit('start_hire')} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold">
           雇佣
         </button>
         <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">

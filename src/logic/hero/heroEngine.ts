@@ -159,7 +159,6 @@ export class HeroEngine {
     gameState.selectedTargetId = null;
     gameState.lastPlayedCardId = null;
     gameState.selectedTokenId = null;
-    gameState.hireSource = null;
     gameState.remainingMv = 0;
     gameState.reachableCells = [];
 

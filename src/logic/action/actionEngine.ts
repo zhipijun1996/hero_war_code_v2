@@ -884,11 +884,7 @@ export class ActionEngine {
     helpers: ActionHelpers,
     socket: any
   ): void {
-    if ((gameState.phase === 'action_select_option' || 
-         gameState.phase === 'action_defend' || 
-         gameState.phase === 'shop' || 
-         gameState.phase === 'action_resolve') && 
-        playerIndex === gameState.activePlayerIndex) {
+    if (playerIndex === gameState.activePlayerIndex) {
       
       gameState.selectedTargetId = targetId;
 

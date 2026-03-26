@@ -15,6 +15,20 @@ export const createShopHandlers = (deps: any) => {
   } = deps;
 
   return {
+    start_buy:(socket: any) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      const source = gameState.phase=='shop' ? 'shop' : 'action_common';
+      if (playerIndex === gameState.activePlayerIndex) {
+        ActionEngine.startBuySelection(gameState, source, actionHelpers);
+      }
+    },
+    start_hire:(socket: any) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      const source = gameState.phase=='shop' ? 'shop' : 'action_common';
+      if (playerIndex === gameState.activePlayerIndex) {
+        ActionEngine.startHireSelection(gameState, source, actionHelpers);
+      }
+    },
     select_hire_cost: (socket: any, cost: number) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (playerIndex === gameState.activePlayerIndex) {

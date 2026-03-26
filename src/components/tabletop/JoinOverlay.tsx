@@ -91,6 +91,7 @@ export const JoinOverlay: React.FC<JoinOverlayProps> = ({
                       onClick={() => {
                         if (!playerNameInput.trim()) {
                           setErrorMsg("请输入名称 (Please enter a name)");
+                          setTimeout(() => setErrorMsg(null), 3000);
                           return;
                         }
                         socket.emit('sit_down', { seatIndex, playerName: playerNameInput.trim() });
