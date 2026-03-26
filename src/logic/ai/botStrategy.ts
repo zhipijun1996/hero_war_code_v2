@@ -17,6 +17,7 @@ export type BotAction =
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
   | { type: 'select_hire_cost'; payload: { cost: number } }
+  | { type: 'select_hire_castle'; payload: { castle: number } }  
   | { type: 'next_shop' }
   | { type: 'pass_shop' }  
   | { type: 'finish_action'}
@@ -214,7 +215,7 @@ export class BotStrategy {
           return { type: 'select_hire_cost', payload: { cost: 2 } };
         }
         if (!gameState.selectedHireCastle) {
-          return { type: 'select_hire_castle', payload: { castle: 2 } };
+          return { type: 'select_hire_castle', payload: { castle: freeCastleIdx } };
         }
         if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
           return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
@@ -431,27 +432,26 @@ export class BotStrategy {
         break;
       }
     }
-       
+        
     if (gameState.phase === 'hire') {
       if (!gameState.selectedHireCost) {
           return { type: 'select_hire_cost', payload: { cost: 2 } };
-        }
-        if (!gameState.selectedHireCastle) {
-          return { type: 'select_hire_castle', payload: { castle: 2 } };
-        }
-        if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
-          return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
-        }
-        if (gameState.selectedHireCost && gameState.selectedTargetId && gameState.selectedHireCastle) {
-          return {
-            type: 'hire_hero',
-            payload: {
-              cardId: gameState.selectedTargetId,
-              goldAmount: gameState.selectedHireCost,
-              targetCastleIndex: gameState.selectedHireCastle
-            }
-          };
-        }
+      }
+      if (!gameState.selectedHireCastle) {
+        return { type: 'select_hire_castle', payload: { castle: freeCastleIdx } };
+      }
+      if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
+        return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
+      }
+      if (gameState.selectedHireCost && gameState.selectedTargetId && gameState.selectedHireCastle) {
+        return {
+          type: 'hire_hero',
+          payload: {
+            cardId: gameState.selectedTargetId,
+            goldAmount: gameState.selectedHireCost,
+            targetCastleIndex: gameState.selectedHireCastle
+          }
+        };
       }
     }
 
