@@ -61,6 +61,7 @@ export const createShopHandlers = (deps: any) => {
       addLog(`玩家${playerIndex + 1}花费1金币刷新商店 (Player ${playerIndex + 1} refreshed shop)`, playerIndex);
 
       broadcastState();
+      checkBotTurn();
     },
     pass_shop: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -92,6 +93,9 @@ export const createShopHandlers = (deps: any) => {
 
       if (!result.success) {
         socket.emit('error_message', result.reason);
+        gameState.phase = gameState.hireSource === 'shop' ? 'shop' : 'action_common';
+        broadcastState();
+        checkBotTurn();
         return;
       }
 

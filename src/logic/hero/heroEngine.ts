@@ -1,4 +1,4 @@
-import { GameState, TableCard, Token, HeroCard, Counter } from '../../shared/types';
+import { GameState, TableCard, Token, HeroCard, Counter } from '../../shared/types/index.ts';
 import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { ActionEngine, ActionHelpers } from '../action/actionEngine.ts';

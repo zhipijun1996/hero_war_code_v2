@@ -1,7 +1,7 @@
 import { ActionEngine } from '../../src/logic/action/actionEngine.ts';
 import { HeroEngine } from '../../src/logic/hero/heroEngine.ts';
 import { CardLogic } from '../../src/logic/card/cardLogic.ts';
-import { CombatLogic } from '../../src/logic/combat/combatLogic.ts';
+import { CombatLogic } from '../../src/logic/combat/combatLogic.ts'; 
 
 export const createActionHandlers = (deps: any) => {
   const {
@@ -162,10 +162,7 @@ export const createActionHandlers = (deps: any) => {
     revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
       const playerIndex = getPlayerIndex(socket.id);
       
-      const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, {
-        addLog,
-        checkBotTurn
-      });
+      const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, actionHelpers);
 
       if (!result.success) {
         socket.emit('error_message', result.reason);

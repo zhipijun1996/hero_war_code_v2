@@ -14,7 +14,11 @@ export function dispatchGameCommand(
 
   switch (action.type) {
     case 'play_card':
-      migratedHandlers.play_card(socketLike, action.payload);
+      if (gameState.phase === 'action_play_enhancement') {
+        migratedHandlers.play_enhancement_card(socketLike, action.payload.cardId);
+      } else {
+        migratedHandlers.play_card(socketLike, action.payload);
+      }
       break;
 
     case 'revive_hero':

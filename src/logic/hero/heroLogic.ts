@@ -1,5 +1,5 @@
-import { HEROES_DATABASE } from '../../shared/config/heroes';
-import { GameState, TableCard, Counter } from '../../shared/types';
+import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
+import { GameState, TableCard, Counter } from '../../shared/types/index.ts';
 
 /**
  * 获取英雄在特定等级的属性

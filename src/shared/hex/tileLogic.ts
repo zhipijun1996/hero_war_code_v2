@@ -1,4 +1,4 @@
-import { HexCoord, MapConfig } from '../types';
+import { HexCoord, MapConfig } from '../types/index.ts';
 
 export type TileType = 'empty' | 'castle' | 'monster' | 'chest' | 'magicCircle' | 'trap' | 'turret' | 'watchtower' | 'obstacle' | 'water' | 'bush';
 

@@ -1,5 +1,5 @@
 import { Hex, getHexDistance, pixelToHex, hexToPixel } from "../../shared/utils/hexUtils";
-import { GameState, Token } from "../../shared/types";
+import { GameState, Token } from "../../shared/types/index.ts";
 
 /**
  * 判断目标是否在攻击范围内
@@ -83,7 +83,10 @@ export function getRecoilHex(
         return !hasTimer;
       });
 
-      if (!isOccupied && !isMonster) {
+      // 检查地图边界 (假设 4x4x4 的六边形地图)
+      const inBounds = Math.abs(neighbor.q) <= 4 && Math.abs(neighbor.r) <= 4 && Math.abs(-neighbor.q - neighbor.r) <= 4;
+
+      if (!isOccupied && !isMonster && inBounds) {
         const dist = getHexDistance(neighbor, enemyCastleHex);
         if (dist > maxDist) {
           maxDist = dist;

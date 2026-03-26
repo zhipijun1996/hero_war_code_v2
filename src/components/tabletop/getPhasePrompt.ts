@@ -65,6 +65,8 @@ export const getPhasePrompt = ({
       return `请结算技能 (Resolve skill)`;
     } else if (gameState.activeActionType === 'evolve') {
       return `请结算进化 (Resolve evolve)`;
+    } else if (gameState.activeActionType === 'fire') {
+      return `开火：请点击敌方王城以发射 (Fire: Click the enemy castle to fire)`;
     }
     return `请结算行动 (Resolve action)`;
   }
@@ -123,7 +125,7 @@ export const getPhasePrompt = ({
     return `购买：请点击商店区的装备卡进行购买 (Buy: Click an equipment card in the shop area)`;
   }
   if (gameState.phase === 'action_defend') {
-    const hasDefenseCard = gameState.playAreaCards.some(c => c.name === '防御');
+    const hasDefenseCard = !!gameState.hasDefenseCard;
     if (hasDefenseCard) {
       return `防御阶段：已打出防御卡，请选择确认防御或反击 (Defense card played, choose Confirm or Counter)`;
     }

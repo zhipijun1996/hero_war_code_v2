@@ -1,4 +1,4 @@
-import { MapConfig } from '../../types';
+import { MapConfig } from '../../types/index.ts';
 
 export const mapTower: MapConfig = {
   name: 'Map TOWER',

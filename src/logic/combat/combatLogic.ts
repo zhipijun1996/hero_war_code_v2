@@ -1,10 +1,10 @@
-import { GameState, TableCard, Token } from '../../shared/types';
-import { getHeroStat } from '../hero/heroLogic';
-import { getAttackDamageBonusFromEnhancement } from '../card/enhancementModifiers';
-import { HEROES_DATABASE } from '../../shared/config/heroes';
-import { hexToPixel, pixelToHex, generateId } from '../../shared/utils/hexUtils';
-import { REWARDS } from '../../shared/hex/tileLogic';
-import { ActionHelpers } from '../action/actionEngine';
+import { GameState, TableCard, Token } from '../../shared/types/index.ts';
+import { getHeroStat } from '../hero/heroLogic.ts';
+import { getAttackDamageBonusFromEnhancement } from '../card/enhancementModifiers.ts';
+import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
+import { hexToPixel, pixelToHex, generateId } from '../../shared/utils/hexUtils.ts';
+import { REWARDS } from '../../shared/hex/tileLogic.ts';
+import { ActionHelpers } from '../action/actionEngine.ts';
 
 export class CombatLogic {
   /**
@@ -38,6 +38,7 @@ export class CombatLogic {
         }
         damageCounter.value = targetCard.damage;
 
+        helpers.checkAndResetChanting(targetToken.id);
         helpers.addLog(`${attackerCard?.heroClass} 对 ${targetCard.heroClass} 造成了 ${damage} 点伤害`, playerIndex);
 
         if (this.isHeroDead(targetCard, gameState)) {
@@ -133,6 +134,7 @@ export class CombatLogic {
         heroCard.damage = (heroCard.damage || 0) + 1;
         const heroDamageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === heroCard.id);
         if (heroDamageCounter) heroDamageCounter.value = heroCard.damage;
+        helpers.checkAndResetChanting(token.id);
         helpers.addLog(`反击阶段: LV${monster.level}怪物 存活，触发反击！${heroCard.heroClass} 受到 1 点伤害`, playerIndex);
         helpers.addLog(`结算阶段: ${heroCard.heroClass} 当前受伤计数器为 ${heroCard.damage}`, playerIndex);
         gameState.notification = `攻击怪物！怪物反击造成 1 点伤害。 (Attacked monster! Monster counter-attacked for 1 damage.)`;
@@ -204,6 +206,7 @@ export class CombatLogic {
       }
       damageCounter.value = attackerCard.damage;
 
+      helpers.checkAndResetChanting(attackerToken.id);
       helpers.addLog(`${defenderCard.heroClass} 对 ${attackerCard.heroClass} 进行了反击，造成了 ${damage} 点伤害`, playerIndex);
 
       if (this.isHeroDead(attackerCard, gameState)) {

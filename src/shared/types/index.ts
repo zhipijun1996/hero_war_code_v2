@@ -105,6 +105,7 @@ export type GamePhase =
   | 'action_resolve_attack_counter' 
   | 'action_common' 
   | 'action_select_skill'
+  | 'action_play_defense'
   ;
 
 export interface MovementStep {
@@ -241,7 +242,7 @@ export interface GameState {
   logs: GameLog[];
   actionTokens: ActionToken[];
   activeActionTokenId?: string | null;
-  activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | null;
+  activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | null;
   activeEnhancementCardId?: string | null;
   activeHeroTokenId?: string | null;
   isCounterAttack?: boolean;

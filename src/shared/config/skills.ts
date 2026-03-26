@@ -1,4 +1,4 @@
-import { Skill } from '../types';
+import { Skill } from '../types/index.ts';
 
 export const SKILLS_LIBRARY: Record<string, Skill> = {
   "battle_step": {

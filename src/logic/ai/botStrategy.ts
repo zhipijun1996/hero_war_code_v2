@@ -1,7 +1,9 @@
-import { GameState, Card, TableCard, Token, HexCoord, ActionToken } from '../../shared/types';
-import { pixelToHex, hexToPixel, generateId, getHexDistance } from '../../shared/utils/hexUtils';
-import { getHeroStat } from '../hero/heroLogic';
-import { isTargetInAttackRange, getReachableHexes, getAttackableHexes } from '../map/mapLogic';
+import { GameState, Card, TableCard, Token, HexCoord, ActionToken } from '../../shared/types/index.ts';
+import { pixelToHex, hexToPixel, generateId, getHexDistance } from '../../shared/utils/hexUtils.ts';
+import { getHeroStat } from '../hero/heroLogic.ts';
+import { isTargetInAttackRange, getReachableHexes, getAttackableHexes } from '../map/mapLogic.ts';
+import { canHeroEvolve } from '../hero/heroLogic.ts';
+import { isEnhancementCardName } from '../card/enhancementModifiers.ts';
 
 export type BotAction = 
   | { type: 'play_card'; payload: { cardId: string; targetCastleIndex?: number; targetId?: string } }
@@ -52,7 +54,7 @@ export class BotStrategy {
         return this.decideActionSelectOptionAction(gameState, playerIndex, heroesDatabase);
 
       case 'action_options':
-        return { type: 'select_action_category', payload: { category: 'direct_action' } };
+        return this.decideActionOptionsAction(gameState, botPlayer, playerIndex);
 
       case 'action_common':
         return this.decideActionCommonAction(gameState, playerIndex);
@@ -68,7 +70,7 @@ export class BotStrategy {
         return this.decideActionSelectActionAction(gameState, playerIndex);
 
       case 'action_play_enhancement':
-        return { type: 'pass_action' };
+        return this.decideActionPlayEnhancementAction(gameState, botPlayer, playerIndex);
 
       case 'action_resolve':
         return this.decideActionResolveAction(gameState, playerIndex);
@@ -81,6 +83,9 @@ export class BotStrategy {
 
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
+
+      case 'hire':
+        return this.decideHireAction(gameState, playerIndex);
 
       case 'discard':
         return this.decideDiscardAction(gameState, botPlayer);
@@ -98,13 +103,13 @@ export class BotStrategy {
   }
 
   private static decideRevivalAction(gameState: GameState, playerIndex: number): BotAction {
-    const pending = gameState.pendingRevivals?.find(r => r.playerIndex === playerIndex);
+    const pending = gameState.pendingRevivals?.find(r => r && r.playerIndex === playerIndex);
     if (pending) {
       const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
       let freeCastleIdx = -1;
       for (let i = 0; i < playerCastles.length; i++) {
         const pos = hexToPixel(playerCastles[i].q, playerCastles[i].r);
-        const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+        const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
         if (!occupied) {
           freeCastleIdx = i;
           break;
@@ -153,7 +158,7 @@ export class BotStrategy {
   }
 
   private static decideActionPlayAction(gameState: GameState, playerIndex: number): BotAction {
-    const availableTokens = gameState.actionTokens.filter(t => t.playerIndex === playerIndex && !t.used);
+    const availableTokens = (gameState.actionTokens || []).filter(t => t && t.playerIndex === playerIndex && !t.used);
     if (availableTokens.length > 0) {
       const token = availableTokens[Math.floor(Math.random() * availableTokens.length)];
       return { type: 'click_action_token', payload: { tokenId: token.id } };
@@ -167,7 +172,7 @@ export class BotStrategy {
     if (gameState.selectedOption) {
       const option = gameState.selectedOption;
       if (option === 'heal') {
-        const myHeros = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
+        const myHeros = gameState.tableCards.filter(c => c && c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
         if (myHeros.length > 0) {
           return { type: 'select_target', payload: { targetId: myHeros[0].id } };
         } else {
@@ -175,15 +180,15 @@ export class BotStrategy {
         }
       } else if (option === 'evolve') {
         const myHeros = gameState.tableCards.filter(c => {
-          if (c.type !== 'hero' || !((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0))) return false;
+          if (!c || c.type !== 'hero' || !((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0))) return false;
           // Check if hero is alive (has a token)
-          const hasToken = gameState.tokens.some(t => t.boundToCardId === c.id);
+          const hasToken = gameState.tokens.some(t => t && t.boundToCardId === c.id);
           if (!hasToken) return false;
           
           const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === c.heroClass);
           const levelData = heroData?.levels?.[c.level || 1];
           const expNeeded = levelData?.xp;
-          const expCounter = gameState.counters.find(cnt => cnt.type === 'exp' && cnt.boundToCardId === c.id);
+          const expCounter = gameState.counters.find(cnt => cnt && cnt.type === 'exp' && cnt.boundToCardId === c.id);
           return expCounter && typeof expNeeded === 'number' && expNeeded > 0 && expCounter.value >= expNeeded;
         });
         if (myHeros.length > 0) {
@@ -191,22 +196,22 @@ export class BotStrategy {
         }
         return { type: 'finish_action' };
       } else if (option === 'buy') {
-        if (gameState.decks.treasure1.length > 0) {
+        if (gameState.decks?.treasure1?.length > 0) {
           return { type: 'select_option', payload: { option: 'treasure1' } };
-        } else if (gameState.decks.treasure2.length > 0) {
+        } else if (gameState.decks?.treasure2?.length > 0) {
           return { type: 'select_option', payload: { option: 'treasure2' } };
-        } else if (gameState.decks.treasure3.length > 0) {
+        } else if (gameState.decks?.treasure3?.length > 0) {
           return { type: 'select_option', payload: { option: 'treasure3' } };
         } else {
           return { type: 'finish_action' };
         }
       } else if (option === 'hire') {
-        const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+        const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
         let freeCastleIdx = -1;
         for (let i = 0; i < playerCastles.length; i++) {
           const cCoord = playerCastles[i];
           const pos = hexToPixel(cCoord.q, cCoord.r);
-          const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+          const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
           if (!occupied) {
             freeCastleIdx = i;
             break;
@@ -219,7 +224,7 @@ export class BotStrategy {
         if (gameState.selectedHireCastle == null) {
           return { type: 'select_hire_castle', payload: { castle: freeCastleIdx } };
         }
-        if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
+        if (!gameState.selectedTargetId && (gameState.hireAreaCards?.length || 0) > 0) {
           return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
         }
         if (gameState.selectedHireCost != null && gameState.selectedTargetId && gameState.selectedHireCastle != null) {
@@ -235,7 +240,7 @@ export class BotStrategy {
         return { type: 'finish_action' };
       }
     } else {
-      const lastCard = gameState.playAreaCards[gameState.playAreaCards.length - 1];
+      const lastCard = gameState.playAreaCards?.[gameState.playAreaCards.length - 1];
       if (lastCard) {
         if (lastCard.name === '回复' || lastCard.name === '治疗药水') {
           return { type: 'select_option', payload: { option: 'heal' } };
@@ -249,7 +254,7 @@ export class BotStrategy {
           return { type: 'select_option', payload: { option: 'seize' } };
         }
       } else if (gameState.activeActionTokenId) {
-        const myHerosWithDamage = gameState.tableCards.filter(c => c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
+        const myHerosWithDamage = gameState.tableCards.filter(c => c && c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
         if (myHerosWithDamage.length > 0) {
           return { type: 'select_option', payload: { option: 'heal' } };
         } else if (gameState.canEvolve) {
@@ -279,8 +284,9 @@ export class BotStrategy {
   private static decideActionSelectHeroAction(gameState: GameState, playerIndex: number): BotAction {
     const isPlayer1 = playerIndex === 0;
     const myHeroTokens = gameState.tokens.filter(t => {
-      const c = gameState.tableCards.find(tc => tc.id === t.boundToCardId);
-      const isAlive = !gameState.counters.some(counter => counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
+      if (!t) return false;
+      const c = gameState.tableCards.find(tc => tc && tc.id === t.boundToCardId);
+      const isAlive = !gameState.counters.some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
       return c && isAlive && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0));
     });
     if (myHeroTokens.length > 0) {
@@ -307,9 +313,40 @@ export class BotStrategy {
       gameState,
       heroCard?.level || 1
     );
+
+    // 1. Magic Circle Priority (Chant/Fire)
+    const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+    if (mc) {
+      if (mc.state === 'idle') {
+        return { type: 'select_hero_action', payload: { action: 'chant' } };
+      } else if (mc.state === 'chanting' && mc.chantingTokenId === heroToken.id) {
+        return { type: 'select_hero_action', payload: { action: 'fire' } };
+      }
+    }
+
+    // 2. High-Value Attack Priority (Hero or Castle)
+    const hasHighValueTarget = attackableCells.some(cell => cell.targetType === 'hero' || cell.targetType === 'castle');
+    if (hasHighValueTarget) {
+      return { type: 'select_hero_action', payload: { action: 'attack' } };
+    }
+
+    // 3. Evolution Priority
+    if (heroCard && heroCard.level < 3) {
+      const expCounter = gameState.counters.find(c => c.type === 'exp' && c.boundToCardId === heroCard.id);
+      const heroData = HEROES_DATABASE.heroes.find(h => h.name === heroCard.heroClass);
+      const levelData = heroData?.levels?.[heroCard.level.toString()];
+      const expNeeded = levelData?.xp;
+      if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
+        return { type: 'select_hero_action', payload: { action: 'evolve' } };
+      }
+    }
+
+    // 4. Low-Value Attack (Monster)
     if (attackableCells.length > 0) {
       return { type: 'select_hero_action', payload: { action: 'attack' } };
-    } 
+    }
+
+    // 5. Default to Move
     return { type: 'select_hero_action', payload: { action: 'move' } };
   }
 
@@ -318,12 +355,30 @@ export class BotStrategy {
     if (gameState.activeActionType === 'move') {
       const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
       if (heroToken && gameState.reachableCells && gameState.reachableCells.length > 0) {
-        // Try to move towards enemy castle
-        const enemyCastle = isPlayer1 ? { q: 0, r: -4 } : { q: 0, r: 4 };
+        // Find target: nearest idle magic circle or enemy castle
+        const idleMagicCircles = (gameState.magicCircles || []).filter(m => m && m.state === 'idle');
+        const enemyIndex = 1 - playerIndex;
+        const enemyCastles = gameState.map?.castles?.[enemyIndex as 0 | 1] || [];
+        let targetPos = enemyCastles.length > 0 ? { q: enemyCastles[0].q, r: enemyCastles[0].r } : (isPlayer1 ? { q: 0, r: -4 } : { q: 0, r: 4 }); // Default to enemy castle
+        
+        if (idleMagicCircles.length > 0) {
+          const currentHex = pixelToHex(heroToken.x, heroToken.y);
+          let nearestMC = idleMagicCircles[0];
+          let minMCdist = getHexDistance(currentHex, { q: nearestMC.q, r: nearestMC.r });
+          for (const mc of idleMagicCircles) {
+            const d = getHexDistance(currentHex, { q: mc.q, r: mc.r });
+            if (d < minMCdist) {
+              minMCdist = d;
+              nearestMC = mc;
+            }
+          }
+          targetPos = { q: nearestMC.q, r: nearestMC.r };
+        }
+
         let bestCell = gameState.reachableCells[0];
-        let minDist = getHexDistance({ q: bestCell.q, r: bestCell.r }, { q: enemyCastle.q, r: enemyCastle.r });
+        let minDist = getHexDistance({ q: bestCell.q, r: bestCell.r }, targetPos);
         for (const cell of gameState.reachableCells) {
-          const d = getHexDistance({ q: cell.q, r: cell.r }, { q: enemyCastle.q, r: enemyCastle.r });
+          const d = getHexDistance({ q: cell.q, r: cell.r }, targetPos);
           if (d < minDist) {
             minDist = d;
             bestCell = cell;
@@ -332,7 +387,8 @@ export class BotStrategy {
         return { type: 'move_token_to_cell', payload: { tokenId: heroToken.id, q: bestCell.q, r: bestCell.r } };
       }
       return { type: 'finish_action' };
-    } else if (gameState.activeActionType === 'attack') {
+    }
+ else if (gameState.activeActionType === 'attack') {
       if (gameState.reachableCells && gameState.reachableCells.length > 0) {
         let bestTargetId: string | null = null;
         let bestScore = -1;
@@ -367,6 +423,19 @@ export class BotStrategy {
         }
       }
       return { type: 'finish_action' };
+    } else if (gameState.activeActionType === 'chant') {
+      // Chant target is self/current cell
+      const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
+      if (heroToken) {
+        return { type: 'select_target', payload: { targetId: heroToken.id } };
+      }
+      return { type: 'finish_action' };
+    } else if (gameState.activeActionType === 'fire') {
+      if (gameState.reachableCells && gameState.reachableCells.length > 0) {
+        const cell = gameState.reachableCells[0];
+        return { type: 'select_target', payload: { targetId: `castle_${cell.q}_${cell.r}` } };
+      }
+      return { type: 'finish_action' };
     }
     return { type: 'finish_action' };
   }
@@ -379,39 +448,38 @@ export class BotStrategy {
   }
 
   private static decideActionDefendAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
-    const isPlayer1 = playerIndex === 0;
-    const attackerToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
-    const defenderCard = gameState.tableCards.find(c => c.id === gameState.selectedTargetId);
+    const attackerToken = gameState.tokens.find(t => t && t.id === gameState.selectedTokenId);
+    const defenderCard = gameState.tableCards.find(c => c && c.id === gameState.selectedTargetId);
     
     if (attackerToken && defenderCard) {
-      const attackerCard = gameState.tableCards.find(c => c.id === attackerToken.boundToCardId);
+      const attackerCard = gameState.tableCards.find(c => c && c.id === attackerToken.boundToCardId);
       if (attackerCard) {
         const defenderMaxHP = getHeroStat(defenderCard.heroClass!, defenderCard.level, 'hp');
         const defenderHP = defenderMaxHP - (defenderCard.damage || 0);
 
-        const hasDefenseInPlay = gameState.playAreaCards.some(c => c.name === '防御' || c.name === '闪避');
-        const hasDefenseCardInPlay = gameState.playAreaCards.find(c => c.name === '防御' || c.name === '闪避');
-        const hasDefenseInHand = botPlayer.hand.some((c: Card) => c.name === '防御' || c.name === '闪避');
+        const hasDefenseInPlay = !!gameState.hasDefenseCard;
+        const hasDefenseCardInPlay = gameState.pendingDefenseCardId ? gameState.playAreaCards?.find(c => c && c.id === gameState.pendingDefenseCardId) : null ;
+        const hasDefenseInHand = botPlayer.hand?.some((c: Card) => c && c.name === '防御' );
 
         if (hasDefenseInPlay) {
-          const defenderToken = gameState.tokens.find(t => t.boundToCardId === defenderCard.id);
+          const defenderToken = gameState.tokens.find(t => t && t.boundToCardId === defenderCard.id);
           const isDefenseCard = hasDefenseCardInPlay?.name === '防御';
+          const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
+          const defenderHex = defenderToken ? pixelToHex(defenderToken.x, defenderToken.y) : null;
+          const ar = getHeroStat(defenderCard.heroClass!, defenderCard.level, 'ar');
 
           // 修正逻辑: 只有在 defenderToken 存在、打出的防御牌名字是“防御”、
           // 且 gameState.canCounterAttack 为 true、且目标在反击范围内、且防御者存活时，才尝试反击。
-          if (defenderToken && isDefenseCard && gameState.canCounterAttack === true) {
-            const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
-            const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
-            const ar = getHeroStat(defenderCard.heroClass!, defenderCard.level, 'ar');
-            
-            if (isTargetInAttackRange(defenderHex, attackerHex, ar, gameState) && defenderHP >= 1) {
-              return { type: 'declare_counter'};
-            }
+          if (defenderToken && defenderHex && isDefenseCard && gameState.canCounterAttack === true && isTargetInAttackRange(defenderHex, attackerHex, ar, gameState) && defenderHP >= 1) {
+            return { type: 'declare_counter'};
+          } else {
+            return { type: 'declare_defend'};
           }
-          return { type: 'declare_defend'};
         } else if (hasDefenseInHand) {
-          const defenseCard = botPlayer.hand.find((c: Card) => c.name === '防御' || c.name === '闪避');
-          return { type: 'play_card', payload: { cardId: defenseCard.id } };
+          const defenseCard = botPlayer.hand.find((c: Card) => c && c.name === '防御');
+          if (defenseCard) {
+            return { type: 'play_card', payload: { cardId: defenseCard.id } };
+          }
         }
       }
     }
@@ -420,15 +488,43 @@ export class BotStrategy {
 
   private static decideShopAction(gameState: GameState, playerIndex: number): BotAction {
     const goldY = playerIndex === 0 ? 550 : -700;
-    const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
+    const goldCounter = gameState.counters.find(c => c && c.type === 'gold' && Math.abs(c.y - goldY) < 100);
     const gold = goldCounter ? goldCounter.value : 0;
 
-    const playerCastles = gameState.map!.castles[playerIndex as 0 | 1];
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     let freeCastleIdx = -1;
     for (let i = 0; i < playerCastles.length; i++) {
       const cCoord = playerCastles[i];
       const pos = hexToPixel(cCoord.q, cCoord.r);
-      const occupied = gameState.tokens.some(t => Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+      const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
+      if (!occupied) {
+        freeCastleIdx = i;
+        break;
+      }
+    }
+        
+    const myHeroes = gameState.tableCards.filter(c =>
+      c && c.type === 'hero' && ((playerIndex === 0 && c.y > 0) || (playerIndex === 1 && c.y < 0))
+    );
+    if (
+      freeCastleIdx !== -1 &&
+      gold >= 2 &&
+      (gameState.hireAreaCards?.length || 0) > 0 &&
+      myHeroes.length < 4
+    ) {
+      return { type: 'start_hire' };
+    }
+
+    return { type: 'pass_shop' };
+  }
+
+  private static decideHireAction(gameState: GameState, playerIndex: number): BotAction {
+    const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
+    let freeCastleIdx = -1;
+    for (let i = 0; i < playerCastles.length; i++) {
+      const cCoord = playerCastles[i];
+      const pos = hexToPixel(cCoord.q, cCoord.r);
+      const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
       if (!occupied) {
         freeCastleIdx = i;
         break;
@@ -442,7 +538,7 @@ export class BotStrategy {
       if (gameState.selectedHireCastle == null) {
         return { type: 'select_hire_castle', payload: { castle: freeCastleIdx } };
       }
-      if (!gameState.selectedTargetId && gameState.hireAreaCards.length > 0) {
+      if (!gameState.selectedTargetId && (gameState.hireAreaCards?.length || 0) > 0) {
         return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
       }
       if (gameState.selectedHireCost != null && gameState.selectedTargetId && gameState.selectedHireCastle != null) {
@@ -457,16 +553,8 @@ export class BotStrategy {
       }
     }
 
-    if (
-      freeCastleIdx !== -1 &&
-      gold >= 2 &&
-      gameState.hireAreaCards.length > 0
-    ) {
-      return { type: 'start_hire' };
-    }
-
     return { type: 'pass_shop' };
-  }
+  }  
 
   private static decideDiscardAction(gameState: GameState, botPlayer: any): BotAction {
     if (botPlayer.hand.length > 5) {
@@ -508,5 +596,24 @@ export class BotStrategy {
     });
     
     return targets;
+  }
+
+  private static decideActionOptionsAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
+    // If we have enhancement cards, we might want to play them
+    const enhancementCards = (botPlayer.hand || []).filter((c: Card) => isEnhancementCardName(c.name));
+    if (enhancementCards.length > 0) {
+      // For now, let's just always try to play an enhancement if we have one
+      return { type: 'select_action_category', payload: { category: 'play_card' } };
+    }
+    return { type: 'select_action_category', payload: { category: 'direct_action' } };
+  }
+
+  private static decideActionPlayEnhancementAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
+    const enhancementCards = (botPlayer.hand || []).filter((c: Card) => isEnhancementCardName(c.name));
+    if (enhancementCards.length > 0) {
+      // Pick the first one for now
+      return { type: 'play_card', payload: { cardId: enhancementCards[0].id } };
+    }
+    return { type: 'pass_action' };
   }
 }

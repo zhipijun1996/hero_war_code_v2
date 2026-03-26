@@ -1,15 +1,15 @@
-import { GameState, GamePhase } from '../../shared/types';
-import { pixelToHex, hexToPixel, generateId } from '../../shared/utils/hexUtils';
-import { getPathDist, resolveTileEffect, getReachableHexes, isTargetInAttackRange, getAttackableHexes, getNeighbors } from '../map/mapLogic';
-import { CombatLogic } from '../combat/combatLogic';
-import { CardLogic } from '../card/cardLogic';
-import { HEROES_DATABASE } from '../../shared/config/heroes';
-import { REWARDS } from '../../shared/hex/tileLogic';
+import { GameState, GamePhase } from '../../shared/types/index.ts';
+import { pixelToHex, hexToPixel, generateId, Hex, getHexDistance, hexRound } from '../../shared/utils/hexUtils.ts';
+import { getPathDist, resolveTileEffect, getReachableHexes, isTargetInAttackRange, getAttackableHexes, getNeighbors, getRecoilHex } from '../map/mapLogic.ts';
+import { CombatLogic } from '../combat/combatLogic.ts';
+import { CardLogic } from '../card/cardLogic.ts';
+import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
+import { REWARDS } from '../../shared/hex/tileLogic.ts';
 import {
   getMoveBonusFromEnhancement,
   getAttackRangeBonusFromEnhancement,
   isEnhancementCardName
-} from '../card/enhancementModifiers';
+} from '../card/enhancementModifiers.ts';
 
 const heroesDatabase = HEROES_DATABASE;
 
@@ -353,6 +353,8 @@ export class ActionEngine {
 
     gameState.activeActionTokenId = tokenId;
     gameState.activeEnhancementCardId = null; // Reset enhancement card
+    gameState.movementHistory = []; // Initialize movement history for undo
+    gameState.lastPlayedCardId = null; // Clear last played card so undo works correctly for the token
     if (token.heroCardId) {
       const heroToken = gameState.tokens.find(t => t.boundToCardId === token.heroCardId);
       if (heroToken) {
@@ -398,6 +400,53 @@ export class ActionEngine {
     
     if (subPhases.includes(gameState.phase)) {
       // Reset action-specific state
+      // Restore hero positions if they moved during this action
+      if (gameState.movementHistory && gameState.movementHistory.length > 0) {
+        // Restore in reverse order
+        for (let i = gameState.movementHistory.length - 1; i >= 0; i--) {
+          const step = gameState.movementHistory[i];
+          const heroToken = gameState.tokens.find(t => t.id === step.tokenId);
+          if (heroToken) {
+            heroToken.x = step.fromX;
+            heroToken.y = step.fromY;
+            
+            // If it was chanting, restore chanting state
+            if (step.wasChanting) {
+              const hex = pixelToHex(heroToken.x, heroToken.y);
+              const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+              if (mc) {
+                mc.state = 'chanting';
+                mc.chantingTokenId = heroToken.id;
+              }
+            }
+          }
+        }
+        gameState.movementHistory = [];
+      }
+
+      // If we are cancelling from a sub-phase, we should also return the enhancement card to hand if one was played
+      if (gameState.activeEnhancementCardId) {
+        let cardIndex = gameState.playAreaCards.findIndex(c => c.id === gameState.activeEnhancementCardId);
+        let cardList = gameState.playAreaCards;
+        if (cardIndex === -1) {
+          cardIndex = gameState.discardPiles.action.findIndex(c => c.id === gameState.activeEnhancementCardId);
+          cardList = gameState.discardPiles.action;
+        }
+        
+        if (cardIndex !== -1) {
+          const card = cardList.splice(cardIndex, 1)[0];
+          const player = Object.values(gameState.players).find(p => p.id === gameState.seats[playerIndex]);
+          if (player) {
+            player.hand.push(card);
+            helpers.addLog(`玩家${playerIndex + 1}撤回了增强卡 (Player ${playerIndex + 1} undid enhancement card)`, playerIndex);
+          }
+        }
+        gameState.activeEnhancementCardId = null;
+        if (gameState.lastPlayedCardId === gameState.activeEnhancementCardId) {
+          gameState.lastPlayedCardId = null;
+        }
+      }
+
       gameState.selectedTokenId = null;
       gameState.selectedOption = null;
       gameState.reachableCells = [];
@@ -762,7 +811,7 @@ export class ActionEngine {
   static selectHeroAction(
     gameState: GameState,
     playerIndex: number,
-    actionType: 'move' | 'attack' | 'skill' | 'evolve',
+    actionType: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire',
     helpers: ActionHelpers,
     socket: any
   ): void {
@@ -792,6 +841,7 @@ export class ActionEngine {
     }
 
     if (actionType === 'attack') {
+      helpers.checkAndResetChanting(heroToken.id);
       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
       const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard?.heroClass);
       const levelData = heroData?.levels?.[heroCard?.level || 1];
@@ -811,6 +861,7 @@ export class ActionEngine {
       gameState.selectedTokenId = heroToken.id;
       gameState.notification = '选择攻击目标 (Select attack target)';
     } else if (actionType === 'move') {
+      helpers.checkAndResetChanting(heroToken.id);
       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
       const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard?.heroClass);
       const levelData = heroData?.levels?.[heroCard?.level || 1];
@@ -831,15 +882,45 @@ export class ActionEngine {
       gameState.selectedTokenId = heroToken.id;
       gameState.notification = '选择移动目标 (Select move target)';
     } else if (actionType === 'skill') {
+      helpers.checkAndResetChanting(heroToken.id);
       gameState.phase = 'action_select_skill';
       gameState.notification = '选择技能 (Select skill)';
     } else if (actionType === 'evolve') {
+      helpers.checkAndResetChanting(heroToken.id);
       gameState.phase = 'action_resolve';
       gameState.activeActionType = 'evolve';
       gameState.selectedTokenId = heroToken.id;
       gameState.selectedTargetId = null;
       gameState.reachableCells = [];
       gameState.notification = '确认进化 (Confirm evolve)';
+    } else if (actionType === 'chant') {
+      const hex = pixelToHex(heroToken.x, heroToken.y);
+      const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r && m.state === 'idle');
+      if (!mc) {
+        socket.emit('error_message', '英雄必须站在空闲的魔法阵上才能咏唱 (Hero must be on an idle magic circle to chant)');
+        return;
+      }
+      // 咏唱动作直接结算，不需要再次点击确认 (Chant action resolves immediately)
+      mc.state = 'chanting';
+      mc.chantingTokenId = heroToken.id;
+      helpers.addLog(`玩家${playerIndex + 1}的英雄开始咏唱`, playerIndex);
+      
+      ActionEngine.finishAction(gameState, playerIndex, helpers, socket);
+      return; // 直接返回，避免执行下方的 broadcastState
+    } else if (actionType === 'fire') {
+      const hex = pixelToHex(heroToken.x, heroToken.y);
+      const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r && m.state === 'chanting' && m.chantingTokenId === heroToken.id);
+      if (!mc) {
+        socket.emit('error_message', '英雄必须处于咏唱状态才能开火 (Hero must be chanting to fire)');
+        return;
+      }
+      // Target is enemy castle
+      const enemyIndex = 1 - playerIndex;
+      gameState.reachableCells = gameState.map?.castles?.[enemyIndex as 0 | 1] || [];
+      gameState.phase = 'action_resolve';
+      gameState.activeActionType = 'fire';
+      gameState.selectedTokenId = heroToken.id;
+      gameState.notification = '选择敌方王城开火 (Select enemy castle to fire)';
     }
     helpers.broadcastState();
     helpers.checkBotTurn();
@@ -887,6 +968,49 @@ export class ActionEngine {
     if (playerIndex === gameState.activePlayerIndex) {
       
       gameState.selectedTargetId = targetId;
+
+      if (gameState.activeActionType === 'fire') {
+        const heroToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
+        if (!heroToken) return;
+        
+        if (!targetId.startsWith('castle_')) {
+          socket.emit('error_message', '只能攻击敌方王城');
+          return;
+        }
+
+        const parts = targetId.split('_');
+        const cq = parseInt(parts[1]);
+        const cr = parseInt(parts[2]);
+        const isCastle0 = (gameState.map?.castles?.[0]?.some(c => c.q === cq && c.r === cr)) ?? false;
+        const isCastle1 = (gameState.map?.castles?.[1]?.some(c => c.q === cq && c.r === cr)) ?? false;
+        const castleIdx = isCastle0 ? 0 : 1;
+
+        if (castleIdx === playerIndex) {
+          socket.emit('error_message', '不能攻击自己的王城');
+          return;
+        }
+
+        // 1. Damage castle
+        CombatLogic.resolveCastleAttack(gameState, playerIndex, castleIdx, helpers);
+
+        // 2. Reset magic circle
+        const hex = pixelToHex(heroToken.x, heroToken.y);
+        const mc = gameState.magicCircles.find(m => m.q === hex.q && m.r === hex.r && m.state === 'chanting' && m.chantingTokenId === heroToken.id);
+        if (mc) {
+          mc.state = 'idle';
+          mc.chantingTokenId = undefined;
+        }
+
+        // 3. Recoil
+        const recoilHex = getRecoilHex(hex, { q: cq, r: cr }, gameState);
+        const newPos = hexToPixel(recoilHex.q, recoilHex.r);
+        heroToken.x = newPos.x;
+        heroToken.y = newPos.y;
+        helpers.addLog(`英雄受到后坐力后退了`, playerIndex);
+
+        this.finishAction(gameState, playerIndex, helpers, socket);
+        return;
+      }
 
       if (gameState.selectedOption === 'heal') {
         const heroCard = gameState.tableCards.find(c => c.id === targetId);
@@ -1005,6 +1129,9 @@ export class ActionEngine {
         gameState.selectedTargetId = targetToken ? targetToken.boundToCardId || null : targetCard!.id;
         gameState.phase = 'action_defend';
         gameState.notification = null;
+        gameState.pendingDefenseCardId = null;
+        gameState.hasDefenseCard = false;
+        gameState.canCounterAttack = false;
         gameState.lastPlayedCardId = null;
         gameState.isCounterAttack = false;
         gameState.isDefended = false;
@@ -1224,6 +1351,7 @@ export class ActionEngine {
     gameState.selectedTokenId = null;
     gameState.reachableCells = [];
     gameState.remainingMv = 0;
+    gameState.movementHistory = [];
     if (gameState.attackInitiatorIndex !== undefined && gameState.attackInitiatorIndex !== null) {
       gameState.activePlayerIndex = 1 - gameState.attackInitiatorIndex;
     } else {

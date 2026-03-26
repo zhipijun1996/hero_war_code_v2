@@ -24,14 +24,15 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
 
   const renderHireUI = () => {
     const goldY = isPlayer1 ? 550 : -700;
-    const goldCounter = gameState.counters.find(c => c.type === 'gold' && Math.abs(c.y - goldY) < 100);
+    const goldCounter = (gameState.counters || []).find(c => c && c.type === 'gold' && Math.abs(c.y - goldY) < 100);
     const maxGold = goldCounter ? goldCounter.value : 0;
     const costs = [2, 3, 4, 5, 6, 7, 8, 9].filter(c => c <= maxGold);
     const hireableHeroes = gameState.hireAreaCards;
     const hireCardId = gameState.selectedTargetId;
     const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
     const freeCastleIdx = playerCastles.map((castle, index) => {
-      const occupied = gameState.tokens.some(token => {
+      const occupied = (gameState.tokens || []).some(token => {
+        if (!token) return false;
         const tokenHex = pixelToHex(token.x, token.y);
         return tokenHex.q === castle.q && tokenHex.r === castle.r;
       });
@@ -43,7 +44,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择雇佣英雄和费用和王城 (Select hero and cost)</div>
         
         <div className="flex gap-2 flex-wrap justify-center">
-          {hireableHeroes.map(hero => hero && (
+          {hireableHeroes?.map(hero => hero && (
             <button 
               key={hero.id}
               onClick={() => socket.emit('select_target', hero.id)}
@@ -55,7 +56,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         </div>
 
         <div className="flex gap-2 flex-wrap justify-center">
-          {costs.map(cost => (
+          {costs?.map(cost => (
             <button 
               key={cost}
               onClick={() => socket.emit('select_hire_cost', cost)}
@@ -103,25 +104,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   }
   
-  if (gameState.phase === 'action_select_action') {
-    return (
-      <div className="flex gap-4 flex-wrap justify-center">
-        <button onClick={() => socket.emit('select_hero_action', 'move')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-          移动 (Move)
-        </button>
-        <button onClick={() => socket.emit('select_hero_action', 'attack')} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold">
-          攻击 (Attack)
-        </button>
-        <button onClick={() => socket.emit('select_hero_action', 'skill')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">
-          技能 (Skill)
-        </button>
-        <button onClick={() => socket.emit('select_hero_action', 'evolve')} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg font-bold">
-          进化 (Evolve)
-        </button>
-      </div>
-    );
-  }
-
   if (gameState.phase === 'action_play_enhancement') {
     return (
       <button onClick={() => socket.emit('pass_enhancement')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">
@@ -189,8 +171,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   if (gameState.phase === 'action_select_option') {
     let playedCard = null;
     if (gameState.lastPlayedCardId) {
-      playedCard = gameState.playAreaCards.find(c => c.id === gameState.lastPlayedCardId) || 
-                   gameState.tableCards.find(c => c.id === gameState.lastPlayedCardId);
+      playedCard = (gameState.playAreaCards || []).find(c => c && c.id === gameState.lastPlayedCardId) || 
+                   (gameState.tableCards || []).find(c => c && c.id === gameState.lastPlayedCardId);
     }
 
     if (!gameState.selectedOption) {
@@ -215,20 +197,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
             购买
           </button>
-          {gameState.tokens.some(t => t && (() => {
-            const c = gameState.tableCards.find(tc => tc && tc.id === t.boundToCardId);
-            const isMine = c && ((gameState.seats[0] === playerId && c.y > 0) || (gameState.seats[1] === playerId && c.y < 0));
-            if (!isMine) return false;
-            const isAlive = !gameState.counters.some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
-            if (!isAlive) return false;
-            const hex = pixelToHex(t.x, t.y);
-            const mc = gameState.magicCircles?.find(m => m.q === hex.q && m.r === hex.r);
-            return mc && mc.state === 'idle';
-          })()) && (
-            <button onClick={() => socket.emit('select_option', 'chant')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-              咏唱
-            </button>
-          )}
           
           {playedCard && playedCard.type === 'action' && playedCard.name !== '防御' && (
             <>
@@ -247,25 +215,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
                   <button onClick={() => socket.emit('select_option', 'skill')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">
                     技能
                   </button>
-                  {gameState.tokens.some(t => t && (() => {
-                    const c = gameState.tableCards.find(tc => tc && tc.id === t.boundToCardId);
+                  { (gameState.tokens || []).some(t => t && (() => {
+                    const c = (gameState.tableCards || []).find(tc => tc && tc.id === t.boundToCardId);
                     const isMine = c && ((gameState.seats[0] === playerId && c.y > 0) || (gameState.seats[1] === playerId && c.y < 0));
                     if (!isMine) return false;
-                    const isAlive = !gameState.counters.some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
-                    if (!isAlive) return false;
-                    const hex = pixelToHex(t.x, t.y);
-                    const mc = gameState.magicCircles?.find(m => m.q === hex.q && m.r === hex.r);
-                    return mc && mc.state === 'chanting' && mc.chantingTokenId === t.id;
-                  })()) && (
-                    <button onClick={() => socket.emit('select_option', 'fire')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold">
-                      开火
-                    </button>
-                  )}
-                  {gameState.tokens.some(t => t && (() => {
-                    const c = gameState.tableCards.find(tc => tc && tc.id === t.boundToCardId);
-                    const isMine = c && ((gameState.seats[0] === playerId && c.y > 0) || (gameState.seats[1] === playerId && c.y < 0));
-                    if (!isMine) return false;
-                    const isAlive = !gameState.counters.some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
+                    const isAlive = !(gameState.counters || []).some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
                     if (!isAlive) return false;
                     const hex = pixelToHex(t.x, t.y);
                     return gameState.map?.turrets?.some(tu => tu.q === hex.q && tu.r === hex.r);
@@ -281,7 +235,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         </div>
       );
     } else if (gameState.selectedOption === 'heal') {
-      const healableHeroes = gameState.tableCards.filter(c => c && gameState.healableHeroIds?.includes(c.id));
+      const healableHeroes = (gameState.tableCards || []).filter(c => c && gameState.healableHeroIds?.includes(c.id));
       
       return (
         <div className="flex flex-col gap-4 items-center">
@@ -370,15 +324,15 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   }
 
   if ((gameState.phase as string) === 'action_select_hero' || (gameState.phase as string) === 'action_select_substitute') {
-    const substituteHeroes = gameState.tokens.filter(t => {
-      if (!t.boundToCardId) return false;
+    const substituteHeroes = (gameState.tokens || []).filter(t => {
+      if (!t || !t.boundToCardId) return false;
       if (t.id === gameState.activeHeroTokenId) return false;
-      const heroCard = gameState.tableCards.find(c => c.id === t.boundToCardId);
+      const heroCard = (gameState.tableCards || []).find(c => c && c.id === t.boundToCardId);
       if (!heroCard) return false;
       const isMine =
         (playerIndex === 0 && heroCard.y > 0) ||
         (playerIndex === 1 && heroCard.y < 0);
-      const isDead = gameState.counters.some(counter =>
+      const isDead = (gameState.counters || []).some(counter =>
         counter &&
         counter.type === 'time' &&
         counter.boundToCardId === t.boundToCardId
@@ -391,7 +345,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择另一个英雄机型行动 (Select a hero)</div>
         <div className="flex gap-2 flex-wrap justify-center">
           {substituteHeroes.map(hero => {
-            const heroCard = gameState.tableCards.find(c => c.id === hero.boundToCardId);
+            const heroCard = (gameState.tableCards || []).find(c => c && c.id === hero.boundToCardId);
             return (
               <button 
                 key={hero.id}
@@ -408,10 +362,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   }
   if ((gameState.phase as string) === 'action_select_action') {
-    const selectedToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
+    const selectedToken = (gameState.tokens || []).find(t => t && t.id === gameState.activeHeroTokenId);
     const boundCard = selectedToken?.boundToCardId ? 
-      Object.values(gameState.players).flatMap((p: any) => p.hand).find((c: any) => c.id === selectedToken.boundToCardId) ||
-      gameState.tableCards.find(c => c.id === selectedToken.boundToCardId)
+      Object.values(gameState.players || {}).flatMap((p: any) => p?.hand || []).find((c: any) => c && c.id === selectedToken.boundToCardId) ||
+      (gameState.tableCards || []).find(c => c && c.id === selectedToken.boundToCardId)
       : null;
     const heroClass = boundCard?.heroClass || selectedToken?.label?.split(' ')[0];
     const level = boundCard?.level || selectedToken?.lv || 1;
@@ -423,21 +377,37 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm text-center">
           请选择 {heroClass} (Lv.{level}) 的行动类型
         </div>
-        <div className="flex gap-2 flex-wrap justify-center">
+        <div className="flex gap-2 flex-wrap justify-center w-full">
           <button onClick={() => socket.emit('select_hero_action', 'move')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm">移动 (Move)</button>
           <button onClick={() => socket.emit('select_hero_action', 'attack')} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm">攻击 (Attack)</button>
           <button onClick={() => socket.emit('select_hero_action', 'skill')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm">技能 (Skill)</button>
           <button onClick={() => socket.emit('select_hero_action', 'evolve')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm">进化 (Evolve)</button>
+          {(() => {
+            if (!selectedToken) return false;
+            const hex = pixelToHex(selectedToken.x, selectedToken.y);
+            const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+            return mc && mc.state === 'idle';
+          })() && (
+            <button onClick={() => socket.emit('select_hero_action', 'chant')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm">咏唱 (Chant)</button>
+          )} 
+          {(() => {
+            if (!selectedToken) return false;
+            const hex = pixelToHex(selectedToken.x, selectedToken.y);
+            const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+            return mc && mc.state === 'chanting' && mc.chantingTokenId === selectedToken?.id;
+          })() && (
+            <button onClick={() => socket.emit('select_hero_action', 'fire')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">开火 (Fire)</button>
+          )}
           <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm">返回 (Back)</button>
         </div>
-        {levelData && levelData.skills.length > 0 && (
+        {levelData && levelData?.skills?.length > 0 && (
           <div className="bg-black/60 p-3 rounded-lg border border-purple-500/30 w-full">
             <div className="text-purple-300 text-xs font-bold mb-2 uppercase tracking-wider">当前技能 (Current Skills)</div>
             <div className="flex flex-col gap-2">
-              {levelData.skills.map((skill, idx) => (
+              {levelData?.skills?.map((skill, idx) => (
                 <div key={idx} className="text-white text-xs">
                   <span className="font-bold text-purple-400">【{skill.name}】</span>: {skill.description}
-                </div>
+                </div> 
               ))}
             </div>
           </div>
@@ -513,11 +483,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   }
   if (gameState.phase === 'discard') {
-    const myPlayer = gameState.players[playerId];
+    const myPlayer = (gameState.players || {})[playerId];
     if (myPlayer) {
       return (
         <div className="flex flex-col gap-4 items-center">
-          {myPlayer.hand.length > 5 ? (
+          {(myPlayer?.hand?.length || 0) > 5 ? (
             <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请弃牌至5张以下 (Discard down to 5 cards)</div>
           ) : (
             <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">手牌已就绪，请点击结束弃牌</div>
@@ -532,8 +502,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             </button>
             <button 
               onClick={() => socket.emit('finish_discard')} 
-              disabled={myPlayer.hand.length > 5 || myPlayer.discardFinished}
-              className={`px-4 py-2 rounded-lg font-bold ${myPlayer.hand.length > 5 || myPlayer.discardFinished ? 'bg-zinc-500 text-zinc-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+              disabled={(myPlayer?.hand?.length || 0) > 5 || myPlayer.discardFinished}
+              className={`px-4 py-2 rounded-lg font-bold ${(myPlayer?.hand?.length || 0) > 5 || myPlayer.discardFinished ? 'bg-zinc-500 text-zinc-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
             >
               结束弃牌
             </button>

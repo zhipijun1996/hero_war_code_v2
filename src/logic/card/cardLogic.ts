@@ -1,8 +1,8 @@
-import { GameState, TableCard, Token, ActionCard, HeroCard, GamePhase, Card } from '../../shared/types';
+import { GameState, TableCard, Token, ActionCard, HeroCard, GamePhase, Card } from '../../shared/types/index.ts';
 import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { applyEnhancementImmediateEffect } from './enhancementImmediateEffects';
-import { requiresSubstituteSelection } from './enhancementModifiers';
+import { isEnhancementCardName, requiresSubstituteSelection } from './enhancementModifiers.ts';
 import { HeroEngine } from '../hero/heroEngine';
 
 /**
@@ -24,8 +24,7 @@ export class CardLogic {
     }
 
     if (gameState.phase === 'action_play_enhancement') {
-      const isEnhancement = card.name === '近战强化' || card.name === '远程强化' || card.name === '移动强化' || card.name === '替身术';
-      if (!isEnhancement) {
+      if (!isEnhancementCardName(card.name)) {
         return { canPlay: false, reason: '只能打出增强卡。' };
       }
     }

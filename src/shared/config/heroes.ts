@@ -1,5 +1,5 @@
-import { HeroesDatabase } from '../types';
-import { SKILLS_LIBRARY } from './skills';
+import { HeroesDatabase } from '../types/index.ts';
+import { SKILLS_LIBRARY } from './skills.ts';
 
 export const HEROES_DATABASE: HeroesDatabase = {
   "heroes": [

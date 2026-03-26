@@ -49,6 +49,11 @@ export const handleHexClickLogic = (
     return;
   }
 
+  if (gameState.phase === 'action_resolve' && isActivePlayer && gameState.activeActionType === 'fire' && gameState.selectedTokenId) {
+    socket.emit('select_target', `castle_${q}_${r}`);
+    return;
+  }
+
   if (gameState.phase === 'action_resolve' && isActivePlayer && gameState.activeActionType === 'attack' && gameState.selectedTokenId) {
     console.log(`handleHexClick (attack): q=${q}, r=${r}`);
     // Find target at this hex
@@ -150,6 +155,18 @@ export const handleTokenClickLogic = (
         console.log(`handleTokenClick (attack): token ${id}, card ${token.boundToCardId}`);
         socket.emit('select_target', token.boundToCardId);
         return;
+      }
+    }
+    if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'fire') {
+      const token = gameState.tokens.find(t => t.id === id);
+      if (token) {
+        const hex = pixelToHex(token.x, token.y);
+        const isCastle = gameState.map?.castles[0]?.some((c: any) => c.q === hex.q && c.r === hex.r) || 
+                         gameState.map?.castles[1]?.some((c: any) => c.q === hex.q && c.r === hex.r);
+        if (isCastle) {
+          socket.emit('select_target', `castle_${hex.q}_${hex.r}`);
+          return;
+        }
       }
     }
     if (gameState.phase === 'action_select_option') {

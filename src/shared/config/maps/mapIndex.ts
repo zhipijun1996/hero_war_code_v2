@@ -1,6 +1,6 @@
-import { MapConfig } from '../../types';
-import { defaultMap } from './mapDefault';
-import { mapTower } from './mapTower';
+import { MapConfig } from '../../types/index.ts';
+import { defaultMap } from './mapDefault.ts';
+import { mapTower } from './mapTower.tsx';
 
 export type BuiltinMap = {
   id: string;

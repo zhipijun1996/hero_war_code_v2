@@ -1,4 +1,4 @@
-import { GameState, GamePhase } from '../../shared/types';
+import { GameState, GamePhase } from '../../shared/types/index.ts';
 
 /**
  * 阶段管理器
