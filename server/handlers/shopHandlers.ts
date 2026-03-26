@@ -71,16 +71,23 @@ export const createShopHandlers = (deps: any) => {
       }
 
       // Handle turn transition
-      if (gameState.phase === 'shop') {
+      if (gameState.hireSource === 'shop') {
         if (playerIndex === gameState.firstPlayerIndex) {
+          gameState.phase = 'shop';
         } else {
           ActionEngine.startEndPhase(gameState, actionHelpers);
         }
-      } else {
-        // From action phase
+      } else if (gameState.hireSource === 'action_common'){
+        const token = gameState.actionTokens.find(t => t.id === gameState.activeActionTokenId);
+        if(token) token.used = true;
+        gameState.activeActionTokenId = null;
+        gameState.activeHeroTokenId = null;
+        gameState.selectedTokenId = null;
         gameState.activePlayerIndex = 1 - playerIndex;
-        gameState.phase = 'action_common';
+        gameState.phase = 'action_play';
         checkAllTokensUsed(gameState);
+      } else {
+
       }
 
       broadcastState();

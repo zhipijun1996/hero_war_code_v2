@@ -48,7 +48,6 @@ export class BotStrategy {
       case 'action_select_option':
         return this.decideActionSelectOptionAction(gameState, playerIndex, heroesDatabase);
 
-      case 'action_select_category':
       case 'action_options':
         return { type: 'select_action_category', payload: { category: 'direct_action' } };
 
@@ -74,16 +73,8 @@ export class BotStrategy {
       case 'action_defend':
         return this.decideActionDefendAction(gameState, botPlayer, playerIndex);
 
-      case 'action_play_defense':
-        return this.decideActionPlayDefenseAction(gameState, botPlayer, playerIndex);
-
-      case 'action_play_counter':
-        return this.decideActionPlayCounterAction(gameState, botPlayer, playerIndex);
-
       case 'action_resolve_attack':
       case 'action_resolve_attack_counter':
-      case 'action_resolve_counter':
-        return { type: 'finish_action' };
 
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
@@ -271,7 +262,7 @@ export class BotStrategy {
     const gold = goldCounter ? goldCounter.value : 0;
     
     if (gold >= 2) {
-      return { type: 'select_common_action', payload: { action: 'recruit' } };
+      return { type: 'select_common_action', payload: { action: 'hire' } };
     } else if (gold > 0) {
       return { type: 'select_common_action', payload: { action: 'early_buy' } };
     } else {
@@ -374,22 +365,6 @@ export class BotStrategy {
     return { type: 'finish_action' };
   }
 
-  private static decideActionPlayDefenseAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
-    const defenseCard = botPlayer.hand.find((c: Card) => c.name === '防御' || c.name === '闪避');
-    if (defenseCard) {
-      return { type: 'play_card', payload: { cardId: defenseCard.id } };
-    }
-    return { type: 'none' };
-  }
-
-  private static decideActionPlayCounterAction(gameState: GameState, botPlayer: any, playerIndex: number): BotAction {
-    const counterCard = botPlayer.hand.find((c: Card) => c.name === '行动' || c.name === '强击');
-    if (counterCard) {
-      return { type: 'play_card', payload: { cardId: counterCard.id } };
-    }
-    return { type: 'none' };
-  }
-
   private static getCellScore(cell: any): number {
     if (cell.targetType === 'hero') return 100;
     if (cell.targetType === 'castle') return 90;
@@ -454,7 +429,7 @@ export class BotStrategy {
       }
     }
        
-    if (gameState.selectedOption === 'hire') {
+    if (gameState.phase === 'hire') {
       if (!gameState.selectedHireCost) {
         return { type: 'select_hire_cost', payload: { cost: 2 } };
       }

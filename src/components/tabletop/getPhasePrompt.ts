@@ -101,13 +101,6 @@ export const getPhasePrompt = ({
         return `已选择英雄，请点击高亮的攻击目标 (Hero selected, click a highlighted target)`;
       }
       return `攻击：请选择一个己方英雄 (Attack: Select a hero)`;
-    } else if (gameState.selectedOption === 'buy') {
-      return `购买：请点击商店区的装备卡进行购买 (Buy: Click an equipment card in the shop area)`;
-    } else if (gameState.selectedOption === 'hire') {
-      if (gameState.selectedTargetId && gameState.selectedHireCost) {
-        return "请点击地图上的王城🏰以部署雇佣的英雄";
-      }
-      return `雇佣：请选择一个英雄并支付金币 (Hire: Select a hero and pay gold)`;
     } else if (gameState.selectedOption === 'chant') {
       return `咏唱：请选择在魔法阵上的己方英雄 (Chant: Select a hero on a magic circle)`;
     } else if (gameState.selectedOption === 'fire') {
@@ -120,8 +113,17 @@ export const getPhasePrompt = ({
     }
     return `结算阶段：请${activePlayerStr}结算场面`;
   }
+  if (gameState.phase === 'hire') {
+    if (gameState.selectedTargetId && gameState.selectedHireCost) {
+      return "请点击地图上的王城🏰以部署雇佣的英雄";
+    }
+    return `雇佣：请选择一个英雄并支付金币 (Hire: Select a hero and pay gold)`;
+  }
+  if (gameState.phase === 'buy') {
+    return `购买：请点击商店区的装备卡进行购买 (Buy: Click an equipment card in the shop area)`;
+  }
   if (gameState.phase === 'action_defend') {
-    const hasDefenseCard = gameState.playAreaCards.some(c => c.name === '防御' || c.name === '闪避');
+    const hasDefenseCard = gameState.playAreaCards.some(c => c.name === '防御');
     if (hasDefenseCard) {
       return `防御阶段：已打出防御卡，请选择确认防御或反击 (Defense card played, choose Confirm or Counter)`;
     }
@@ -133,15 +135,7 @@ export const getPhasePrompt = ({
   if (gameState.phase === 'action_resolve_attack_counter') {
     return `攻击结算：请${activePlayerStr}结算攻击 (Settle attack)`;
   }
-  if (gameState.phase === 'action_resolve_counter') {
-    return `反击结算：请${activePlayerStr}结算反击 (Settle counter-attack)`;
-  }
   if (gameState.phase === 'shop') {
-    if (gameState.selectedTargetId && gameState.selectedHireCost) {
-      return "请点击地图上的王城🏰以部署雇佣的英雄";
-    } else if (gameState.selectedTargetId) {
-      return "请选择雇佣成本 (Select hire cost)";
-    }
     return `商店阶段：请${activePlayerStr}购买装备或雇佣英雄`;
   }
   if (gameState.phase === 'revival') {

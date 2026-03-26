@@ -65,17 +65,6 @@ export const createCombatHandlers = (deps: any) => {
       const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
       ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
-    cancel_defend_or_counter: (socket: any) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      if (gameState.phase === 'action_play_counter' && playerIndex === gameState.activePlayerIndex) {
-        addLog(`玩家${playerIndex + 1}放弃了反击 (Canceled Counter)`, playerIndex);
-        
-        const originalAttackerIndex = 1 - playerIndex;
-        // Revert activePlayerIndex to the attacker so finishAction flips it correctly to the defender
-        gameState.activePlayerIndex = originalAttackerIndex;
-        ActionEngine.finishAction(gameState, originalAttackerIndex, actionHelpers, socket);
-      }
-    },
     end_resolve_attack: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.endResolveAttack(gameState, playerIndex, actionHelpers, socket);

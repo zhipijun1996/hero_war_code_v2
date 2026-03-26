@@ -33,7 +33,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
 
     return (
       <div className="flex flex-col gap-4 items-center">
-        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择雇佣英雄和费用 (Select hero and cost)</div>
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">请选择雇佣英雄和费用和王城 (Select hero and cost)</div>
         
         <div className="flex gap-2 flex-wrap justify-center">
           {hireableHeroes.map(hero => hero && (
@@ -261,8 +261,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           )}
         </div>
       );
-    } else if (gameState.selectedOption === 'hire') {
-      return renderHireUI();
     } else if (gameState.selectedOption === 'heal') {
       const healableHeroes = gameState.tableCards.filter(c => c && gameState.healableHeroIds?.includes(c.id));
       
@@ -436,7 +434,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           <button onClick={() => socket.emit('select_common_action', 'open_chest')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm">开启宝箱</button>
           <button onClick={() => socket.emit('select_common_action', 'early_buy')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">提前购买</button>
           <button onClick={() => socket.emit('select_common_action', 'seize_initiative')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm">抢占先手</button>
-          <button onClick={() => socket.emit('select_common_action', 'recruit')} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold text-sm">招募英雄</button>
+          <button onClick={() => socket.emit('select_common_action', 'hire')} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold text-sm">招募英雄</button>
           <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm">返回 (Back)</button>
         </div>
       </div>
@@ -468,24 +466,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       </div>
     );
   }
-  if (gameState.phase === 'action_play_defense') {
-    return (
-      <button onClick={() => socket.emit('cancel_defend_or_counter')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-        撤回 (Cancel)
-      </button>
-    );
-  }
-  if (gameState.phase === 'action_play_counter') {
-    return (
-      <button onClick={() => socket.emit('cancel_defend_or_counter')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
-        放弃反击 (Pass Counter)
-      </button>
-    );
-  }
   if (gameState.phase === 'shop') {
-    if (gameState.selectedOption === 'hire') {
-      return renderHireUI();
-    }
     return (
       <div className="flex gap-4">
         <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
@@ -496,6 +477,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         </button>
         <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">
           Pass
+        </button>
+      </div>
+    );
+  }
+  if (gameState.phase === 'hire') {
+    return renderHireUI();
+  }
+  if (gameState.phase === 'buy') {
+    return (
+      <div className="flex gap-4">
+        <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
+          购买
         </button>
       </div>
     );

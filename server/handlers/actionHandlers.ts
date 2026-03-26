@@ -234,7 +234,7 @@ export const createActionHandlers = (deps: any) => {
       if (!player) return;
 
       // Case 0: Undoing hire selection
-      if (gameState.selectedOption === 'hire') {
+      if (gameState.phase === 'hire') {
         ActionEngine.cancelHireSelection(gameState, playerIndex, actionHelpers);
         broadcastState();
         return;

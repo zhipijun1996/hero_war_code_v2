@@ -13,7 +13,7 @@ export class CardLogic {
    * 检查是否可以打出卡牌
    */
   static canPlayCard(card: Card, gameState: GameState, playerIndex: number): { canPlay: boolean; reason?: string } {
-    const allowedPhases = ['action_play_enhancement', 'discard', 'setup', 'action_select_option', 'action_defend', 'action_play_defense', 'action_resolve_attack_counter', 'action_play_counter'];
+    const allowedPhases = ['action_play_enhancement', 'discard', 'setup', 'action_select_option', 'action_defend',  'action_resolve_attack_counter'];
     
     if (!allowedPhases.includes(gameState.phase)) {
       return { canPlay: false, reason: '当前阶段不允许打出卡牌。' };
@@ -30,7 +30,7 @@ export class CardLogic {
       }
     }
 
-    if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
+    if (gameState.phase === 'action_defend') {
       if (card.name !== '防御') {
         return { canPlay: false, reason: '只能打出防御卡。' };
       }
@@ -203,12 +203,7 @@ export class CardLogic {
           gameState.consecutivePasses = 0;
           helpers.updateAvailableActions(playerIndex);
         }
-      } else if (gameState.phase === 'action_play_defense') {
-        helpers.setPhase('action_defend');
-      } else if (gameState.phase === 'action_play_counter') {
-        helpers.setPhase('action_resolve_attack_counter');
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-      }
+      } 
     }
     // 5. 分支处理：其他（宝藏等）
     else {

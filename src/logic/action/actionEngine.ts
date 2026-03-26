@@ -583,7 +583,7 @@ export class ActionEngine {
   static selectCommonAction(
     gameState: GameState,
     playerIndex: number,
-    action: 'open_chest' | 'early_buy' | 'seize_initiative' | 'recruit',
+    action: 'open_chest' | 'early_buy' | 'seize_initiative' | 'hire',
     helpers: ActionHelpers,
     socket: any
   ): void {
@@ -639,11 +639,7 @@ export class ActionEngine {
     } else if (action === 'early_buy') {
       const gold = gameState.counters.find(c => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
       if (gold && gold.value > 0) {
-        gameState.phase = 'action_select_option';
-        gameState.selectedOption = 'buy';
-        gameState.notification = null;
-        helpers.broadcastState();
-        helpers.checkBotTurn();
+        ActionEngine.startBuySelection(gameState, 'action_common', helpers);
         return;
       } else {
         socket.emit('error_message', '金币不足');
@@ -658,11 +654,10 @@ export class ActionEngine {
         socket.emit('error_message', '先手已被抢占');
         return;
       }
-    } else if (action === 'recruit') {
+    } else if (action === 'hire') {
       const gold = gameState.counters.find(c => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
       if (gold && gold.value >= 2) {
         ActionEngine.startHireSelection(gameState, 'action_common', helpers);
-        helpers.checkBotTurn();
         return;
       } else {
         socket.emit('error_message', '金币不足 (需要2金币)');
@@ -705,9 +700,24 @@ export class ActionEngine {
     gameState.selectedHireCost = null;
     gameState.notification = null;
     gameState.hireSource = source;
-    gameState.phase = source === 'shop' ? 'shop' : 'action_select_option';
+    gameState.phase = 'hire';
     helpers.broadcastState();
+    helpers.checkBotTurn();
   }
+
+  static startBuySelection(
+    gameState: GameState,
+    source: 'shop' | 'action_common',
+    helpers: ActionHelpers
+  ) {
+    gameState.selectedOption = 'buy';
+    gameState.selectedTargetId = null;
+    gameState.notification = null;
+    gameState.buySource = source;
+    gameState.phase = 'buy';
+    helpers.broadcastState();
+    helpers.checkBotTurn();
+  }  
 
   /**
    * 处理行动英雄选择逻辑 (Hero selection for action logic)

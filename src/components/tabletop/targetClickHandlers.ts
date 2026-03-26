@@ -32,8 +32,8 @@ export const handleHexClickLogic = (
     return;
   }
 
-  if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer) {
-    if (gameState.selectedOption === 'hire' && gameState.selectedTargetId && gameState.selectedHireCost) {
+  if ((gameState.phase === 'hire') && isActivePlayer) {
+    if (gameState.selectedTargetId && gameState.selectedHireCost) {
       const playerCastles = gameState.map?.castles[playerIndex as 0 | 1] || CASTLES[playerIndex as 0 | 1];
       const castleIdx = playerCastles.findIndex((c: any) => c.q === q && c.r === r);
       if (castleIdx !== -1) {
@@ -41,7 +41,7 @@ export const handleHexClickLogic = (
         return;
       }
     }
-    if (gameState.phase === 'shop') return;
+    return;
   }
 
   if (gameState.phase === 'revival' && isActivePlayer) {

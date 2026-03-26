@@ -11,9 +11,6 @@ export class PhaseManager {
     gameState.phase = phase;
     
     switch (phase) {
-      case 'prepare':
-        // 回合开始逻辑通常在 server.ts 的 next_turn 中
-        break;
       case 'action_play':
         gameState.selectedTokenId = null;
         gameState.selectedTargetId = null;
@@ -38,11 +35,7 @@ export class PhaseManager {
     const current = gameState.phase;
 
     switch (current) {
-      case 'prepare':
-        return 'action_play';
       case 'action_resolve_attack':
-        return 'action_play';
-      case 'action_resolve_counter':
         return 'action_play';
       case 'supply':
         return 'discard';
@@ -51,7 +44,7 @@ export class PhaseManager {
       case 'shop':
         return 'end';
       case 'end':
-        return 'prepare';
+        return 'action_play';
       default:
         return current;
     }

@@ -52,6 +52,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
             fill = "#fef3c7"; // Light yellow background for chanting
             icon = "🔥"; // Fire icon for chanting
           } else {
+            fill = "#bfdbfe";
             icon = "✨"; 
           }
         } // magicCircle

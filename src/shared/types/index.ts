@@ -84,7 +84,6 @@ export interface ActionToken {
 }
 
 export type GamePhase = 
-  | 'prepare'
   | 'setup' 
   | 'action_play' 
   | 'action_options' 
@@ -98,14 +97,12 @@ export type GamePhase =
   | 'discard' 
   | 'end' 
   | 'revival' 
+  | 'hire'   
+  | 'buy'    
   | 'action_select_option' 
   | 'action_defend' 
-  | 'action_play_defense' 
-  | 'action_play_counter' 
   | 'action_resolve_attack' 
   | 'action_resolve_attack_counter' 
-  | 'action_resolve_counter' 
-  | 'action_select_category' 
   | 'action_common' 
   | 'action_select_skill'
   ;
@@ -222,6 +219,7 @@ export interface GameState {
   selectedTargetId?: string | null;
   selectedHireCost?: number | null;
   hireSource?: 'shop' | 'action_common' | null;
+  buySource?: 'shop' | 'action_common' | null;  
   hasSeizedInitiative?: boolean;
   canEvolve?: boolean;
   evolvableHeroIds?: string[];

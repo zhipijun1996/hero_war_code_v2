@@ -72,9 +72,8 @@ export class HeroEngine {
     const goldY = isPlayer1 ? 550 : -700;
     
     // 1. 检查阶段
-    const isShopHire = gameState.phase === 'shop';
-    const isActionHire = gameState.phase === 'action_select_option' && gameState.selectedOption === 'hire';
-    if ((!isShopHire && !isActionHire) || playerIndex !== gameState.activePlayerIndex) {
+    const isLeagleHire = gameState.phase === 'hire';
+    if ((!isLeagleHire) || playerIndex !== gameState.activePlayerIndex) {
       return { success: false, reason: '现在不是你的雇佣时机。' };
     }
 
