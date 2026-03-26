@@ -67,15 +67,18 @@ export const createShopHandlers = (deps: any) => {
       if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;
 
       addLog(`玩家${playerIndex + 1}结束商店阶段 (Player ${playerIndex + 1} ended shop phase)`, playerIndex);
-           
-      if (gameState.activePlayerIndex === gameState.firstPlayerIndex) {
-        gameState.activePlayerIndex = 1 - gameState.firstPlayerIndex;
-        addLog(`玩家${gameState.activePlayerIndex + 1}开始商店阶段`, -1);
-        broadcastState();
-        checkBotTurn();
-      } else {
+
+      gameState.shopPasses = (gameState.shopPasses || 0) + 1;
+
+      if (gameState.shopPasses >= 2) {
         ActionEngine.startEndPhase(gameState, actionHelpers);
-      }
+        return;
+      } 
+
+      gameState.activePlayerIndex = 1 - playerIndex;
+      addLog(`玩家${gameState.activePlayerIndex + 1}开始商店阶段`, -1);
+      broadcastState();
+      checkBotTurn();
     },
     hire_hero: (socket: any, { cardId, goldAmount, targetCastleIndex }: any) => {
       if (!cardId) { socket.emit('error_message', '缺少雇佣英雄'); return; }
@@ -94,11 +97,9 @@ export const createShopHandlers = (deps: any) => {
 
       // Handle turn transition
       if (gameState.hireSource === 'shop') {
-        if (playerIndex === gameState.firstPlayerIndex) {
-          gameState.phase = 'shop';
-        } else {
-          ActionEngine.startEndPhase(gameState, actionHelpers);
-        }
+        gameState.phase = 'shop';
+        gameState.hireSource = null;
+        gameState.activePlayerIndex = 1 - playerIndex;
       } else if (gameState.hireSource === 'action_common'){
         const token = gameState.actionTokens.find(t => t.id === gameState.activeActionTokenId);
         if(token) token.used = true;

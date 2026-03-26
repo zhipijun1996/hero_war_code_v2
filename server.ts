@@ -719,6 +719,8 @@ const broadcastState = () => {
 
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
 
+    socket.on('start_buy', () => migratedHandlers.start_buy(socket));
+    socket.on('start_hire', () => migratedHandlers.start_hire(socket));
     socket.on('select_hire_cost', (cost: number) => migratedHandlers.select_hire_cost(socket, cost));
     socket.on('select_hire_castle', (castle: number) => migratedHandlers.select_hire_castle(socket, castle));
     socket.on('cancel_hire_selection', () => migratedHandlers.cancel_hire_selection(socket));

@@ -506,8 +506,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   if (gameState.phase === 'buy') {
     return (
       <div className="flex gap-4">
-        <button onClick={() => socket.emit('select_option', 'buy')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
-          购买
+        <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
+          Pass
         </button>
       </div>
     );

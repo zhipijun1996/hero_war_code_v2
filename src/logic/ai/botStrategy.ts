@@ -17,7 +17,9 @@ export type BotAction =
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
   | { type: 'select_hire_cost'; payload: { cost: number } }
-  | { type: 'select_hire_castle'; payload: { castle: number } }  
+  | { type: 'select_hire_castle'; payload: { castle: number } } 
+  | { type: 'start_buy'} 
+  | { type: 'start_hire' }      
   | { type: 'next_shop' }
   | { type: 'pass_shop' }  
   | { type: 'finish_action'}
@@ -267,11 +269,11 @@ export class BotStrategy {
     
     if (gold >= 2) {
       return { type: 'select_common_action', payload: { action: 'hire' } };
-    } else if (gold > 0) {
+    } else if (gold < 0) {
       return { type: 'select_common_action', payload: { action: 'early_buy' } };
     } else {
       return { type: 'select_common_action', payload: { action: 'seize_initiative' } };
-    }
+    } 
   }
 
   private static decideActionSelectHeroAction(gameState: GameState, playerIndex: number): BotAction {
@@ -460,7 +462,7 @@ export class BotStrategy {
       gold >= 2 &&
       gameState.hireAreaCards.length > 0
     ) {
-      return { type: 'select_option', payload: { option: 'hire' } };
+      return { type: 'start_hire' };
     }
 
     return { type: 'pass_shop' };

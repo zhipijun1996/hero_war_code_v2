@@ -185,7 +185,7 @@ export const handleCardClickLogic = (
       socket.emit('select_target', id);
     }
   } else if (area === 'hire') {
-    if ((gameState.phase === 'shop' || gameState.phase === 'action_select_option') && isActivePlayer && gameState.selectedOption === 'hire') {
+    if ((gameState.phase === 'hire') && isActivePlayer) {
       socket.emit('select_target', id);
     }
   }
