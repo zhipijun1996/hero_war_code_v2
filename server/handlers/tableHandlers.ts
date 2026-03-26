@@ -94,6 +94,11 @@ export const createTableHandlers = (deps: any) => {
     },
     update_map: (socket: any, mapConfig: any) => {
       gameState.map = mapConfig;
+      gameState.magicCircles = (mapConfig.magicCircles || []).map((mc: any) => ({
+        q: mc.q,
+        r: mc.r,
+        state: 'idle'
+      }));
       broadcastState();
     },
     draw_card: (socket: any) => {
