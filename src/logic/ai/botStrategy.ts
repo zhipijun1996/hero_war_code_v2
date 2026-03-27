@@ -67,7 +67,7 @@ export class BotStrategy {
         return this.decideRevivalAction(gameState, playerIndex);
 
       case 'action_select_action':
-        return this.decideActionSelectActionAction(gameState, playerIndex);
+        return this.decideActionSelectActionAction(gameState, playerIndex, heroesDatabase);
 
       case 'action_play_enhancement':
         return this.decideActionPlayEnhancementAction(gameState, botPlayer, playerIndex);
@@ -287,7 +287,13 @@ export class BotStrategy {
       if (!t) return false;
       const c = gameState.tableCards.find(tc => tc && tc.id === t.boundToCardId);
       const isAlive = !gameState.counters.some(counter => counter && counter.type === 'time' && counter.boundToCardId === t.boundToCardId);
-      return c && isAlive && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0));
+      const isCorrectPlayer = (isPlayer1 && c && c.y > 0) || (!isPlayer1 && c && c.y < 0);
+      
+      if (gameState.phase === 'action_select_substitute' && t.id === gameState.activeHeroTokenId) {
+        return false;
+      }
+      
+      return c && isAlive && isCorrectPlayer;
     });
     if (myHeroTokens.length > 0) {
       const heroToken = myHeroTokens[Math.floor(Math.random() * myHeroTokens.length)];
@@ -296,7 +302,7 @@ export class BotStrategy {
     return { type: 'pass_action' };
   }
 
-  private static decideActionSelectActionAction(gameState: GameState, playerIndex: number): BotAction {
+  private static decideActionSelectActionAction(gameState: GameState, playerIndex: number, heroesDatabase: any): BotAction {
     const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
     if (!heroToken) {
       return { type: 'pass_action' };
@@ -333,8 +339,8 @@ export class BotStrategy {
     // 3. Evolution Priority
     if (heroCard && heroCard.level < 3) {
       const expCounter = gameState.counters.find(c => c.type === 'exp' && c.boundToCardId === heroCard.id);
-      const heroData = HEROES_DATABASE.heroes.find(h => h.name === heroCard.heroClass);
-      const levelData = heroData?.levels?.[heroCard.level.toString()];
+      const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard?.heroClass);
+      const levelData = heroData?.levels?.[heroCard?.level || 1];
       const expNeeded = levelData?.xp;
       if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
         return { type: 'select_hero_action', payload: { action: 'evolve' } };

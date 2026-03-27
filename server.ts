@@ -195,6 +195,7 @@ const createInitialState = (mapConfig: MapConfig = DEFAULT_MAP): GameState => {
     activeActionType: null,
     activeEnhancementCardId: null,
     activeHeroTokenId: null,
+    notification: null,
   };
 
   const drawToTable = (deckType: keyof GameState['decks'], count: number, startX: number, startY: number) => {
@@ -383,14 +384,16 @@ const broadcastState = () => {
         console.log(`[BotTurn] Phase: ${gameState.phase}, Player: ${gameState.activePlayerIndex === 0 ? 'P1' : 'P2'}, Hand: ${botPlayer.hand.length}`);
 
         const botSocket = { id: activePlayerId, emit: () => {}, broadcast: { emit: () => {} } };
-        const action = BotStrategy.decideNextAction(gameState, gameState.activePlayerIndex, HEROES_DATABASE);
-
-        console.log(`[BotTurn] Action: ${action.type}`, action);
-
-        dispatchGameCommand(botSocket, action, {
-          migratedHandlers,
-          gameState
-        });
+        try {
+          const action = BotStrategy.decideNextAction(gameState, gameState.activePlayerIndex, HEROES_DATABASE);
+          console.log(`[BotTurn] Action: ${action.type}`, action);
+          dispatchGameCommand(botSocket, action, {
+            migratedHandlers,
+            gameState
+          });
+        } catch (err) {
+          console.error('[BotTurn] AI decision failed:', err);
+        }
 
       }, 1000);
     }
@@ -761,8 +764,6 @@ const broadcastState = () => {
 
     socket.on('hire_hero', ({ cardId, goldAmount, targetCastleIndex }) => migratedHandlers.hire_hero(socket, { cardId, goldAmount, targetCastleIndex }));
     socket.on('revive_hero', ({ heroCardId, targetCastleIndex }) => migratedHandlers.revive_hero(socket, { heroCardId, targetCastleIndex }));
-
-    socket.on('evolve_hero', (cardId) => migratedHandlers.evolve_hero(socket, cardId));
 
     socket.on('discard_card', (cardId) => migratedHandlers.discard_card(socket, cardId));
 

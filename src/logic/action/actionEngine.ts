@@ -5,6 +5,8 @@ import { CombatLogic } from '../combat/combatLogic.ts';
 import { CardLogic } from '../card/cardLogic.ts';
 import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
 import { REWARDS } from '../../shared/hex/tileLogic.ts';
+import { HeroEngine } from '../hero/heroEngine.ts'
+import { canHeroEvolve } from '../hero/heroLogic.ts'
 import {
   getMoveBonusFromEnhancement,
   getAttackRangeBonusFromEnhancement,
@@ -825,17 +827,12 @@ export class ActionEngine {
 
     if (actionType === 'evolve') {
       const heroCard = heroToken ? gameState.tableCards.find(c => c.id === heroToken.boundToCardId) : null;
-      if (heroCard && heroCard.level < 3) {
-        const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass);
-        const levelData = heroData?.levels?.[heroCard.level || 1];
-        const expCounter = gameState.counters.find(c => c.type === 'exp' && c.boundToCardId === heroCard.id);
-        const expNeeded = levelData?.xp;
-        if (!expCounter || typeof expNeeded !== 'number' || expCounter.value < expNeeded) {
-          socket.emit('error_message', '经验不足，无法进化 (Not enough EXP to evolve)');
-          return;
-        }
-      } else {
-        socket.emit('error_message', '英雄已达到最高等级 (Hero is already at max level)');
+      if (!heroCard) {
+        socket.emit('error_message', '未选择英雄');
+        return;
+      }
+      if(!canHeroEvolve(heroCard, gameState)){
+        socket.emit('error_message', '英雄已达到最高等级或经验不足，无法进化');
         return;
       }
     }
@@ -1019,17 +1016,7 @@ export class ActionEngine {
           this.finishAction(gameState, playerIndex, helpers, socket);
           return;
         }
-      } else if (gameState.selectedOption === 'evolve') {
-        const heroCard = gameState.tableCards.find(c => c.id === targetId);
-        const heroToken = gameState.tokens.find(t => t.boundToCardId === targetId);
-        if (heroCard && heroToken) {
-          gameState.phase = 'action_resolve';
-          gameState.activeActionType = 'evolve';
-          gameState.selectedTokenId = heroToken.id;
-          this.finishAction(gameState, playerIndex, helpers, socket);
-          return;
-        }
-      }
+      } 
 
       // If we are in action_resolve and it's an attack, transition to defense phase
       if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') || 
@@ -1260,19 +1247,8 @@ export class ActionEngine {
       gameState.phase = 'action_resolve';
       gameState.notification = null;
     } else if (gameState.activeActionType === 'evolve') {
-      if (heroCard && heroCard.level < 3) {
-        const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id);
-        const expNeeded = levelData?.xp;
-        if (expCounter && typeof expNeeded === 'number' && expCounter.value >= expNeeded) {
-          expCounter.value -= expNeeded;
-          heroCard.level += 1;
-          heroToken.lv = heroCard.level;
-          heroToken.label = `${heroCard.heroClass} Lv${heroCard.level}`;
-          helpers.addLog(`玩家${playerIndex + 1}的英雄 ${heroCard.heroClass} 进化到了 Lv${heroCard.level}`, playerIndex);
-        } else {
-          socket.emit('error_message', '经验不足，无法进化');
-        }
-      }
+      gameState.selectedTokenId = heroToken.id;
+      HeroEngine.evolveHero(gameState, playerIndex, helpers);
       this.finishAction(gameState, playerIndex, helpers, socket);
       return;
     }
@@ -1304,31 +1280,6 @@ export class ActionEngine {
           const counter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === heroId);
           if (counter) counter.value = 0;
           helpers.addLog(`玩家${playerIndex + 1}回复了${card.heroClass}的生命`, playerIndex);
-        }
-      } else if (gameState.activeActionType === 'evolve') {
-        const heroToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
-        const heroCard = gameState.tableCards.find((c: any) => c.id === heroToken?.boundToCardId);
-        if (!heroToken || !heroCard) {
-          socket.emit('error_message', '未找到可进化的英雄');
-        } else if (heroCard.level >= 3) {
-          socket.emit('error_message', '该英雄已达到最高等级');
-        } else {
-          const expCounter = gameState.counters.find(
-            (c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id
-          );
-          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass);
-          const levelData = heroData?.levels?.[heroCard.level.toString()];
-          const expNeeded = levelData?.xp;
-          if (!expCounter || typeof expNeeded !== 'number' || expCounter.value < expNeeded) {
-            socket.emit('error_message', '经验不足，无法进化');
-          } else {
-            expCounter.value -= expNeeded;
-            heroCard.level += 1;
-            heroToken.lv = heroCard.level;
-            heroToken.label = `${heroCard.heroClass} Lv${heroCard.level}`;
-            gameState.lastEvolvedId = heroCard.id;
-            helpers.addLog(`玩家${playerIndex + 1}进化了${heroCard.heroClass}到Lv${heroCard.level}`, playerIndex);
-          }
         }
       }
     }

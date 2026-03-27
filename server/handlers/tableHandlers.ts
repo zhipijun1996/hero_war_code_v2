@@ -80,6 +80,9 @@ export const createTableHandlers = (deps: any) => {
       gameState.players = players;
       gameState.map = map;
       
+      gameState.notification = null;
+      gameState.gameStarted = false;
+      
       Object.values(gameState.players).forEach((p: any) => {
         p.hand = [];
         p.gold = 0;
@@ -295,39 +298,6 @@ export const createTableHandlers = (deps: any) => {
       gameState.firstPlayerIndex = playerIndex;
       addLog(`玩家${playerIndex + 1}抢夺了先手 (Player ${playerIndex + 1} stole first player)`, playerIndex);
       broadcastState();
-    },
-    evolve_hero: (socket: any, cardId: string) => {
-      const card = gameState.tableCards.find((c: any) => c.id === cardId);
-      if (card && card.type === 'hero' && card.heroClass && card.level && card.level < 3) {
-        const expCounter = gameState.counters.find((c: any) => c.type === 'exp' && c.boundToCardId === card.id);
-        const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === card.heroClass);
-        const levelData = heroData?.levels?.[card.level.toString()];
-        const expNeeded = levelData?.xp;
-
-        if (expCounter && typeof expNeeded === 'number' && expNeeded > 0 && expCounter.value >= expNeeded) {
-          expCounter.value -= expNeeded;
-          card.level += 1;
-          card.frontImage = getHeroCardImage(card.heroClass, card.level);
-          card.backImage = getHeroBackImage(card.level);
-          
-          const token = gameState.tokens.find((t: any) => t.boundToCardId === card.id);
-          if (token) {
-            token.lv = card.level;
-            token.label = `${card.heroClass} Lv${card.level}`;
-          }
-          
-          addLog(`玩家${gameState.activePlayerIndex + 1}进化了${card.heroClass}到Lv${card.level}`, gameState.activePlayerIndex);
-          gameState.lastEvolvedId = card.id;
-          broadcastState();
-          
-          setTimeout(() => {
-            if (gameState.lastEvolvedId === card.id) {
-              gameState.lastEvolvedId = null;
-              broadcastState();
-            }
-          }, 2000);
-        }
-      }
-    }
+    } 
   };
 };

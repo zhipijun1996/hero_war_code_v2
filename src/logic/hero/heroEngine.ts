@@ -2,7 +2,9 @@ import { GameState, TableCard, Token, HeroCard, Counter } from '../../shared/typ
 import { hexToPixel, generateId } from '../../shared/utils/hexUtils';
 import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { ActionEngine, ActionHelpers } from '../action/actionEngine.ts';
-
+import { canHeroEvolve, getHeroStat, getHeroCardImage, getHeroBackImage } from './heroLogic.ts';
+import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
+const heroesDatabase = HEROES_DATABASE;
 /**
  * 英雄生命周期引擎
  */
@@ -212,4 +214,37 @@ export class HeroEngine {
 
     return { success: true };
   }
+
+  static evolveHero(
+    gameState: GameState,
+    playerIndex: number,
+    helpers: ActionHelpers
+  ): { success: boolean; reason?: string } {
+    const heroToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+    const heroCard = gameState.tableCards.find((c: any) => c.id === heroToken?.boundToCardId);
+    const expCounter = gameState.counters.find(
+      (c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id
+    );
+    const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass);
+    const levelData = heroData?.levels?.[heroCard.level.toString()];
+    const expNeeded = levelData?.xp;
+
+    if (!heroToken || !heroCard) {
+      return { success:false , reason:'未找到可进化的英雄'};
+    } else if(canHeroEvolve(heroCard, gameState)) {
+      expCounter.value -= expNeeded;
+      heroCard.level += 1;
+      heroToken.lv = heroCard.level;
+      heroToken.label = `${heroCard.heroClass} Lv${heroCard.level}`;
+      gameState.lastEvolvedId = heroCard.id;
+      helpers.addLog(`玩家${playerIndex + 1}进化了${heroCard.heroClass}到Lv${heroCard.level}`, playerIndex);
+      heroCard.frontImage = getHeroCardImage(heroCard.heroClass, heroCard.level); 
+      heroCard.backImage = getHeroBackImage(heroCard.level);
+      return { success:true , reason: 'finish evolve'};
+    }
+    return { success:false , reason: '不满足进化条件'};
+  }
+
+
+
 }
