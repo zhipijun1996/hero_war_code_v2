@@ -385,19 +385,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
         setMenu={setMenu} 
       />
 
-      {/* Withdraw Card Button */}
-      {gameState.phase === 'action_select_option' && isActivePlayer && gameState.lastPlayedCardId && (
-        <div className="absolute bottom-48 left-1/2 -translate-x-1/2 z-[200] pointer-events-auto">
-          <button 
-            onClick={() => socket.emit('cancel_play_card')}
-            className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-full font-bold shadow-lg flex items-center gap-2 transition-all"
-          >
-            <RotateCcw size={18} />
-            撤回出牌
-          </button>
-        </div>
-      )}
-
       {/* Zoom Controls Overlay */}
       <ZoomControls 
         zoomIn={zoomIn} 

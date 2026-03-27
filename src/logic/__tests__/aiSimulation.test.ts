@@ -132,9 +132,6 @@ describe('AI Simulation Test', () => {
       case 'select_common_action':
         ActionEngine.selectCommonAction(gameState, playerIndex, action.payload.action as any, helpers, socket);
         break;
-      case 'select_option':
-        ActionEngine.selectOption(gameState, playerIndex, action.payload.option, helpers, socket);
-        break;
       case 'finish_action':
         ActionEngine.finishAction(gameState, playerIndex, helpers, socket);
         break;

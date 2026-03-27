@@ -93,49 +93,6 @@ export const handleHexClickLogic = (
     }
     return;
   }
-
-  if (gameState.phase === 'action_select_option' && isActivePlayer && gameState.selectedTokenId) {
-    if (gameState.selectedOption === 'attack' || gameState.selectedOption === 'turret_attack') {
-      console.log(`handleHexClick (attack option): q=${q}, r=${r}`);
-      // Find target at this hex
-      const monster = gameState.map?.monsters?.find((m: any) => m.q === q && m.r === r);
-      if (monster) {
-        console.log(`Emitting select_target for monster at ${q},${r}`);
-        socket.emit('select_target', `monster_${monster.q}_${monster.r}`);
-        return;
-      }
-
-      const isCastle = gameState.map ? 
-        (gameState.map.castles[0]?.some((c: any) => c.q === q && c.r === r) || gameState.map.castles[1]?.some((c: any) => c.q === q && c.r === r)) :
-        ((q === 0 && r === 4) || (q === 4 && r === 0) || (q === 0 && r === -4) || (q === -4 && r === 0));
-      
-      if (isCastle) {
-        console.log(`Emitting select_target for castle at ${q},${r}`);
-        socket.emit('select_target', `castle_${q}_${r}`);
-        return;
-      }
-
-      const targetToken = gameState.tokens.find(t => {
-        const hex = pixelToHex(t.x, t.y);
-        return hex.q === q && hex.r === r;
-      });
-      if (targetToken && targetToken.boundToCardId) {
-        console.log(`Emitting select_target for token ${targetToken.id} (card ${targetToken.boundToCardId})`);
-        socket.emit('select_target', targetToken.boundToCardId);
-      } else {
-        const targetCard = gameState.tableCards.find(c => {
-          const hex = pixelToHex(c.x, c.y);
-          return hex.q === q && hex.r === r;
-        });
-        if (targetCard) {
-          console.log(`Emitting select_target for card ${targetCard.id}`);
-          socket.emit('select_target', targetCard.id);
-        }
-      }
-    } else {
-      socket.emit('move_token_to_cell', { q, r });
-    }
-  }
 };
 
 export const handleTokenClickLogic = (
@@ -169,24 +126,6 @@ export const handleTokenClickLogic = (
         }
       }
     }
-    if (gameState.phase === 'action_select_option') {
-      if ((gameState.selectedOption === 'attack' || gameState.selectedOption === 'turret_attack') && gameState.selectedTokenId) {
-        const token = gameState.tokens.find(t => t.id === id);
-        if (token && token.boundToCardId) {
-          const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
-          const isEnemy = card && ((playerIndex === 0 && card.y < 0) || (playerIndex === 1 && card.y > 0));
-          if (isEnemy) {
-            console.log(`handleTokenClick (attack option): emitting select_target for enemy token ${id}, card ${token.boundToCardId}`);
-            socket.emit('select_target', token.boundToCardId);
-            return;
-          }
-        }
-      }
-
-      if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint' || gameState.selectedOption === 'attack' || gameState.selectedOption === 'chant' || gameState.selectedOption === 'fire' || gameState.selectedOption === 'turret_attack') {
-        socket.emit('select_token', id);
-      }
-    }
   }
 };
 
@@ -198,7 +137,7 @@ export const handleCardClickLogic = (
   const { gameState, isActivePlayer, socket } = params;
 
   if (area === 'table' || area === 'play') {
-    if ((gameState.phase === 'action_select_option' || (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack')) && isActivePlayer) {
+    if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') && isActivePlayer) {
       socket.emit('select_target', id);
     }
   } else if (area === 'hire') {

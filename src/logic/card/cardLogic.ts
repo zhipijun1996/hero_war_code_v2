@@ -13,14 +13,10 @@ export class CardLogic {
    * 检查是否可以打出卡牌
    */
   static canPlayCard(card: Card, gameState: GameState, playerIndex: number): { canPlay: boolean; reason?: string } {
-    const allowedPhases = ['action_play_enhancement', 'discard', 'setup', 'action_select_option', 'action_defend',  'action_resolve_attack_counter'];
+    const allowedPhases = ['action_play_enhancement', 'discard', 'setup', 'action_defend',  'action_resolve_attack_counter'];
     
     if (!allowedPhases.includes(gameState.phase)) {
       return { canPlay: false, reason: '当前阶段不允许打出卡牌。' };
-    }
-
-    if (gameState.phase === 'action_select_option') {
-      return { canPlay: false, reason: '请先完成当前卡牌的结算。' };
     }
 
     if (gameState.phase === 'action_play_enhancement') {
@@ -196,12 +192,6 @@ export class CardLogic {
 
       if (nextPhase) {
         helpers.setPhase(nextPhase as GamePhase);
-        if (nextPhase === 'action_select_option') {
-          gameState.selectedOption = null;
-          gameState.selectedTargetId = null;
-          gameState.consecutivePasses = 0;
-          helpers.updateAvailableActions(playerIndex);
-        }
       } 
     }
     // 5. 分支处理：其他（宝藏等）
@@ -211,7 +201,7 @@ export class CardLogic {
       gameState.lastPlayedCardId = tableCard.id;
       
       if (gameState.phase === 'action_play') {
-        helpers.setPhase('action_select_option');
+        helpers.setPhase('action_play');
         gameState.selectedOption = null;
         gameState.selectedTargetId = null;
         gameState.consecutivePasses = 0;
@@ -238,7 +228,7 @@ export class CardLogic {
 
     if (gameState.phase === 'action_play' || gameState.phase === 'setup') {
       logs.push(`玩家${playerIndex + 1}打出了${card.name}`);
-      nextPhase = 'action_select_option';
+      nextPhase = 'action_play';
     } else if (
       gameState.phase === 'action_play_enhancement'
     ) {

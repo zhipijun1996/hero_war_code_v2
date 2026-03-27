@@ -70,51 +70,6 @@ export const getPhasePrompt = ({
     }
     return `请结算行动 (Resolve action)`;
   }
-  if (gameState.phase === 'action_select_option') {
-    if (gameState.activePlayerIndex !== playerIndex) return `等待对方选择行动 (Waiting for opponent to select action)`;
-    if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-      if (!gameState.selectedTokenId) return "请选择一个英雄Token进行移动 (Select a hero token to move)";
-      const token = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
-      return `正在移动 ${token?.label || '英雄'} (剩余移动力: ${gameState.remainingMv}) | Moving ${token?.label || 'Hero'} (Remaining MV: ${gameState.remainingMv})`;
-    }
-    if (!gameState.selectedOption) {
-      return `请选择行动选项 (Select Action Option)`;
-    } else if (gameState.selectedOption === 'heal') {
-      if (!gameState.selectedTargetId) {
-        return `回复：请在桌面上选择一个要回复的英雄 (Heal: Select a hero on the table)`;
-      } else {
-        return `已选择回复目标，请点击完成结算 (Target selected, click Finish Resolve)`;
-      }
-    } else if (gameState.selectedOption === 'evolve') {
-      if (!gameState.selectedTargetId) {
-        return `进化：请在桌面上选择一个要进化的英雄 (Evolve: Select a hero on the table)`;
-      } else {
-        return `已选择进化目标，请点击完成结算 (Target selected, click Finish Resolve)`;
-      }
-    } else if (gameState.selectedOption === 'seize') {
-      return `抢先手：点击完成结算以获得下回合先手 (Seize: Click Finish Resolve to get initiative)`;
-    } else if (gameState.selectedOption === 'move') {
-      if (gameState.selectedTokenId) {
-        return `已选择英雄，请点击高亮的格子以移动 (Hero selected, click a highlighted cell to move)`;
-      }
-      return `移动：请选择一个己方英雄 (Move: Select a hero)`;
-    } else if (gameState.selectedOption === 'attack') {
-      if (gameState.selectedTokenId) {
-        return `已选择英雄，请点击高亮的攻击目标 (Hero selected, click a highlighted target)`;
-      }
-      return `攻击：请选择一个己方英雄 (Attack: Select a hero)`;
-    } else if (gameState.selectedOption === 'chant') {
-      return `咏唱：请选择在魔法阵上的己方英雄 (Chant: Select a hero on a magic circle)`;
-    } else if (gameState.selectedOption === 'fire') {
-      return `开火：请选择正在咏唱的己方英雄 (Fire: Select a chanting hero)`;
-    } else if (gameState.selectedOption === 'turret_attack') {
-      if (gameState.selectedTokenId) {
-        return `已选择英雄，请点击高亮的攻击目标 (Hero selected, click a highlighted target)`;
-      }
-      return `炮台攻击：请选择在炮台上的己方英雄 (Turret Attack: Select a hero on a turret)`;
-    }
-    return `结算阶段：请${activePlayerStr}结算场面`;
-  }
   if (gameState.phase === 'hire') {
     if (gameState.selectedTargetId && gameState.selectedHireCost) {
       return "请点击地图上的王城🏰以部署雇佣的英雄";

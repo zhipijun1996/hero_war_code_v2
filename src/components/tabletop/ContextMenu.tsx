@@ -60,22 +60,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ menu, gameState, playerId, so
           >
             弃掉 (Discard)
           </button>
-          {(() => {
-            const card = gameState.tableCards.find(c => c.id === menu.targetId) || 
-                        gameState.hireAreaCards.find(c => c.id === menu.targetId) ||
-                        gameState.playAreaCards.find(c => c.id === menu.targetId);
-            if (card && card.type === 'hero' && isPlayer && isMyTurn && gameState.phase === 'action_select_option') {
-              return (
-                <button 
-                  className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-zinc-700 font-bold"
-                  onClick={() => { socket.emit('select_option', 'move'); socket.emit('select_target', menu.targetId); setMenu(null); }}
-                >
-                  移动 (Move)
-                </button>
-              );
-            }
-            return null;
-          })()}
         </>
       )}
     </div>

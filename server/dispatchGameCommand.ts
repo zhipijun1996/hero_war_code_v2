@@ -53,10 +53,6 @@ export function dispatchGameCommand(
       migratedHandlers.select_hero_action(socketLike, action.payload.action as any);
       break;
 
-    case 'select_option':
-      migratedHandlers.select_option(socketLike, action.payload.option);
-      break;
-
     case 'select_target':
       migratedHandlers.select_target(socketLike, action.payload.targetId);
       break;

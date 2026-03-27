@@ -8,7 +8,6 @@ export type GameCommand =
   | { type: 'select_common_action'; payload: { action: string } }
   | { type: 'select_hero_for_action'; payload: { tokenId: string } }
   | { type: 'select_hero_action'; payload: { action: string } }
-  | { type: 'select_option'; payload: { option: string | null } }
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
   | { type: 'finish_action' }

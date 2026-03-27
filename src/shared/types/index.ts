@@ -99,7 +99,6 @@ export type GamePhase =
   | 'revival' 
   | 'hire'   
   | 'buy'    
-  | 'action_select_option' 
   | 'action_defend' 
   | 'action_resolve_attack' 
   | 'action_resolve_attack_counter' 

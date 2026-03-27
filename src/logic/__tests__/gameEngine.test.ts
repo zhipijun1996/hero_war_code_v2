@@ -16,41 +16,6 @@ describe('Game Engine Core Operations', () => {
     helpers.alignHireArea = vi.fn();
   });
 
-  describe('Movement', () => {
-    it('should move a token to a reachable cell and consume movement points', () => {
-      const tokenId = 'hero-1';
-      const playerIndex = 0;
-      const targetQ = 1;
-      const targetR = 0;
-      const targetPos = hexToPixel(targetQ, targetR);
-
-      gameState.tokens = [{
-        id: tokenId,
-        x: 0,
-        y: 0,
-        image: '',
-        heroClass: 'Warrior',
-        label: 'Warrior Lv1',
-        lv: 1,
-        time: 0,
-        boundToCardId: 'card-1'
-      }];
-      gameState.selectedTokenId = tokenId;
-      gameState.phase = 'action_select_option';
-      gameState.selectedOption = 'move';
-      gameState.activePlayerIndex = playerIndex;
-      gameState.reachableCells = [{ q: targetQ, r: targetR }];
-      gameState.remainingMv = 3;
-
-      ActionEngine.moveTokenToCell(gameState, playerIndex, targetQ, targetR, helpers, {});
-
-      const token = gameState.tokens[0];
-      expect(token.x).toBe(targetPos.x);
-      expect(token.y).toBe(targetPos.y);
-      expect(gameState.remainingMv).toBe(2); // dist is 1
-    });
-  });
-
   describe('Hiring', () => {
     it('should hire a hero from the hire area', () => {
       const playerIndex = 0;

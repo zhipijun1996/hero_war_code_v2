@@ -176,14 +176,6 @@ export const createActionHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
-    select_token: (socket: any, tokenId: string) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.selectToken(gameState, playerIndex, tokenId, actionHelpers, socket);
-    },
-    select_option: (socket: any, option: string) => {
-      const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.selectOption(gameState, playerIndex, option, actionHelpers, socket);
-    },
     select_action_category: (socket: any, category: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.selectActionCategory(gameState, playerIndex, category, actionHelpers, socket);
@@ -255,7 +247,7 @@ export const createActionHandlers = (deps: any) => {
             return;
           }
           
-          // If we were in action_select_option or action_resolve, go back to action_play_enhancement or action_play
+          // If we were in action_resolve, go back to action_play_enhancement or action_play
           if (gameState.activeActionTokenId) {
             gameState.phase = 'action_play_enhancement';
           } else {
@@ -272,7 +264,7 @@ export const createActionHandlers = (deps: any) => {
       }
 
       // Case 2: Undoing action selection (no card played)
-      if (gameState.phase === 'action_resolve' || gameState.phase === 'action_select_option' || gameState.phase === 'action_select_skill' || gameState.phase === 'action_select_target') {
+      if (gameState.phase === 'action_resolve' || gameState.phase === 'action_select_skill' || gameState.phase === 'action_select_target') {
         if (gameState.activeActionTokenId) {
           ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
           return;

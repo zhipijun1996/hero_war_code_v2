@@ -222,16 +222,18 @@ export class HeroEngine {
   ): { success: boolean; reason?: string } {
     const heroToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
     const heroCard = gameState.tableCards.find((c: any) => c.id === heroToken?.boundToCardId);
-    const expCounter = gameState.counters.find(
-      (c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id
-    );
     const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass);
     const levelData = heroData?.levels?.[heroCard.level.toString()];
     const expNeeded = levelData?.xp;
-
     if (!heroToken || !heroCard) {
       return { success:false , reason:'未找到可进化的英雄'};
-    } else if(canHeroEvolve(heroCard, gameState)) {
+    } 
+    
+    const expCounter = gameState.counters.find(
+      (c: any) => c.type === 'exp' && c.boundToCardId === heroCard.id
+    );
+
+    if(canHeroEvolve(heroCard, gameState)) {
       expCounter.value -= expNeeded;
       heroCard.level += 1;
       heroToken.lv = heroCard.level;

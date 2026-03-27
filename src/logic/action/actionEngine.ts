@@ -43,7 +43,7 @@ export class ActionEngine {
       ? gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId) 
       : null;
 
-    if ((gameState.phase === 'action_select_option' || gameState.phase === 'action_resolve') && 
+    if (gameState.phase === 'action_resolve' && 
         playerIndex === gameState.activePlayerIndex && 
         gameState.selectedTokenId) {
       
@@ -395,7 +395,6 @@ export class ActionEngine {
       'action_play_enhancement', 
       'action_select_substitute',
       'action_resolve',
-      'action_select_option',
       'action_select_skill',
       'action_select_target'
     ];
@@ -466,126 +465,6 @@ export class ActionEngine {
     gameState.phase = 'action_play';
     gameState.notification = null;
     helpers.broadcastState();
-  }
-
-  /**
-   * 处理选择Token逻辑 (Select token logic - used in action_select_option phase)
-   */
-  static selectToken(
-    gameState: GameState,
-    playerIndex: number,
-    tokenId: string,
-    helpers: ActionHelpers,
-    socket: any
-  ): void {
-    if (gameState.phase === 'action_select_option' && playerIndex === gameState.activePlayerIndex) {
-      const isAction = ['move', 'sprint', 'attack', 'chant', 'fire'].includes(gameState.selectedOption || '');
-      
-      const token = gameState.tokens.find((t: any) => t.id === tokenId);
-      if (token && token.boundToCardId) {
-        const isAlive = !gameState.counters.some((counter: any) => counter.type === 'time' && counter.boundToCardId === token.boundToCardId);
-        if (!isAlive) {
-          socket.emit('error_message', '该英雄正在复活中，无法行动。');
-          return;
-        }
-        const card = gameState.tableCards.find((c: any) => c.id === token.boundToCardId);
-        if (card && ((playerIndex === 0 && card.y > 0) || (playerIndex === 1 && card.y < 0))) {
-          
-          if (gameState.selectedOption === 'move' || gameState.selectedOption === 'sprint') {
-            if (!gameState.globalMovementMovedTokens) gameState.globalMovementMovedTokens = [];
-            
-            if (gameState.globalMovementMovedTokens.includes(tokenId)) {
-              socket.emit('error_message', '该英雄本回合已经移动过。');
-              return;
-            }
-            
-            gameState.selectedTokenId = tokenId;
-            const hex = pixelToHex(token.x, token.y);
-            gameState.reachableCells = getReachableHexes(hex, gameState.remainingMv, playerIndex, gameState);
-            helpers.broadcastState();
-          } else if (gameState.selectedOption === 'attack') {
-            gameState.selectedTokenId = tokenId;
-            const hex = pixelToHex(token.x, token.y);
-            gameState.reachableCells = getAttackableHexes(hex.q, hex.r, 1, playerIndex, gameState, card.level || 1); // Default range 1 for old attack
-            helpers.broadcastState();
-          } else if (gameState.selectedOption === 'chant') {
-            gameState.selectedTokenId = tokenId;
-            const hex = pixelToHex(token.x, token.y);
-            gameState.reachableCells = getNeighbors(hex.q, hex.r).filter((h: any) => gameState.magicCircles.some((mc: any) => mc.q === h.q && mc.r === h.r && mc.state === 'idle'));
-            helpers.broadcastState();
-          } else if (gameState.selectedOption === 'fire') {
-            gameState.selectedTokenId = tokenId;
-            const hex = pixelToHex(token.x, token.y);
-            // Simple range check for fire
-            gameState.reachableCells = getNeighbors(hex.q, hex.r); // Placeholder
-            helpers.broadcastState();
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * 处理选择选项逻辑 (Select option logic)
-   */
-  static selectOption(
-    gameState: GameState,
-    playerIndex: number,
-    option: string,
-    helpers: ActionHelpers,
-    socket: any
-  ): void {
-    if ((gameState.phase === 'action_select_option' || gameState.phase === 'shop') && playerIndex === gameState.activePlayerIndex) {
-      if (option === 'heal' && (!gameState.healableHeroIds || gameState.healableHeroIds.length === 0)) {
-        socket.emit('error_message', '没有可以回复的英雄。 (No heroes available to heal.)');
-        return;
-      }
-      
-      if (option === 'fire') {
-        const lastCard = gameState.playAreaCards[gameState.playAreaCards.length - 1] || 
-                         gameState.tableCards.find((c: any) => c.id === gameState.lastPlayedCardId);
-        if (!lastCard || lastCard.type !== 'action') {
-          socket.emit('error_message', '只有打出行动卡才能开火。 (Only action cards can trigger fire.)');
-          return;
-        }
-      }
-
-      const optionNames: any = {
-        'move': '移动',
-        'sprint': '冲刺',
-        'attack': '攻击',
-        'heal': '回复',
-        'evolve': '进化',
-        'hire': '雇佣',
-        'spy': '间谍',
-        'seize': '抢先手',
-        'chant': '咏唱',
-        'fire': '开火',
-        'turret_attack': '炮台攻击'
-      };
-      if (optionNames[option]) {
-        helpers.addLog(`玩家${playerIndex + 1}选择了${optionNames[option]}`, playerIndex);
-      }
-
-      // Manage action counts if changing option while a token is selected
-      if (gameState.selectedTokenId) {
-        const isPrevAction = ['move', 'sprint', 'attack', 'turret_attack'].includes(gameState.selectedOption || '');
-        if (isPrevAction) {
-          const prevTokenId = gameState.selectedTokenId;
-          if (gameState.roundActionCounts[prevTokenId] > 0) {
-            gameState.roundActionCounts[prevTokenId]--;
-          }
-        }
-      }
-
-      gameState.selectedOption = option;
-      gameState.selectedTokenId = null;
-      gameState.selectedTargetId = null;
-      gameState.remainingMv = 0;
-      gameState.reachableCells = [];
-      gameState.movementHistory = undefined;
-      helpers.broadcastState();
-    }
   }
 
   /**
@@ -856,7 +735,6 @@ export class ActionEngine {
       gameState.phase = 'action_resolve';
       gameState.activeActionType = 'attack';
       gameState.selectedTokenId = heroToken.id;
-      gameState.notification = '选择攻击目标 (Select attack target)';
     } else if (actionType === 'move') {
       helpers.checkAndResetChanting(heroToken.id);
       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
@@ -877,11 +755,9 @@ export class ActionEngine {
       gameState.phase = 'action_resolve';
       gameState.activeActionType = 'move';
       gameState.selectedTokenId = heroToken.id;
-      gameState.notification = '选择移动目标 (Select move target)';
     } else if (actionType === 'skill') {
       helpers.checkAndResetChanting(heroToken.id);
       gameState.phase = 'action_select_skill';
-      gameState.notification = '选择技能 (Select skill)';
     } else if (actionType === 'evolve') {
       helpers.checkAndResetChanting(heroToken.id);
       gameState.phase = 'action_resolve';
@@ -889,7 +765,6 @@ export class ActionEngine {
       gameState.selectedTokenId = heroToken.id;
       gameState.selectedTargetId = null;
       gameState.reachableCells = [];
-      gameState.notification = '确认进化 (Confirm evolve)';
     } else if (actionType === 'chant') {
       const hex = pixelToHex(heroToken.x, heroToken.y);
       const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r && m.state === 'idle');
@@ -1019,8 +894,7 @@ export class ActionEngine {
       } 
 
       // If we are in action_resolve and it's an attack, transition to defense phase
-      if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') || 
-          (gameState.phase === 'action_select_option' && (gameState.selectedOption === 'attack' || gameState.selectedOption === 'turret_attack'))) {
+      if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
         
         const targetCard = gameState.tableCards.find(c => c.id === targetId);
         const monster = gameState.map?.monsters?.find(m => `monster_${m.q}_${m.r}` === targetId);
@@ -1246,12 +1120,7 @@ export class ActionEngine {
       gameState.selectedTokenId = heroToken.id;
       gameState.phase = 'action_resolve';
       gameState.notification = null;
-    } else if (gameState.activeActionType === 'evolve') {
-      gameState.selectedTokenId = heroToken.id;
-      HeroEngine.evolveHero(gameState, playerIndex, helpers);
-      this.finishAction(gameState, playerIndex, helpers, socket);
-      return;
-    }
+    } 
     helpers.broadcastState();
   }
 
@@ -1280,7 +1149,10 @@ export class ActionEngine {
           const counter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === heroId);
           if (counter) counter.value = 0;
           helpers.addLog(`玩家${playerIndex + 1}回复了${card.heroClass}的生命`, playerIndex);
-        }
+        } 
+      } else if (gameState.activeActionType === 'evolve') {
+        const err_msg = HeroEngine.evolveHero(gameState, playerIndex, helpers);
+        helpers.addLog(err_msg.reason, playerIndex);
       }
     }
 

@@ -15,7 +15,6 @@ export type BotAction =
   | { type: 'select_common_action'; payload: { action: string } }
   | { type: 'select_hero_for_action'; payload: { tokenId: string } }
   | { type: 'select_hero_action'; payload: { action: string } }
-  | { type: 'select_option'; payload: { option: string } }
   | { type: 'select_target'; payload: { targetId: string } }
   | { type: 'pass_action' }
   | { type: 'select_hire_cost'; payload: { cost: number } }
@@ -49,9 +48,6 @@ export class BotStrategy {
       
       case 'action_play':
         return this.decideActionPlayAction(gameState, playerIndex);
-
-      case 'action_select_option':
-        return this.decideActionSelectOptionAction(gameState, playerIndex, heroesDatabase);
 
       case 'action_options':
         return this.decideActionOptionsAction(gameState, botPlayer, playerIndex);
@@ -165,106 +161,6 @@ export class BotStrategy {
     } else {
       return { type: 'pass_action' };
     }
-  }
-
-  private static decideActionSelectOptionAction(gameState: GameState, playerIndex: number, heroesDatabase: any): BotAction {
-    const isPlayer1 = playerIndex === 0;
-    if (gameState.selectedOption) {
-      const option = gameState.selectedOption;
-      if (option === 'heal') {
-        const myHeros = gameState.tableCards.filter(c => c && c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
-        if (myHeros.length > 0) {
-          return { type: 'select_target', payload: { targetId: myHeros[0].id } };
-        } else {
-          return { type: 'finish_action' };
-        }
-      } else if (option === 'evolve') {
-        const myHeros = gameState.tableCards.filter(c => {
-          if (!c || c.type !== 'hero' || !((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0))) return false;
-          // Check if hero is alive (has a token)
-          const hasToken = gameState.tokens.some(t => t && t.boundToCardId === c.id);
-          if (!hasToken) return false;
-          
-          const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === c.heroClass);
-          const levelData = heroData?.levels?.[c.level || 1];
-          const expNeeded = levelData?.xp;
-          const expCounter = gameState.counters.find(cnt => cnt && cnt.type === 'exp' && cnt.boundToCardId === c.id);
-          return expCounter && typeof expNeeded === 'number' && expNeeded > 0 && expCounter.value >= expNeeded;
-        });
-        if (myHeros.length > 0) {
-          return { type: 'select_target', payload: { targetId: myHeros[0].id } };
-        }
-        return { type: 'finish_action' };
-      } else if (option === 'buy') {
-        if (gameState.decks?.treasure1?.length > 0) {
-          return { type: 'select_option', payload: { option: 'treasure1' } };
-        } else if (gameState.decks?.treasure2?.length > 0) {
-          return { type: 'select_option', payload: { option: 'treasure2' } };
-        } else if (gameState.decks?.treasure3?.length > 0) {
-          return { type: 'select_option', payload: { option: 'treasure3' } };
-        } else {
-          return { type: 'finish_action' };
-        }
-      } else if (option === 'hire') {
-        const playerCastles = gameState.map?.castles?.[playerIndex as 0 | 1] || [];
-        let freeCastleIdx = -1;
-        for (let i = 0; i < playerCastles.length; i++) {
-          const cCoord = playerCastles[i];
-          const pos = hexToPixel(cCoord.q, cCoord.r);
-          const occupied = gameState.tokens.some(t => t && Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10);
-          if (!occupied) {
-            freeCastleIdx = i;
-            break;
-          }
-        }
-
-        if (!gameState.selectedHireCost) {
-          return { type: 'select_hire_cost', payload: { cost: 2 } };
-        }
-        if (gameState.selectedHireCastle == null) {
-          return { type: 'select_hire_castle', payload: { castle: freeCastleIdx } };
-        }
-        if (!gameState.selectedTargetId && (gameState.hireAreaCards?.length || 0) > 0) {
-          return { type: 'select_target', payload: { targetId: gameState.hireAreaCards[0].id } };
-        }
-        if (gameState.selectedHireCost != null && gameState.selectedTargetId && gameState.selectedHireCastle != null) {
-          return {
-            type: 'hire_hero',
-            payload: {
-              cardId: gameState.selectedTargetId,
-              goldAmount: gameState.selectedHireCost,
-              targetCastleIndex: gameState.selectedHireCastle
-            }
-          };
-        }
-        return { type: 'finish_action' };
-      }
-    } else {
-      const lastCard = gameState.playAreaCards?.[gameState.playAreaCards.length - 1];
-      if (lastCard) {
-        if (lastCard.name === '回复' || lastCard.name === '治疗药水') {
-          return { type: 'select_option', payload: { option: 'heal' } };
-        } else if (lastCard.name === '进化') {
-          return { type: 'select_option', payload: { option: 'evolve' } };
-        } else if (lastCard.name === '雇佣') {
-          return { type: 'select_option', payload: { option: 'hire' } };
-        } else if (lastCard.name === '间谍') {
-          return { type: 'select_option', payload: { option: 'spy' } };
-        } else if (lastCard.name === '抢先手') {
-          return { type: 'select_option', payload: { option: 'seize' } };
-        }
-      } else if (gameState.activeActionTokenId) {
-        const myHerosWithDamage = gameState.tableCards.filter(c => c && c.type === 'hero' && ((isPlayer1 && c.y > 0) || (!isPlayer1 && c.y < 0)) && (c.damage || 0) > 0);
-        if (myHerosWithDamage.length > 0) {
-          return { type: 'select_option', payload: { option: 'heal' } };
-        } else if (gameState.canEvolve) {
-          return { type: 'select_option', payload: { option: 'evolve' } };
-        } else {
-          return { type: 'select_option', payload: { option: 'spy' } };
-        }
-      }
-    }
-    return { type: 'finish_action' };
   }
 
   private static decideActionCommonAction(gameState: GameState, playerIndex: number): BotAction {

@@ -39,7 +39,6 @@ select_hero_action
 select_hero_for_action
 select_hire_cost
 select_hire_castle
-select_option
 select_target
 select_token
 shuffle_deck

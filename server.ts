@@ -734,8 +734,6 @@ const broadcastState = () => {
 
     socket.on('end_resolve_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
 
-    socket.on('select_option', (option: string) => migratedHandlers.select_option(socket, option));
-
     socket.on('select_token', (tokenId: string) => migratedHandlers.select_token(socket, tokenId));
 
     socket.on('select_target', (targetId: string) => migratedHandlers.select_target(socket, targetId));
