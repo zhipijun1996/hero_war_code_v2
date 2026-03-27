@@ -14,6 +14,12 @@ export function isTargetInAttackRange(
   const dist = getHexDistance(attackerHex, targetHex);
   if (dist <= ar) return true;
 
+  if (ar <= 1) {
+    if( dist === 1 ) return true;
+  } else {
+    if( dist >=2 && dist <= ar ) return true;
+  }
+
   // 瞭望塔奖励逻辑
   const isOnWatchtower = gameState.map?.watchtowers?.some(
     (w) => w.q === attackerHex.q && w.r === attackerHex.r
@@ -318,6 +324,13 @@ export function getAttackableHexes(
     for (let dr = Math.max(-ar, -dq - ar); dr <= Math.min(ar, -dq + ar); dr++) {
       const nq = startQ + dq;
       const nr = startR + dr;
+      const dist = getHexDistance({ q: startQ, r: startR}, { q: nq, r: nr });
+      if (ar <= 1) {
+        if( dist !== 1 ) continue;
+      } else {
+        if( dist < 2 || dist > ar ) continue;
+      }
+
       const targetType = checkCell(nq, nr);
       if (targetType) {
         cells.push({ q: nq, r: nr, targetType });
