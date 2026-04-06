@@ -36,6 +36,14 @@ export function getHexDistance(a: Hex, b: Hex) {
   return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
 }
 
+export function hexDirection(a: Hex, b: Hex): Hex {
+  return { q: b.q - a.q, r: b.r - a.r };
+}
+
+export function hexAdd(a: Hex, b: Hex): Hex {
+  return { q: a.q + b.q, r: a.r + b.r };
+}
+
 export const HEX_DIRECTIONS: Hex[] = [
   { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
   { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }

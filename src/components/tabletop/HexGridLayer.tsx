@@ -92,7 +92,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       }
       
       const isReachable = reachableCells?.some(c => c.q === q && c.r === r);
-      const isAttack = selectedOption === 'attack' || selectedOption === 'turret_attack' || (phase === 'action_resolve' && activeActionType === 'attack');
+      const isAttack = selectedOption === 'attack' || selectedOption === 'turret_attack' || (phase === 'action_resolve' && activeActionType === 'attack') || phase === 'action_select_skill_target';
       let highlightColor = isReachable ? (isAttack ? "rgba(239, 68, 68, 0.4)" : "rgba(253, 224, 71, 0.4)") : undefined;
 
       // Highlight castles for deployment/hiring/revival

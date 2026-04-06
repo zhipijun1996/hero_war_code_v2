@@ -2,6 +2,9 @@ import { ActionEngine } from '../../src/logic/action/actionEngine.ts';
 import { HeroEngine } from '../../src/logic/hero/heroEngine.ts';
 import { CardLogic } from '../../src/logic/card/cardLogic.ts';
 import { CombatLogic } from '../../src/logic/combat/combatLogic.ts'; 
+import { skillRegistry } from '../../src/logic/skills/skillRegistry.ts';
+import { SkillContext } from '../../src/logic/skills/types.ts';
+import { pixelToHex } from '../../src/shared/utils/hexUtils.ts';
 
 export const createActionHandlers = (deps: any) => {
   const {
@@ -38,7 +41,7 @@ export const createActionHandlers = (deps: any) => {
   } = deps;
 
   return {
-    play_card: (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
+    play_card: async (socket: any, { cardId, x, y, targetCastleIndex }: { cardId: string, x?: number, y?: number, targetCastleIndex?: number }) => {
       const playerIndex = getPlayerIndex(socket.id);
 
       const result = CardLogic.playCard(
@@ -84,7 +87,7 @@ export const createActionHandlers = (deps: any) => {
       }
 
       if (gameState.phase === 'action_resolve_attack_counter') {
-        ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
+        await ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
       } else {
         broadcastState();
         checkBotTurn();
@@ -159,10 +162,10 @@ export const createActionHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.finishDiscard(gameState, playerIndex, actionHelpers, socket);
     },
-    revive_hero: (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
+    revive_hero: async (socket: any, { heroCardId, targetCastleIndex }: { heroCardId: string, targetCastleIndex: number }) => {
       const playerIndex = getPlayerIndex(socket.id);
       
-      const result = HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, actionHelpers);
+      const result = await HeroEngine.reviveHero(gameState, playerIndex, heroCardId, targetCastleIndex, actionHelpers);
 
       if (!result.success) {
         socket.emit('error_message', result.reason);
@@ -172,17 +175,17 @@ export const createActionHandlers = (deps: any) => {
       broadcastState();
       checkBotTurn();
     },
-    move_token_to_cell: (socket: any, { q, r }: { q: number, r: number }) => {
+    move_token_to_cell: async (socket: any, { q, r }: { q: number, r: number }) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
+      await ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
     select_action_category: (socket: any, category: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.selectActionCategory(gameState, playerIndex, category, actionHelpers, socket);
     },
-    select_common_action: (socket: any, action: any) => {
+    select_common_action: async (socket: any, action: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.selectCommonAction(gameState, playerIndex, action, actionHelpers, socket);
+      await ActionEngine.selectCommonAction(gameState, playerIndex, action, actionHelpers, socket);
     },
     select_hero_action: (socket: any, action: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -200,16 +203,58 @@ export const createActionHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
     },
-    select_target: (socket: any, targetId: string) => {
+    use_skill: async (socket: any, payload: { skillId: string, targetTokenId?: string, targetHex?: { q: number, r: number } }) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.resolveTargetSelection(gameState, playerIndex, targetId, actionHelpers, socket);
+      await ActionEngine.useSkill(gameState, playerIndex, payload, actionHelpers, socket);
+    },
+    select_skill_target: (socket: any, payload: { skillId: string }) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      console.log(`[select_skill_target] playerIndex=${playerIndex}, payload=${JSON.stringify(payload)}, phase=${gameState.phase}, activePlayerIndex=${gameState.activePlayerIndex}`);
+      if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex) return;
+      if (gameState.phase !== 'action_select_skill') return;
+      
+      gameState.phase = 'action_select_skill_target';
+      gameState.activeSkillId = payload.skillId;
+
+      // Populate reachableCells for highlighting
+      const skill = skillRegistry.getSkill(payload.skillId);
+      if (skill && skill.getValidTargets) {
+        const context: SkillContext = {
+          gameState,
+          playerIndex,
+          sourceTokenId: gameState.activeHeroTokenId || '',
+        };
+        const targets = skill.getValidTargets(context);
+        
+        // Convert target IDs to hexes for highlighting
+        gameState.reachableCells = targets.map(target => {
+          if (typeof target === 'string') {
+            if (target.startsWith('monster_')) {
+              const parts = target.split('_');
+              return { q: parseInt(parts[1]), r: parseInt(parts[2]) };
+            }
+            const token = gameState.tokens.find(t => t.id === target);
+            if (token) return pixelToHex(token.x, token.y);
+          } else if (typeof target === 'object' && 'q' in target) {
+            return target;
+          }
+          return null;
+        }).filter(h => h !== null) as { q: number, r: number }[];
+      }
+
+      console.log(`[select_skill_target] phase changed to action_select_skill_target, activeSkillId=${gameState.activeSkillId}, reachableCells=${gameState.reachableCells.length}`);
+      broadcastState();
+    },
+    select_target: async (socket: any, targetId: string) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      await ActionEngine.resolveTargetSelection(gameState, playerIndex, targetId, actionHelpers, socket);
     },
     proceed_phase: (socket: any) => {
       ActionEngine.proceedPhase(gameState, actionHelpers, socket);
     },
-    finish_action: (socket: any) => {
+    finish_action: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.finishAction(gameState, playerIndex, actionHelpers, socket);
+      await ActionEngine.finishAction(gameState, playerIndex, actionHelpers, socket);
     },
     pass_action: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -264,7 +309,20 @@ export const createActionHandlers = (deps: any) => {
       }
 
       // Case 2: Undoing action selection (no card played)
-      if (gameState.phase === 'action_resolve' || gameState.phase === 'action_select_skill' || gameState.phase === 'action_select_target') {
+      if (gameState.phase === 'action_select_skill_target') {
+        gameState.phase = 'action_select_skill';
+        gameState.activeSkillId = null;
+        broadcastState();
+        return;
+      }
+
+      if (gameState.phase === 'action_select_skill') {
+        gameState.phase = 'action_select_action';
+        broadcastState();
+        return;
+      }
+
+      if (gameState.phase === 'action_resolve' || gameState.phase === 'action_select_target') {
         if (gameState.activeActionTokenId) {
           ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
           return;

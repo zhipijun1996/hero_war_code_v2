@@ -151,7 +151,7 @@ describe('Game Engine Core Operations', () => {
       gameState.activePlayerIndex = playerIndex;
 
       // Mock finishAction to avoid side effects
-      vi.spyOn(ActionEngine, 'finishAction').mockImplementation(() => {});
+      vi.spyOn(ActionEngine, 'finishAction').mockImplementation(async () => {});
 
       ActionEngine.resolveActionStart(gameState, playerIndex, helpers, {});
 

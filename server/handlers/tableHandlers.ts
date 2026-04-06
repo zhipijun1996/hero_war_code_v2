@@ -72,6 +72,7 @@ export const createTableHandlers = (deps: any) => {
       const seats = [...gameState.seats];
       const players = { ...gameState.players };
       const map = gameState.map;
+      const mapConfig = gameState.mapConfig;
       
       const newState = createInitialState();
       Object.assign(gameState, newState);
@@ -79,6 +80,7 @@ export const createTableHandlers = (deps: any) => {
       gameState.seats = seats;
       gameState.players = players;
       gameState.map = map;
+      gameState.mapConfig = mapConfig;
       
       gameState.notification = null;
       gameState.gameStarted = false;
@@ -96,7 +98,8 @@ export const createTableHandlers = (deps: any) => {
       broadcastState();
     },
     update_map: (socket: any, mapConfig: any) => {
-      gameState.map = mapConfig;
+      gameState.map = JSON.parse(JSON.stringify(mapConfig));
+      gameState.mapConfig = JSON.parse(JSON.stringify(mapConfig));
       gameState.magicCircles = (mapConfig.magicCircles || []).map((mc: any) => ({
         q: mc.q,
         r: mc.r,

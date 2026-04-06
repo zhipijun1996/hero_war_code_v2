@@ -1,5 +1,6 @@
 import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
 import { GameState, TableCard, Counter } from '../../shared/types/index.ts';
+import { SkillEngine } from '../skills/skillEngine.ts';
 
 const BASE_URL = 'https://raw.githubusercontent.com/zhipijun1996/heros_war/main/';
 const HERO1_BACK = `${BASE_URL}%E5%8D%A1%E8%83%8C_%E8%8B%B1%E9%9B%84lv1.png`;
@@ -31,7 +32,11 @@ export function canHeroEvolve(hero: TableCard, gameState: GameState): boolean {
     return false;
   }
 
-  const expNeeded = getHeroStat(hero.heroClass, hero.level, 'xp');
+  const token = gameState.tokens.find(t => t.boundToCardId === hero.id);
+  const expNeeded = token 
+    ? SkillEngine.getModifiedStat(token.id, 'xp', gameState)
+    : getHeroStat(hero.heroClass, hero.level, 'xp');
+    
   const expCounter = gameState.counters.find(c => c.type === 'exp' && c.boundToCardId === hero.id);
   
   return !!(expCounter && expNeeded > 0 && expCounter.value >= expNeeded);
@@ -50,7 +55,11 @@ export function getRespawnTime(level: number): number {
  */
 export function getHeroCurrentHP (hero: TableCard, gameState: GameState): number {
   if (!hero.heroClass || !hero.level) return 0;
-  const maxHP = getHeroStat(hero.heroClass, hero.level, 'hp');
+  const token = gameState.tokens.find(t => t.boundToCardId === hero.id);
+  const maxHP = token 
+    ? SkillEngine.getModifiedStat(token.id, 'hp', gameState)
+    : getHeroStat(hero.heroClass, hero.level, 'hp');
+    
   return Math.max(0, maxHP - (hero.damage || 0));
 }
 

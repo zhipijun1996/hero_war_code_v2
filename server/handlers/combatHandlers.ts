@@ -20,7 +20,7 @@ export const createCombatHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.passEnhancement(gameState, playerIndex, actionHelpers, socket);
     },
-    pass_defend: (socket: any) => {
+    pass_defend: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       
       if (gameState.phase === 'action_defend' && playerIndex === gameState.activePlayerIndex) {
@@ -31,10 +31,10 @@ export const createCombatHandlers = (deps: any) => {
         gameState.isCounterAttack = false;
         gameState.canCounterAttack = false;
         const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
-        ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
+        await ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
       }
     },
-    declare_defend: (socket: any) => {
+    declare_defend: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (gameState.phase !== 'action_defend' || playerIndex !== gameState.activePlayerIndex) return;
 
@@ -46,9 +46,9 @@ export const createCombatHandlers = (deps: any) => {
       gameState.isDefended = true;
       gameState.isCounterAttack = false;
       const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
-      ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
+      await ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
-    declare_counter: (socket: any) => {
+    declare_counter: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);      
       if (gameState.phase !== 'action_defend' || playerIndex !== gameState.activePlayerIndex) return;
       if (!gameState.hasDefenseCard) {
@@ -63,15 +63,15 @@ export const createCombatHandlers = (deps: any) => {
       gameState.isDefended = false;
       gameState.isCounterAttack = true;
       const attackerIndex = gameState.attackInitiatorIndex ?? (1 - playerIndex);
-      ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
+      await ActionEngine.endResolveAttack(gameState, attackerIndex, actionHelpers, socket);
     },
-    end_resolve_attack: (socket: any) => {
+    end_resolve_attack: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.endResolveAttack(gameState, playerIndex, actionHelpers, socket);
+      await ActionEngine.endResolveAttack(gameState, playerIndex, actionHelpers, socket);
     },
-    end_resolve_attack_counter: (socket: any) => {
+    end_resolve_attack_counter: async (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
+      await ActionEngine.endResolveAttackCounter(gameState, playerIndex, actionHelpers, socket);
     }
   };
 };

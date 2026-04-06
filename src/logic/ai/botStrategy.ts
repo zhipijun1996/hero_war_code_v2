@@ -29,6 +29,7 @@ export type BotAction =
   | { type: 'declare_defend' }
   | { type: 'declare_counter' }
   | { type: 'pass_defend' }  
+  | { type: 'skill_interrupt_response'; payload: { response: boolean } }
   | { type: 'none' };
 
 export class BotStrategy {
@@ -86,8 +87,8 @@ export class BotStrategy {
       case 'discard':
         return this.decideDiscardAction(gameState, botPlayer);
 
-      case 'revival':
-        return this.decideRevivalAction(gameState, playerIndex);
+      case 'skill_interrupt_prompt':
+        return this.decideSkillInterruptAction(gameState, playerIndex);
 
       case 'supply':
       case 'end':
@@ -96,6 +97,15 @@ export class BotStrategy {
       default:
         return { type: 'none' };
     }
+  }
+
+  private static decideSkillInterruptAction(gameState: GameState, playerIndex: number): BotAction {
+    const prompt = gameState.pendingSkillPrompt;
+    if (prompt && prompt.playerIndex === playerIndex) {
+      // For now, bots always say yes to skills
+      return { type: 'skill_interrupt_response', payload: { response: true } };
+    }
+    return { type: 'none' };
   }
 
   private static decideRevivalAction(gameState: GameState, playerIndex: number): BotAction {

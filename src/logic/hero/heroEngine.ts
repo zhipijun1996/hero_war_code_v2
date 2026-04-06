@@ -4,6 +4,7 @@ import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { ActionEngine, ActionHelpers } from '../action/actionEngine.ts';
 import { canHeroEvolve, getHeroStat, getHeroCardImage, getHeroBackImage } from './heroLogic.ts';
 import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
+import { SkillEngine } from '../skills/skillEngine.ts';
 const heroesDatabase = HEROES_DATABASE;
 /**
  * 英雄生命周期引擎
@@ -170,13 +171,13 @@ export class HeroEngine {
   /**
    * 复活英雄
    */
-  static reviveHero(
+  static async reviveHero(
     gameState: GameState,
     playerIndex: number,
     heroCardId: string,
     targetCastleIndex: number,
     helpers: ActionHelpers
-  ): { success: boolean; reason?: string } {
+  ): Promise<{ success: boolean; reason?: string }> {
     if (gameState.phase !== 'revival') return { success: false, reason: '当前不是复活阶段。' };
 
     if (!gameState.pendingRevivals || gameState.pendingRevivals.length === 0) return { success: false, reason: '没有待复活的英雄。' };
@@ -199,6 +200,10 @@ export class HeroEngine {
       token.x = castlePos.x;
       token.y = castlePos.y;
       helpers.addLog(`${heroCard.heroClass} 在王城复活！`, playerIndex);
+      
+      await SkillEngine.triggerEvent('onHeroRevive', gameState, helpers, {
+        eventSourceId: token.id
+      });
     }
 
     gameState.pendingRevivals.splice(revivalIndex, 1);

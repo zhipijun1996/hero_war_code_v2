@@ -104,8 +104,9 @@ export type GamePhase =
   | 'action_resolve_attack_counter' 
   | 'action_common' 
   | 'action_select_skill'
+  | 'action_select_skill_target'
   | 'action_play_defense'
-  ;
+  | 'skill_interrupt_prompt';
 
 export interface MovementStep {
   tokenId: string;
@@ -152,10 +153,12 @@ export interface MapConfig {
 }
 
 export interface Skill {
+  id?: string;
   name: string;
   description: string;
-  type?: 'active' | 'passive' | 'trigger';
+  type?: 'active' | 'passive' | 'trigger' | 'semi_passive' | 'static';
   cost?: number;
+  modifiers?: any[];
 }
 
 export interface HeroLevelData {
@@ -181,6 +184,7 @@ export interface HeroesDatabase {
 
 export interface GameState {
   map?: MapConfig;
+  mapConfig?: MapConfig;
   gameStarted: boolean;
   seats: (string | null)[];
   players: Record<string, Player>;
@@ -242,8 +246,15 @@ export interface GameState {
   actionTokens: ActionToken[];
   activeActionTokenId?: string | null;
   activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | null;
+  activeSkillId?: string | null;
+  combatInitiatingSkillId?: string | null;
   activeEnhancementCardId?: string | null;
   activeHeroTokenId?: string | null;
   isCounterAttack?: boolean;
   isDefended?: boolean;
+  pendingSkillPrompt?: {
+    playerIndex: number;
+    promptType: string;
+    context: any;
+  } | null;
 }

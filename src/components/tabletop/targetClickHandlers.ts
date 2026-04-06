@@ -44,6 +44,11 @@ export const handleHexClickLogic = (
     return;
   }
 
+  if (gameState.phase === 'action_select_skill_target' && isActivePlayer && gameState.activeSkillId) {
+    socket.emit('use_skill', { skillId: gameState.activeSkillId, targetHex: { q, r } });
+    return;
+  }
+
   if (gameState.phase === 'action_resolve' && isActivePlayer && gameState.activeActionType === 'move' && gameState.selectedTokenId) {
     socket.emit('move_token_to_cell', { q, r });
     return;
@@ -106,6 +111,10 @@ export const handleTokenClickLogic = (
       socket.emit('select_hero_for_action', id);
       return;
     }
+    if (gameState.phase === 'action_select_skill_target' && gameState.activeSkillId) {
+      socket.emit('use_skill', { skillId: gameState.activeSkillId, targetTokenId: id });
+      return;
+    }
     if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
       const token = gameState.tokens.find(t => t.id === id);
       if (token && token.boundToCardId) {
@@ -139,6 +148,9 @@ export const handleCardClickLogic = (
   if (area === 'table' || area === 'play') {
     if ((gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') && isActivePlayer) {
       socket.emit('select_target', id);
+    }
+    if (gameState.phase === 'action_select_skill_target' && isActivePlayer && gameState.activeSkillId) {
+      socket.emit('use_skill', { skillId: gameState.activeSkillId, targetTokenId: id });
     }
   } else if (area === 'hire') {
     if ((gameState.phase === 'hire') && isActivePlayer) {

@@ -20,6 +20,10 @@ import { BotStrategy, BotAction } from './src/logic/ai/botStrategy.ts';
 import { ActionEngine, ActionHelpers } from './src/logic/action/actionEngine.ts';
 import { createHandlers } from './socketHandlers.ts';
 import { dispatchGameCommand } from './server/dispatchGameCommand.ts';
+import { registerAllSkills } from './src/logic/skills/handlers/index.ts';
+
+// 注册所有技能
+registerAllSkills();
 
 const heroesDatabase = HEROES_DATABASE;
 
@@ -145,7 +149,8 @@ const createSpecificDeck = (type: string, back: string, urls: string[], copies: 
 
 const createInitialState = (mapConfig: MapConfig = DEFAULT_MAP): GameState => {
   const state: GameState = {
-    map: mapConfig,
+    map: JSON.parse(JSON.stringify(mapConfig)),
+    mapConfig: JSON.parse(JSON.stringify(mapConfig)),
     gameStarted: false,
     seats: [null, null],
     players: {},
@@ -340,6 +345,32 @@ const broadcastState = () => {
     const phase = gameState.phase;
     console.log(`checkBotTurn: phase=${phase}, activePlayerIndex=${gameState.activePlayerIndex}`);
     
+    if (phase === 'skill_interrupt_prompt' && gameState.pendingSkillPrompt) {
+      const promptPlayerId = gameState.seats?.[gameState.pendingSkillPrompt.playerIndex];
+      if (promptPlayerId && gameState.players[promptPlayerId]?.isBot) {
+        if (pendingBotTurnTimeout) clearTimeout(pendingBotTurnTimeout);
+        pendingBotTurnTimeout = setTimeout(() => {
+          pendingBotTurnTimeout = null;
+          if (gameState.phase !== 'skill_interrupt_prompt' || !gameState.pendingSkillPrompt) return;
+          const botSocket = { id: promptPlayerId, emit: () => {}, broadcast: { emit: () => {} } };
+          const action = BotStrategy.decideNextAction(gameState, gameState.pendingSkillPrompt.playerIndex, HEROES_DATABASE);
+          dispatchGameCommand(botSocket, action, { 
+            migratedHandlers, 
+            gameState,
+            handleSkillInterruptResponse: (response: boolean) => {
+              if (pendingSkillPromptResolve) {
+                const resolve = pendingSkillPromptResolve;
+                pendingSkillPromptResolve = null;
+                gameState.pendingSkillPrompt = null;
+                resolve(response);
+              }
+            }
+          });
+        }, 1000);
+      }
+      return;
+    }
+
     if (phase === 'discard') {
       gameState.seats?.filter(id => id !== null).forEach(id => {
         const player = gameState.players[id!];
@@ -598,6 +629,8 @@ const broadcastState = () => {
 
   let migratedHandlers: any;
 
+  let pendingSkillPromptResolve: ((response: boolean) => void) | null = null;
+
   const actionHelpers: ActionHelpers = {
     addLog,
     broadcastState,
@@ -618,6 +651,21 @@ const broadcastState = () => {
         }
       }
     },
+    promptPlayer: (playerIndex: number, promptType: string, context: any) => {
+      return new Promise<boolean>((resolve) => {
+        const previousPhase = gameState.phase;
+        pendingSkillPromptResolve = (response: boolean) => {
+          gameState.phase = previousPhase;
+          resolve(response);
+        };
+        gameState.pendingSkillPrompt = {
+          playerIndex,
+          promptType,
+          context
+        };
+        setPhase('skill_interrupt_prompt');
+      });
+    }
   };
 
   migratedHandlers = createHandlers({
@@ -683,6 +731,19 @@ const broadcastState = () => {
     socket.on('add_bot', (payload) => migratedHandlers.add_bot(socket, payload));
     socket.on('sit_down', (payload) => migratedHandlers.sit_down(socket, payload));
     socket.on('leave_seat', () => migratedHandlers.leave_seat(socket));
+
+    socket.on('skill_interrupt_response', (response: boolean) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      if (gameState.phase !== 'skill_interrupt_prompt') return;
+      if (gameState.pendingSkillPrompt?.playerIndex !== playerIndex) return;
+
+      if (pendingSkillPromptResolve) {
+        const resolve = pendingSkillPromptResolve;
+        pendingSkillPromptResolve = null;
+        gameState.pendingSkillPrompt = null;
+        resolve(response);
+      }
+    });
     socket.on('remove_bot', (payload) => migratedHandlers.remove_bot(socket, payload));
     socket.on('update_image_config', (config: ImageConfig) => migratedHandlers.update_image_config(socket));
     socket.on('update_map', (mapConfig: MapConfig) => migratedHandlers.update_map(socket, mapConfig));
@@ -715,6 +776,9 @@ const broadcastState = () => {
     socket.on('select_hero_for_action', (heroTokenId: string) => migratedHandlers.select_hero_for_action(socket, heroTokenId));
 
     socket.on('select_hero_action', (actionType: any) => migratedHandlers.select_hero_action(socket, actionType));
+
+    socket.on('use_skill', (payload: any) => migratedHandlers.use_skill(socket, payload));
+    socket.on('select_skill_target', (payload: any) => migratedHandlers.select_skill_target(socket, payload));
 
     socket.on('play_enhancement_card', (cardId: string) => migratedHandlers.play_enhancement_card(socket, cardId));
 

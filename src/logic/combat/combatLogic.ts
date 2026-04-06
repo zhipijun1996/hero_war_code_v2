@@ -5,16 +5,18 @@ import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
 import { hexToPixel, pixelToHex, generateId } from '../../shared/utils/hexUtils.ts';
 import { REWARDS } from '../../shared/hex/tileLogic.ts';
 import { ActionHelpers } from '../action/actionEngine.ts';
+import { SkillEngine } from '../skills/skillEngine.ts';
+import { isTargetInAttackRange } from '../map/mapLogic.ts';
 
 export class CombatLogic {
   /**
    * 结算攻击 (Resolve attack)
    */
-  static resolveAttack(
+  static async resolveAttack(
     gameState: GameState,
     playerIndex: number,
     helpers: ActionHelpers
-  ): void {
+  ): Promise<void> {
     const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
     const targetId = gameState.selectedTargetId;
     const targetToken = gameState.tokens.find((t: any) => t.boundToCardId  === targetId);
@@ -26,8 +28,20 @@ export class CombatLogic {
     if (targetToken && targetCard) {
       if (isDefended) {
         helpers.addLog(`${targetCard.heroClass} 使用了 ${defenseCard?.name || '防御牌'}，攻击被抵消`, 1 - playerIndex);
+        await SkillEngine.triggerEvent('onDefended', gameState, helpers, {
+          attackerTokenId: attackerToken?.id,
+          defenderTokenId: targetToken.id,
+          defenseCardId: defenseCard?.id
+        });
       } else {
         const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
+        
+        // 触发攻击前事件
+        await SkillEngine.triggerEvent('onAttackStart', gameState, helpers, { 
+          eventSourceId: attackerToken?.id,
+          eventTargetId: targetToken.id 
+        });
+
         const damage = this.calculateDamage(attackerCard, targetCard, false, gameState);
 
         targetCard.damage = (targetCard.damage || 0) + damage;
@@ -41,8 +55,29 @@ export class CombatLogic {
         helpers.checkAndResetChanting(targetToken.id);
         helpers.addLog(`${attackerCard?.heroClass} 对 ${targetCard.heroClass} 造成了 ${damage} 点伤害`, playerIndex);
 
+        // 触发受到伤害事件
+        await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
+          eventSourceId: targetToken.id,
+          attackerTokenId: attackerToken?.id,
+          damage
+        });
+
+        // 触发造成伤害事件
+        await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+          eventSourceId: attackerToken?.id,
+          targetTokenId: targetToken.id,
+          damage
+        });
+
         if (this.isHeroDead(targetCard, gameState)) {
-          this.handleHeroDeath(targetCard, targetToken, 1 - playerIndex, helpers, gameState);
+          // 触发击杀事件
+          await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+            eventSourceId: attackerToken?.id,
+            killedTokenId: targetToken.id,
+            targetType: 'hero'
+          });
+
+          await this.handleHeroDeath(targetCard, targetToken, 1 - playerIndex, helpers, gameState);
           const rewards = this.getCombatRewards(attackerCard, 'hero', true);
           if (rewards.reputation > 0) {
             helpers.addReputation(playerIndex, rewards.reputation, "击杀敌方英雄");
@@ -66,13 +101,13 @@ export class CombatLogic {
   /**
    * 结算怪物攻击
    */
-  static resolveMonsterAttack(
+  static async resolveMonsterAttack(
     gameState: GameState,
     playerIndex: number,
     q: number,
     r: number,
     helpers: ActionHelpers
-  ): void {
+  ): Promise<void> {
     const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
     if (!monster) return;
 
@@ -101,17 +136,49 @@ export class CombatLogic {
     
     if (heroCard) {
       helpers.addLog(`发起阶段: ${heroCard.heroClass} 对 LV${monster.level}怪物 发起了攻击`, playerIndex);
+      await SkillEngine.triggerEvent('onAttackStart', gameState, helpers, {
+        eventSourceId: token.id,
+        targetType: 'monster'
+      });
     }
     
     damageCounter.value += damage;
     helpers.addLog(`结算阶段: LV${monster.level}怪物 受到 ${damage} 点伤害，当前受伤计数器为 ${damageCounter.value}`, playerIndex);
 
+    // 触发造成伤害事件 (Hero -> Monster)
+    await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+      eventSourceId: token.id,
+      targetType: 'monster',
+      damage
+    });
+
     if (damageCounter.value >= monster.level) {
       // Monster dies
       gameState.counters = gameState.counters.filter(c => c.id !== damageCounter!.id);
-      gameState.counters.push({ id: generateId(), type: 'time', x: pos.x, y: pos.y, value: 0 });
       
-      helpers.addLog(`阵亡阶段: LV${monster.level}怪物 已阵亡`, playerIndex);
+      // Find origin from mapConfig
+      const monsterIndex = gameState.map?.monsters?.findIndex(m => m === monster);
+      const origin = (monsterIndex !== undefined && monsterIndex !== -1) 
+        ? gameState.mapConfig?.monsters?.[monsterIndex] 
+        : null;
+      
+      const respawnPos = origin ? hexToPixel(origin.q, origin.r) : pos;
+      
+      gameState.counters.push({ id: generateId(), type: 'time', x: respawnPos.x, y: respawnPos.y, value: 0 });
+      
+      // Reset monster position to origin
+      if (origin) {
+        monster.q = origin.q;
+        monster.r = origin.r;
+      }
+      
+      helpers.addLog(`阵亡阶段: LV${monster.level}怪物 已阵亡，复活计时器已放置在初始位置 (${monster.q}, ${monster.r})`, playerIndex);
+
+      // 触发击杀事件
+      await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+        eventSourceId: token.id,
+        targetType: 'monster'
+      });
 
       // Gain EXP and Gold
       if (heroCard) {
@@ -139,9 +206,29 @@ export class CombatLogic {
         helpers.addLog(`结算阶段: ${heroCard.heroClass} 当前受伤计数器为 ${heroCard.damage}`, playerIndex);
         gameState.notification = `攻击怪物！怪物反击造成 1 点伤害。 (Attacked monster! Monster counter-attacked for 1 damage.)`;
         
+        await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
+          eventSourceId: token.id,
+          damage: 1,
+          sourceType: 'monster'
+        });
+
+        // 触发造成伤害事件 (Monster -> Hero)
+        await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+          sourceType: 'monster',
+          targetTokenId: token.id,
+          damage: 1
+        });
+
         // Check hero death
         if (this.isHeroDead(heroCard, gameState)) {
-          this.handleHeroDeath(heroCard, token, playerIndex, helpers, gameState);
+          // 触发击杀事件 (Monster -> Hero)
+          await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+            sourceType: 'monster',
+            killedTokenId: token.id,
+            targetType: 'hero'
+          });
+
+          await this.handleHeroDeath(heroCard, token, playerIndex, helpers, gameState);
           gameState.notification += ` ${heroCard.heroClass} 阵亡！ (Hero died!)`;
         }
       }
@@ -151,12 +238,12 @@ export class CombatLogic {
   /**
    * 结算王城攻击
    */
-  static resolveCastleAttack(
+  static async resolveCastleAttack(
     gameState: GameState,
     playerIndex: number,
     enemyIndex: number,
     helpers: ActionHelpers
-  ): void {
+  ): Promise<void> {
     gameState.castleHP[enemyIndex] = (gameState.castleHP[enemyIndex] || 3) - 1;
     
     // Reputation scoring for damaging castle
@@ -185,17 +272,33 @@ export class CombatLogic {
   /**
    * 结算反击 (Resolve counter attack)
    */
-  static resolveCounterAttack(
+  static async resolveCounterAttack(
     gameState: GameState,
     playerIndex: number,
     helpers: ActionHelpers
-  ): void {
+  ): Promise<void> {
     const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
     const attackerCard = gameState.tableCards.find((c: any) => c.id === attackerToken?.boundToCardId);
     const defenderCard = gameState.tableCards.find((c: any) => c.id === gameState.selectedTargetId);
     const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
 
     if (attackerToken && attackerCard && defenderCard && defenderToken) {
+      // Check if target is still in range after potential knockback
+      const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
+      const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
+      const ar = SkillEngine.getModifiedStat(defenderToken.id, 'ar', gameState);
+      
+      if (!isTargetInAttackRange(defenderHex, attackerHex, ar, gameState)) {
+        helpers.addLog(`反击失败：${attackerCard.heroClass} 已超出 ${defenderCard.heroClass} 的反击射程`, playerIndex);
+        return;
+      }
+
+      // 触发反击开始事件
+      await SkillEngine.triggerEvent('onCounterAttackStart', gameState, helpers, {
+        eventSourceId: defenderToken.id,
+        eventTargetId: attackerToken.id
+      });
+
       const damage = this.calculateDamage(defenderCard, attackerCard, true, gameState);
 
       attackerCard.damage = (attackerCard.damage || 0) + damage;
@@ -209,8 +312,29 @@ export class CombatLogic {
       helpers.checkAndResetChanting(attackerToken.id);
       helpers.addLog(`${defenderCard.heroClass} 对 ${attackerCard.heroClass} 进行了反击，造成了 ${damage} 点伤害`, playerIndex);
 
+      // 触发受到伤害事件
+      await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
+        eventSourceId: attackerToken.id,
+        attackerTokenId: defenderToken.id,
+        damage
+      });
+
+      // 触发造成伤害事件
+      await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+        eventSourceId: defenderToken.id,
+        targetTokenId: attackerToken.id,
+        damage
+      });
+
       if (this.isHeroDead(attackerCard, gameState)) {
-        this.handleHeroDeath(attackerCard, attackerToken, playerIndex, helpers, gameState);
+        // 触发击杀事件
+        await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+          eventSourceId: defenderToken.id,
+          killedTokenId: attackerToken.id,
+          targetType: 'hero'
+        });
+
+        await this.handleHeroDeath(attackerCard, attackerToken, playerIndex, helpers, gameState);
         const rewards = this.getCombatRewards(defenderCard, 'hero', true);
         if (rewards.reputation > 0) {
           helpers.addReputation(1 - playerIndex, rewards.reputation, "反击击杀敌方英雄");
@@ -253,15 +377,20 @@ export class CombatLogic {
   /**
    * 处理英雄阵亡
    */
-  static handleHeroDeath(
+  static async handleHeroDeath(
     deadHeroCard: TableCard,
     deadHeroToken: Token,
     deadPlayerIndex: number,
     helpers: ActionHelpers,
     gameState: GameState
-  ): void {
+  ): Promise<void> {
     helpers.addLog(`${deadHeroCard.heroClass} 阵亡了！`, deadPlayerIndex);
     
+    // 触发英雄阵亡事件
+    await SkillEngine.triggerEvent('onHeroDeath', gameState, helpers, {
+      eventSourceId: deadHeroToken.id
+    });
+
     // Reset damage
     deadHeroCard.damage = 0;
     const damageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === deadHeroCard.id);
@@ -286,16 +415,16 @@ export class CombatLogic {
     }
   }
 
-  static getHeroAttackRange(card: TableCard): number {
-    const heroData = HEROES_DATABASE?.heroes?.find((h: any) => h.name === card.heroClass);
-    const levelData = heroData?.levels?.[card.level || 1];
-    return levelData?.ar || 1;
+  static getHeroAttackRange(card: TableCard, gameState: GameState): number {
+    const token = gameState.tokens.find(t => t.boundToCardId === card.id);
+    if (!token) return 1;
+    return SkillEngine.getModifiedStat(token.id, 'ar', gameState);
   }
 
-  static getHeroMaxHp(card: TableCard): number {
-    const heroData = HEROES_DATABASE?.heroes?.find((h: any) => h.name === card.heroClass);
-    const levelData = heroData?.levels?.[card.level || 1];
-    return levelData?.hp || 0;
+  static getHeroMaxHp(card: TableCard, gameState: GameState): number {
+    const token = gameState.tokens.find(t => t.boundToCardId === card.id);
+    if (!token) return 3;
+    return SkillEngine.getModifiedStat(token.id, 'hp', gameState);
   }
 
   static hexDistance(a: { q: number; r: number }, b: { q: number; r: number }): number {
@@ -320,14 +449,14 @@ export class CombatLogic {
 
     // 条件1：先吃原始攻击后不能死
     const incomingDamage = this.calculateDamage(attackerCard, defenderCard, false, gameState);
-    const defenderMaxHp = this.getHeroMaxHp(defenderCard);
+    const defenderMaxHp = this.getHeroMaxHp(defenderCard, gameState);
     const defenderCurrentDamage = defenderCard.damage || 0;
     const survives = defenderCurrentDamage + incomingDamage < defenderMaxHp;
 
     if (!survives) return false;
 
     // 条件2：防守方攻击范围能打到原攻击者
-    const defenderRange = this.getHeroAttackRange(defenderCard);
+    const defenderRange = this.getHeroAttackRange(defenderCard, gameState);
     const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
     const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
     const inRange = this.hexDistance(defenderHex, attackerHex) <= defenderRange;
@@ -346,9 +475,9 @@ export class CombatLogic {
     gameState: GameState,
     options?: { isEnhanced?: boolean }
   ): number {
-    const heroData = HEROES_DATABASE?.heroes?.find((h: any) => h.name === attacker.heroClass);
-    const levelData = heroData?.levels?.[attacker.level || 1];
-    let damage = levelData?.atk || 1;
+    const attackerToken = gameState.tokens.find(t => t.boundToCardId === attacker.id);
+    let damage = attackerToken ? SkillEngine.getModifiedStat(attackerToken.id, 'atk', gameState) : 1;
+    if (damage === 0) damage = 1; // 至少造成1点伤害 (At least 1 damage)
 
     if (!isCounter) {
       const enhancementCard = gameState.activeEnhancementCardId 
@@ -369,7 +498,7 @@ export class CombatLogic {
    */
   static isHeroDead(hero: TableCard, gameState: GameState): boolean {
     if (!hero.heroClass || !hero.level) return false;
-    const maxHP = getHeroStat(hero.heroClass, hero.level, 'hp');
+    const maxHP = this.getHeroMaxHp(hero, gameState);
     return (hero.damage || 0) >= maxHP;
   }
 

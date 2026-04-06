@@ -12,21 +12,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.battle_step]
+          "skills": [SKILLS_LIBRARY.warrior_knockback_slash]
         },
         "2": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.battle_step, SKILLS_LIBRARY.guard_break]
+          "skills": [SKILLS_LIBRARY.warrior_knockback_slash]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.battle_step, SKILLS_LIBRARY.guard_break, SKILLS_LIBRARY.onslaught]
+          "skills": [SKILLS_LIBRARY.warrior_knockback_slash]
         }
       }
     },
@@ -120,7 +120,7 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.stealth]
+          "skills": [SKILLS_LIBRARY.stealth, SKILLS_LIBRARY.swift_foot]
         },
         "2": {
           "hp": 3,
@@ -201,7 +201,7 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 2,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.aim]
+          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.eagle_eye]
         },
         "2": {
           "hp": 3,

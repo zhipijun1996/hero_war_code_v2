@@ -3,6 +3,7 @@ import type { BotAction } from '../src/logic/ai/botStrategy.ts';
 type DispatchDeps = {
   migratedHandlers: any;
   gameState: any;
+  handleSkillInterruptResponse?: (response: boolean) => void;
 };
 
 export function dispatchGameCommand(
@@ -10,9 +11,15 @@ export function dispatchGameCommand(
   action: BotAction,
   deps: DispatchDeps
 ) {
-  const { migratedHandlers, gameState } = deps;
+  const { migratedHandlers, gameState, handleSkillInterruptResponse } = deps;
 
   switch (action.type) {
+    case 'skill_interrupt_response':
+      if (handleSkillInterruptResponse) {
+        handleSkillInterruptResponse(action.payload.response);
+      }
+      break;
+
     case 'play_card':
       if (gameState.phase === 'action_play_enhancement') {
         migratedHandlers.play_enhancement_card(socketLike, action.payload.cardId);

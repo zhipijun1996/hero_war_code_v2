@@ -3,6 +3,9 @@ import { Socket } from 'socket.io-client';
 import { GameState } from '../../shared/types';
 import { pixelToHex } from '../../shared/utils/hexUtils';
 import { HEROES_DATABASE } from '../../shared/config/heroes';
+import { SkillEngine } from '../../logic/skills/skillEngine';
+import { SkillContext } from '../../logic/skills/types';
+import { skillRegistry } from '../../logic/skills/skillRegistry';
 
 interface ActionPanelProps {
   gameState: GameState;
@@ -96,6 +99,31 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     );
   };
 
+  if (gameState.phase === 'skill_interrupt_prompt') {
+    const prompt = gameState.pendingSkillPrompt;
+    if (prompt && prompt.playerIndex === playerIndex) {
+      return (
+        <div className="flex flex-col gap-2 items-center">
+          <div className="text-white font-bold">{prompt.context?.message || '是否使用技能？'}</div>
+          <div className="flex gap-4">
+            <button onClick={() => socket.emit('skill_interrupt_response', true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
+              是 (Yes)
+            </button>
+            <button onClick={() => socket.emit('skill_interrupt_response', false)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+              否 (No)
+            </button>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="text-zinc-400 font-bold">
+          等待其他玩家响应技能...
+        </div>
+      );
+    }
+  }
+
   if (gameState.phase === 'action_play') {
     return (
       <button onClick={() => socket.emit('pass_action')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">
@@ -180,6 +208,73 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       </div>
     );
   }
+  if ((gameState.phase as string) === 'action_select_skill') {
+    const context: SkillContext = {
+      gameState,
+      playerIndex,
+      sourceTokenId: gameState.activeHeroTokenId!
+    };
+    const activeSkills = SkillEngine.getActiveSkillOptions(context);
+
+    return (
+      <div className="flex flex-col gap-4 items-center w-full max-w-md">
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm text-center">
+          请选择要使用的技能 (Select a skill)
+        </div>
+        <div className="flex flex-col gap-2 w-full">
+          {activeSkills.map(skill => (
+            <button
+              key={skill.skillId}
+              onClick={() => {
+                if (skill.targetType === 'none') {
+                  socket.emit('use_skill', { skillId: skill.skillId });
+                } else {
+                  socket.emit('select_skill_target', { skillId: skill.skillId });
+                }
+              }}
+              disabled={!skill.isAvailable}
+              className={`px-4 py-3 rounded-lg font-bold text-sm text-left flex flex-col gap-1 ${
+                skill.isAvailable 
+                  ? 'bg-purple-600 hover:bg-purple-500 text-white' 
+                  : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <span>【{skill.name}】</span>
+                {!skill.isAvailable && skill.reason && (
+                  <span className="text-xs text-red-300 font-normal">{skill.reason}</span>
+                )}
+              </div>
+              <span className="text-xs font-normal opacity-80">{skill.description}</span>
+            </button>
+          ))}
+          {activeSkills.length === 0 && (
+            <div className="text-zinc-400 text-sm text-center py-4">
+              当前英雄没有可用的主动技能
+            </div>
+          )}
+        </div>
+        <button onClick={() => socket.emit('undo_play')} className="w-full py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm mt-2">
+          返回上一级 (Undo)
+        </button>
+      </div>
+    );
+  }
+
+  if ((gameState.phase as string) === 'action_select_skill_target') {
+    const skillName = skillRegistry?.getSkill(gameState.activeSkillId || '')?.name || '技能';
+    return (
+      <div className="flex flex-col gap-4 items-center w-full max-w-md">
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm text-center">
+          请在地图上选择【{skillName}】的目标
+        </div>
+        <button onClick={() => socket.emit('undo_play')} className="w-full py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm mt-2">
+          返回上一级 (Undo)
+        </button>
+      </div>
+    );
+  }
+
   if ((gameState.phase as string) === 'action_options') {
     return (
       <div className="flex flex-col gap-4 items-center w-full max-w-md">
