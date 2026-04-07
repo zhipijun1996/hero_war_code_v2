@@ -149,15 +149,290 @@ export const warriorKnockbackSlash: SkillDefinition = {
     if (!sourceToken) return;
 
     const sourceHex = pixelToHex(sourceToken.x, sourceToken.y);
+    const resolvedTargetId = targetTokenId || gameState.selectedTargetId || '';
+    
+    // 获取击退前的目标坐标和是否阵亡
+    let targetOriginalHex: { q: number, r: number } | null = null;
+    let isTargetDead = false;
+    const targetToken = gameState.tokens.find(t => t.id === resolvedTargetId || t.boundToCardId === resolvedTargetId);
+    if (targetToken) {
+      targetOriginalHex = pixelToHex(targetToken.x, targetToken.y);
+      const targetCard = gameState.tableCards.find(c => c.id === targetToken.boundToCardId);
+      if (targetCard) {
+        isTargetDead = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === targetCard.id);
+      }
+    } else if (resolvedTargetId.startsWith('monster_')) {
+      const parts = resolvedTargetId.split('_');
+      const q = parseInt(parts[1]);
+      const r = parseInt(parts[2]);
+      targetOriginalHex = { q, r };
+      
+      const monster = gameState.map?.monsters?.find(m => m.q === q && m.r === r);
+      if (!monster) {
+        isTargetDead = true;
+      } else {
+        const pos = hexToPixel(q, r);
+        isTargetDead = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+      }
+    }
     
     // 使用通用击退工具函数
-    await applyKnockback(
+    const actualDistance = await applyKnockback(
       gameState,
       sourceHex,
-      targetTokenId || gameState.selectedTargetId || '',
+      resolvedTargetId,
       1, // 击退 1 格
       helpers,
       playerIndex
     );
+
+    // 如果成功推开或击杀，触发 onKnockbackSuccess 事件
+    if ((actualDistance > 0 || isTargetDead) && targetOriginalHex) {
+      const { SkillEngine } = await import('../skillEngine.ts');
+      await SkillEngine.triggerEvent('onKnockbackSuccess', gameState, helpers, {
+        sourceTokenId,
+        targetOriginalHex,
+        initiatingSkillId: 'warrior_knockback_slash'
+      });
+    }
+  }
+};
+
+export const warriorPressForward: SkillDefinition = {
+  id: 'warrior_press_forward',
+  name: '压进击退',
+  description: '发动击退斩后，若成功推开或击杀，你可以选择进入其原位。',
+  kind: 'semi_passive',
+  trigger: 'onKnockbackSuccess',
+  
+  canUse: (context: SkillContext) => {
+    const { sourceTokenId, initiatingSkillId } = context as any;
+    // 只有当触发事件的源是自己，且技能是击退斩时才可用
+    if (context.sourceTokenId !== sourceTokenId) return false;
+    if (initiatingSkillId !== 'warrior_knockback_slash') return false;
+    return true;
+  },
+
+  execute: async (context: SkillContext, helpers: SkillHelpers): Promise<SkillResult> => {
+    const { gameState, playerIndex, sourceTokenId, targetOriginalHex } = context as any;
+    
+    if (!targetOriginalHex) return { success: false };
+
+    const sourceToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!sourceToken) return { success: false };
+
+    // 询问玩家是否压进
+    if (helpers.promptPlayer) {
+      const confirm = await helpers.promptPlayer(playerIndex, 'confirm_action', {
+        message: '是否压进到敌方原位？'
+      });
+      
+      if (confirm) {
+        const { hexToPixel } = await import('../../../shared/utils/hexUtils.ts');
+        const newPos = hexToPixel(targetOriginalHex.q, targetOriginalHex.r);
+        sourceToken.x = newPos.x;
+        sourceToken.y = newPos.y;
+        
+        const sourceCard = gameState.tableCards.find(c => c.id === sourceToken.boundToCardId);
+        const heroName = sourceCard?.heroClass || '战士';
+        helpers.addLog(`${heroName} 顺势压进，占领了原位！`, playerIndex);
+        
+        // 如果有地块效果，可以在这里触发 resolveTileEffect，目前先略过
+      }
+    }
+
+    return { success: true };
+  }
+};
+
+export const warriorWhirlwindSlash: SkillDefinition = {
+  id: 'warrior_whirlwind_slash',
+  name: '旋风斩',
+  description: '对所有相邻的敌方单位（英雄和怪物）造成 1 点伤害。',
+  kind: 'active',
+  targetType: 'none',
+  
+  canUse: (context: SkillContext) => {
+    const { gameState, playerIndex, sourceTokenId } = context;
+    const sourceToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!sourceToken) return false;
+
+    const sourceHex = pixelToHex(sourceToken.x, sourceToken.y);
+    let hasTarget = false;
+
+    // Check enemy heroes
+    for (const token of gameState.tokens) {
+      if (token.id === sourceTokenId || !token.heroClass) continue;
+      const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
+      if (!card) continue;
+      const ownerIndex = card.y > 0 ? 0 : 1;
+      if (ownerIndex === playerIndex) continue;
+      
+      const hasTimer = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === card.id);
+      if (hasTimer) continue;
+
+      const targetHex = pixelToHex(token.x, token.y);
+      if (getHexDistance(sourceHex, targetHex) === 1) {
+        hasTarget = true;
+        break;
+      }
+    }
+
+    // Check monsters
+    if (!hasTarget && gameState.map && gameState.map.monsters) {
+      for (const monster of gameState.map.monsters) {
+        const pos = hexToPixel(monster.q, monster.r);
+        const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+        if (hasTimer) continue;
+
+        const targetHex = { q: monster.q, r: monster.r };
+        if (getHexDistance(sourceHex, targetHex) === 1) {
+          hasTarget = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasTarget) {
+      return { canUse: false, reason: '没有相邻的敌方目标。' };
+    }
+    return true;
+  },
+
+  execute: async (context: SkillContext, helpers: SkillHelpers): Promise<SkillResult> => {
+    const { gameState, playerIndex, sourceTokenId } = context;
+    const sourceToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!sourceToken) return { success: false };
+    const sourceCard = gameState.tableCards.find(c => c.id === sourceToken.boundToCardId);
+    if (!sourceCard) return { success: false };
+
+    const sourceHex = pixelToHex(sourceToken.x, sourceToken.y);
+    const { CombatLogic } = await import('../../combat/combatLogic.ts');
+    const { SkillEngine } = await import('../skillEngine.ts');
+    const { generateId } = await import('../../../shared/utils/hexUtils.ts');
+
+    helpers.addLog(`${sourceCard.heroClass} 发动了【旋风斩】！`, playerIndex);
+
+    let hitCount = 0;
+
+    // 1. 伤害相邻敌方英雄
+    for (const token of gameState.tokens) {
+      if (token.id === sourceTokenId || !token.heroClass) continue;
+      const card = gameState.tableCards.find(c => c.id === token.boundToCardId);
+      if (!card) continue;
+      const ownerIndex = card.y > 0 ? 0 : 1;
+      if (ownerIndex === playerIndex) continue;
+      
+      const hasTimer = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === card.id);
+      if (hasTimer) continue;
+
+      const targetHex = pixelToHex(token.x, token.y);
+      if (getHexDistance(sourceHex, targetHex) === 1) {
+        hitCount++;
+        card.damage = (card.damage || 0) + 1;
+        
+        let damageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === card.id);
+        if (!damageCounter) {
+          damageCounter = { id: generateId(), type: 'damage', x: token.x, y: token.y, value: 0, boundToCardId: card.id };
+          gameState.counters.push(damageCounter);
+        }
+        damageCounter.value = card.damage;
+        
+        helpers.addLog(`${card.heroClass} 受到 1 点旋风斩伤害。`, playerIndex);
+
+        await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
+          eventSourceId: token.id,
+          damage: 1,
+          sourceType: 'hero'
+        });
+
+        await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+          eventSourceId: sourceTokenId,
+          sourceType: 'hero',
+          targetTokenId: token.id,
+          damage: 1
+        });
+
+        if (CombatLogic.isHeroDead(card, gameState)) {
+          await CombatLogic.handleHeroDeath(card, token, ownerIndex, helpers as any, gameState);
+          
+          await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+            eventSourceId: sourceTokenId,
+            targetType: 'hero'
+          });
+          
+          const rewards = CombatLogic.getCombatRewards(sourceCard, 'hero', true, card.level);
+          if (rewards.exp > 0) CombatLogic.addExp(sourceCard, rewards.exp, gameState);
+          if (rewards.gold > 0) CombatLogic.addGold(playerIndex, rewards.gold, gameState);
+          if (rewards.reputation > 0) {
+            if ((helpers as any).addReputation) {
+              (helpers as any).addReputation(playerIndex, rewards.reputation, `击杀敌方英雄`);
+            }
+          }
+        }
+      }
+    }
+
+    // 2. 伤害相邻怪物
+    if (gameState.map && gameState.map.monsters) {
+      for (const monster of gameState.map.monsters) {
+        const pos = hexToPixel(monster.q, monster.r);
+        const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+        if (hasTimer) continue;
+
+        const targetHex = { q: monster.q, r: monster.r };
+        if (getHexDistance(sourceHex, targetHex) === 1) {
+          hitCount++;
+          let damageCounter = gameState.counters.find(c => c.type === 'damage' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+          if (!damageCounter) {
+            damageCounter = { id: generateId(), type: 'damage', x: pos.x, y: pos.y, value: 0 };
+            gameState.counters.push(damageCounter);
+          }
+          damageCounter.value += 1;
+          
+          helpers.addLog(`LV${monster.level}怪物 受到 1 点旋风斩伤害。`, playerIndex);
+
+          await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+            eventSourceId: sourceTokenId,
+            targetType: 'monster',
+            damage: 1
+          });
+
+          if (damageCounter.value >= monster.level) {
+            gameState.counters = gameState.counters.filter(c => c.id !== damageCounter!.id);
+            const monsterIndex = gameState.map.monsters.findIndex(m => m === monster);
+            const origin = (monsterIndex !== -1) ? gameState.mapConfig?.monsters?.[monsterIndex] : null;
+            const respawnPos = origin ? hexToPixel(origin.q, origin.r) : pos;
+            
+            gameState.counters.push({ id: generateId(), type: 'time', x: respawnPos.x, y: respawnPos.y, value: 0 });
+            if (origin) {
+              monster.q = origin.q;
+              monster.r = origin.r;
+            }
+            helpers.addLog(`LV${monster.level}怪物 被旋风斩击杀！`, playerIndex);
+            
+            await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+              eventSourceId: sourceTokenId,
+              targetType: 'monster'
+            });
+            
+            const rewards = CombatLogic.getCombatRewards(sourceCard, 'monster', true, monster.level);
+            if (rewards.exp > 0) CombatLogic.addExp(sourceCard, rewards.exp, gameState);
+            if (rewards.gold > 0) CombatLogic.addGold(playerIndex, rewards.gold, gameState);
+            if (rewards.reputation > 0) {
+              if ((helpers as any).addReputation) {
+                (helpers as any).addReputation(playerIndex, rewards.reputation, `击杀LV${monster.level}怪物`);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (hitCount === 0) {
+      helpers.addLog(`旋风斩挥空了！`, playerIndex);
+    }
+
+    return { success: true };
   }
 };

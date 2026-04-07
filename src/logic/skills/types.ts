@@ -17,7 +17,8 @@ export type SkillTrigger =
   | 'onDamageDealt'
   | 'onKill'
   | 'onHeal'
-  | 'onHeroRevive';
+  | 'onHeroRevive'
+  | 'onKnockbackSuccess';
 
 export interface SkillContext {
   gameState: GameState;

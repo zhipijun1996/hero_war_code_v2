@@ -19,14 +19,14 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 2,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.warrior_knockback_slash]
+          "skills": [SKILLS_LIBRARY.warrior_knockback_slash, SKILLS_LIBRARY.warrior_press_forward]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.warrior_knockback_slash]
+          "skills": [SKILLS_LIBRARY.warrior_knockback_slash, SKILLS_LIBRARY.warrior_press_forward, SKILLS_LIBRARY.warrior_whirlwind_slash]
         }
       }
     },
@@ -39,21 +39,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.reckless_attack]
+          "skills": [SKILLS_LIBRARY.berserker_linear_dash]
         },
         "2": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.reckless_attack, SKILLS_LIBRARY.berserk_charge]
+          "skills": [SKILLS_LIBRARY.berserker_linear_dash, SKILLS_LIBRARY.berserker_assault_dash]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.reckless_attack, SKILLS_LIBRARY.berserk_charge, SKILLS_LIBRARY.fury]
+          "skills": [SKILLS_LIBRARY.berserker_linear_dash, SKILLS_LIBRARY.berserker_assault_dash, SKILLS_LIBRARY.berserker_formation_breaking_dash]
         }
       }
     },

@@ -187,6 +187,36 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
     description: "对相邻敌方英雄进行攻击，攻击成功后将其沿直线推开 1 格",
     type: "active"
   },
+  "warrior_press_forward": {
+    id: "warrior_press_forward",
+    name: "压进击退",
+    description: "发动击退斩后，若成功推开或击杀，你可以选择进入其原位。",
+    type: "semi_passive"
+  },
+  "warrior_whirlwind_slash": {
+    id: "warrior_whirlwind_slash",
+    name: "旋风斩",
+    description: "对所有相邻的敌方单位（英雄和怪物）造成 1 点伤害。",
+    type: "active"
+  },
+  "berserker_linear_dash": {
+    id: "berserker_linear_dash",
+    name: "直线冲撞",
+    description: "选择一名与你同一直线、距离 1~2 的敌方单位。移动至其相邻格，并对其进行一次攻击。",
+    type: "active"
+  },
+  "berserker_assault_dash": {
+    id: "berserker_assault_dash",
+    name: "强袭冲撞",
+    description: "选择一名与你同一直线、距离 1~3 的敌方单位。移动至其相邻格，并对其进行一次攻击。若其与你初始距离＜3，无论是否被防御，其后退 1 格。",
+    type: "active"
+  },
+  "berserker_formation_breaking_dash": {
+    id: "berserker_formation_breaking_dash",
+    name: "裂阵冲撞",
+    description: "选择一名与你同一直线、距离 1~3 的敌方单位。移动至其相邻格，并对其进行一次攻击。无论是否被防御，其后退 1 格；与其相邻的其他敌方英雄各后退 1 格。",
+    type: "active"
+  },
   "test_active_skill": {
     id: "test_active_skill",
     name: "测试主动技能",

@@ -9,7 +9,8 @@ export class SkillEngine {
    */
   static async onCombatResolved(gameState: GameState, combatDetails: any, helpers: SkillHelpers): Promise<void> {
     if (gameState.combatInitiatingSkillId) {
-      const skill = skillRegistry.getSkill(gameState.combatInitiatingSkillId);
+      const skillId = gameState.combatInitiatingSkillId.split('|')[0];
+      const skill = skillRegistry.getSkill(skillId);
       if (skill && skill.afterCombat) {
         const context: SkillContext = {
           gameState,

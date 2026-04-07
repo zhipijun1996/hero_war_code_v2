@@ -1530,6 +1530,7 @@ export class ActionEngine {
       // Return to skill selection phase if failed
       gameState.phase = 'action_select_skill';
       gameState.activeSkillId = null;
+      gameState.reachableCells = [];
       helpers.broadcastState();
     }
   }
