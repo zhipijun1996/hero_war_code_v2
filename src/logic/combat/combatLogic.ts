@@ -52,6 +52,15 @@ export class CombatLogic {
         }
         damageCounter.value = targetCard.damage;
 
+        // Remove shield if present
+        if (gameState.statuses) {
+          const shieldIndex = gameState.statuses.findIndex(s => s.tokenId === targetToken.id && s.status === 'shield');
+          if (shieldIndex !== -1) {
+            gameState.statuses.splice(shieldIndex, 1);
+            helpers.addLog(`${targetCard.heroClass} 的圣盾破碎了！`, playerIndex);
+          }
+        }
+
         helpers.checkAndResetChanting(targetToken.id);
         helpers.addLog(`${attackerCard?.heroClass} 对 ${targetCard.heroClass} 造成了 ${damage} 点伤害`, playerIndex);
 
@@ -96,6 +105,271 @@ export class CombatLogic {
         }
       }
     }
+  }
+
+  /**
+   * 对怪物造成法术/环境伤害 (不会触发怪物的反击)
+   */
+  static async applySpellDamageToMonster(
+    gameState: GameState,
+    monster: any, // {q, r, level, ...}
+    damage: number,
+    sourceTokenId: string, // Damage source
+    playerIndex: number,
+    helpers: ActionHelpers,
+    skillName: string
+  ): Promise<boolean> {
+    const pos = hexToPixel(monster.q, monster.r);
+    
+    // 如果怪物已经被时间锁定了（刚死并倒计时），跳过
+    const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+    if (hasTimer) return false;
+
+    let damageCounter = gameState.counters.find(c => c.type === 'damage' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+    if (!damageCounter) {
+      damageCounter = { id: generateId(), type: 'damage', x: pos.x, y: pos.y, value: 0 };
+      gameState.counters.push(damageCounter);
+    }
+    
+    damageCounter.value += damage;
+    helpers.addLog(`【${skillName}】LV${monster.level}怪物 受到 ${damage} 点魔法伤害！(当前受伤: ${damageCounter.value})`, playerIndex);
+
+    // 触发魔法伤害Dealt事件 (如果有技能监听魔法伤害的话)
+    await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+      eventSourceId: sourceTokenId,
+      targetType: 'monster',
+      damage: damage,
+      isSpell: true
+    });
+
+    if (damageCounter.value >= monster.level) {
+      // 怪物死亡
+      gameState.counters = gameState.counters.filter(c => c.id !== damageCounter!.id);
+      
+      const monsterIndex = gameState.map?.monsters?.findIndex(m => m === monster);
+      const origin = (monsterIndex !== undefined && monsterIndex !== -1) 
+        ? gameState.mapConfig?.monsters?.[monsterIndex] 
+        : null;
+      
+      const respawnPos = origin ? hexToPixel(origin.q, origin.r) : pos;
+      gameState.counters.push({ id: generateId(), type: 'time', x: respawnPos.x, y: respawnPos.y, value: 0 });
+      
+      if (origin) {
+        monster.q = origin.q;
+        monster.r = origin.r;
+      }
+      
+      helpers.addLog(`【${skillName}】击杀了 LV${monster.level}怪物！`, playerIndex);
+
+      await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+        eventSourceId: sourceTokenId,
+        targetType: 'monster',
+        isSpell: true
+      });
+
+      // 寻找到导致伤害的卡牌去发奖励
+      const sourceToken = gameState.tokens.find((t: any) => t.id === sourceTokenId);
+      const sourceCard = sourceToken ? gameState.tableCards.find(c => c.id === sourceToken.boundToCardId) : null;
+      
+      if (sourceCard) {
+        const rewards = this.getCombatRewards(sourceCard, 'monster', true, monster.level);
+        if (rewards.exp > 0) this.addExp(sourceCard, rewards.exp, gameState);
+        if (rewards.gold > 0) this.addGold(playerIndex, rewards.gold, gameState);
+        
+        helpers.addLog(`奖励阶段: ${sourceCard.heroClass} 击败了 LV${monster.level}怪物，获得 ${rewards.exp} 经验和 ${rewards.gold} 金币`, playerIndex);
+        
+        if (rewards.reputation > 0) {
+          helpers.addReputation(playerIndex, rewards.reputation, `击杀LV${monster.level}怪物`);
+        }
+      }
+      return true; // killed
+    }
+    return false; // alive
+  }
+
+  /**
+   * 对英雄造成法术/环境伤害
+   */
+  static async applySpellDamageToHero(
+    gameState: GameState,
+    targetCard: TableCard,
+    targetToken: any,
+    damage: number,
+    sourceTokenId: string, // Damage source
+    playerIndex: number, // The player who caused the damage
+    helpers: ActionHelpers,
+    skillName: string
+  ): Promise<boolean> {
+    const ownerIndex = targetCard.y > 0 ? 0 : 1;
+    let actualDamage = damage;
+
+    // Apply shield reduction if present
+    if (gameState.statuses) {
+      const shieldIndex = gameState.statuses.findIndex(s => s.tokenId === targetToken.id && s.status === 'shield');
+      if (shieldIndex !== -1) {
+        actualDamage = Math.max(0, actualDamage - 1);
+        gameState.statuses.splice(shieldIndex, 1);
+        helpers.addLog(`${targetCard.heroClass} 的圣盾破碎了！吸收了伤害。`, playerIndex);
+      }
+    }
+
+    if (actualDamage <= 0) {
+      return false;
+    }
+
+    targetCard.damage = (targetCard.damage || 0) + actualDamage;
+    let damageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === targetCard.id);
+    if (!damageCounter) {
+      damageCounter = { id: generateId(), type: 'damage', x: targetToken.x, y: targetToken.y, value: 0, boundToCardId: targetCard.id };
+      gameState.counters.push(damageCounter);
+    }
+    damageCounter.value = targetCard.damage;
+
+    helpers.addLog(`【${skillName}】${targetCard.heroClass} 受到 ${actualDamage} 点魔法伤害！(当前受伤: ${damageCounter.value})`, playerIndex);
+
+    // 触发魔法受击/Dealt事件
+    await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
+      eventSourceId: targetToken.id,
+      attackerTokenId: sourceTokenId,
+      damage: actualDamage,
+      isSpell: true
+    });
+
+    await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+      eventSourceId: sourceTokenId,
+      sourceType: 'hero',
+      targetTokenId: targetToken.id,
+      damage: actualDamage,
+      isSpell: true
+    });
+
+    if (this.isHeroDead(targetCard, gameState)) {
+      helpers.addLog(`【${skillName}】击杀了 ${targetCard.heroClass}！`, playerIndex);
+      
+      await SkillEngine.triggerEvent('onKill', gameState, helpers, {
+        eventSourceId: sourceTokenId,
+        targetType: 'hero',
+        isSpell: true
+      });
+
+      const sourceToken = gameState.tokens.find((t: any) => t.id === sourceTokenId);
+      const sourceCard = sourceToken ? gameState.tableCards.find(c => c.id === sourceToken.boundToCardId) : null;
+      
+      if (sourceCard) {
+        const rewards = this.getCombatRewards(sourceCard, 'hero', true);
+        if (rewards.exp > 0) this.addExp(sourceCard, rewards.exp, gameState);
+        if (rewards.gold > 0) this.addGold(playerIndex, rewards.gold, gameState);
+        if (rewards.reputation > 0) {
+          helpers.addReputation(playerIndex, rewards.reputation, `击杀敌方英雄`);
+        }
+      }
+
+      await this.handleHeroDeath(targetCard, targetToken, ownerIndex, helpers as any, gameState);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 对冰柱等环境物造成法术/环境被波及伤害
+   */
+  static async applySpellDamageToTerrain(
+    gameState: GameState,
+    targetHex: { q: number; r: number },
+    damage: number,
+    sourceTokenId: string,
+    playerIndex: number,
+    helpers: ActionHelpers,
+    skillName: string
+  ): Promise<boolean> {
+    if (!gameState.icePillars) return false;
+    
+    const pillarIndex = gameState.icePillars.findIndex(p => p.q === targetHex.q && p.r === targetHex.r);
+    if (pillarIndex === -1) return false;
+    
+    let pillar = gameState.icePillars[pillarIndex];
+    pillar.hp -= damage;
+    
+    helpers.addLog(`【${skillName}】对冰柱造成了 ${damage} 点魔法伤害！`, playerIndex);
+    
+    if (pillar.hp <= 0) {
+      gameState.icePillars.splice(pillarIndex, 1);
+      helpers.addLog(`冰柱被击碎了！`, playerIndex);
+      
+      await SkillEngine.triggerEvent('onTerrainDestroyed', gameState, helpers, {
+        terrainType: 'ice_pillar',
+        terrainId: pillar.id,
+        q: pillar.q,
+        r: pillar.r,
+        ownerIndex: pillar.ownerIndex,
+        sourceTokenId: pillar.sourceTokenId,
+        cause: 'spell_damage'
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 主动攻击冰柱 (普通攻击)
+   */
+  static async resolveIcePillarAttack(
+    gameState: GameState,
+    playerIndex: number,
+    icePillarId: string,
+    helpers: ActionHelpers
+  ): Promise<void> {
+    if (!gameState.icePillars) return;
+    
+    const pillarIndex = gameState.icePillars.findIndex(p => p.id === icePillarId);
+    if (pillarIndex === -1) return;
+    
+    const pillar = gameState.icePillars[pillarIndex];
+    
+    const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+    if (!attackerToken) return;
+
+    const attackerCard = gameState.tableCards.find(c => c.id === attackerToken.boundToCardId);
+    if (!attackerCard) return;
+
+    helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 冰柱 发起了攻击`, playerIndex);
+
+    let baseAtk = SkillEngine.getModifiedStat(attackerToken.id, 'atk', gameState);
+    const enhancementCard = gameState.activeEnhancementCardId 
+      ? (gameState.playAreaCards.find(c => c.id === gameState.activeEnhancementCardId) || 
+         gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
+      : null;
+      
+    if (enhancementCard) baseAtk += 1;
+    if (gameState.selectedOption === 'turret_attack') baseAtk += 1;
+
+    helpers.addLog(`结算阶段: 攻击命中！造成 ${baseAtk} 点物理伤害`, playerIndex);
+    pillar.hp -= baseAtk;
+    
+    // Trigger onDamageDealt for normal attack
+    await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
+      eventSourceId: attackerToken.id,
+      sourceType: 'hero',
+      targetType: 'terrain',
+      damage: baseAtk
+    });
+
+    if (pillar.hp <= 0) {
+      gameState.icePillars.splice(pillarIndex, 1);
+      helpers.addLog(`冰柱被击碎了！`, playerIndex);
+      
+      await SkillEngine.triggerEvent('onTerrainDestroyed', gameState, helpers, {
+        terrainType: 'ice_pillar',
+        terrainId: pillar.id,
+        q: pillar.q,
+        r: pillar.r,
+        ownerIndex: pillar.ownerIndex,
+        sourceTokenId: pillar.sourceTokenId,
+        cause: 'attack'
+      });
+    }
+
+    // Since it's a structural target, no counter-attack from it.
   }
 
   /**
@@ -198,17 +472,29 @@ export class CombatLogic {
     } else {
       // Monster counter-attacks
       if (heroCard) {
-        heroCard.damage = (heroCard.damage || 0) + 1;
+        let monsterDamage = 1;
+        
+        // Apply shield reduction
+        if (gameState.statuses) {
+          const shieldIndex = gameState.statuses.findIndex(s => s.tokenId === token.id && s.status === 'shield');
+          if (shieldIndex !== -1) {
+            monsterDamage = Math.max(0, monsterDamage - 1);
+            gameState.statuses.splice(shieldIndex, 1);
+            helpers.addLog(`${heroCard.heroClass} 的圣盾破碎了！`, playerIndex);
+          }
+        }
+
+        heroCard.damage = (heroCard.damage || 0) + monsterDamage;
         const heroDamageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === heroCard.id);
         if (heroDamageCounter) heroDamageCounter.value = heroCard.damage;
         helpers.checkAndResetChanting(token.id);
-        helpers.addLog(`反击阶段: LV${monster.level}怪物 存活，触发反击！${heroCard.heroClass} 受到 1 点伤害`, playerIndex);
+        helpers.addLog(`反击阶段: LV${monster.level}怪物 存活，触发反击！${heroCard.heroClass} 受到 ${monsterDamage} 点伤害`, playerIndex);
         helpers.addLog(`结算阶段: ${heroCard.heroClass} 当前受伤计数器为 ${heroCard.damage}`, playerIndex);
-        gameState.notification = `攻击怪物！怪物反击造成 1 点伤害。 (Attacked monster! Monster counter-attacked for 1 damage.)`;
+        gameState.notification = `攻击怪物！怪物反击造成 ${monsterDamage} 点伤害。 (Attacked monster! Monster counter-attacked for ${monsterDamage} damage.)`;
         
         await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
           eventSourceId: token.id,
-          damage: 1,
+          damage: monsterDamage,
           sourceType: 'monster'
         });
 
@@ -216,7 +502,7 @@ export class CombatLogic {
         await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
           sourceType: 'monster',
           targetTokenId: token.id,
-          damage: 1
+          damage: monsterDamage
         });
 
         // Check hero death
@@ -308,6 +594,15 @@ export class CombatLogic {
         gameState.counters.push(damageCounter);
       }
       damageCounter.value = attackerCard.damage;
+
+      // Remove shield if present
+      if (gameState.statuses) {
+        const shieldIndex = gameState.statuses.findIndex(s => s.tokenId === attackerToken.id && s.status === 'shield');
+        if (shieldIndex !== -1) {
+          gameState.statuses.splice(shieldIndex, 1);
+          helpers.addLog(`${attackerCard.heroClass} 的圣盾破碎了！`, playerIndex);
+        }
+      }
 
       helpers.checkAndResetChanting(attackerToken.id);
       helpers.addLog(`${defenderCard.heroClass} 对 ${attackerCard.heroClass} 进行了反击，造成了 ${damage} 点伤害`, playerIndex);
@@ -447,6 +742,18 @@ export class CombatLogic {
 
     if (!attackerToken || !attackerCard || !defenderCard || !defenderToken) return false;
 
+    // Check if defender has 'hardened' skill
+    if (defenderToken.heroClass) {
+      const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);
+      if (heroData) {
+        const levelData = heroData.levels[defenderToken.lv.toString()];
+        if (levelData && levelData.skills) {
+          const hasHardened = levelData.skills.some(s => s.id === 'hardened');
+          if (hasHardened) return false;
+        }
+      }
+    }
+
     // 条件1：先吃原始攻击后不能死
     const incomingDamage = this.calculateDamage(attackerCard, defenderCard, false, gameState);
     const defenderMaxHp = this.getHeroMaxHp(defenderCard, gameState);
@@ -459,9 +766,8 @@ export class CombatLogic {
     const defenderRange = this.getHeroAttackRange(defenderCard, gameState);
     const defenderHex = pixelToHex(defenderToken.x, defenderToken.y);
     const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
-    const inRange = this.hexDistance(defenderHex, attackerHex) <= defenderRange;
-
-    return inRange;
+    
+    return isTargetInAttackRange(defenderHex, attackerHex, defenderRange, gameState);
   }
 
 
@@ -490,6 +796,15 @@ export class CombatLogic {
     if (options?.isEnhanced) {
       damage += 1;
     }
+
+    // Apply shield reduction
+    if (defender) {
+      const defenderToken = gameState.tokens.find(t => t.boundToCardId === defender.id);
+      if (defenderToken && gameState.statuses?.some(s => s.tokenId === defenderToken.id && s.status === 'shield')) {
+        damage = Math.max(0, damage - 1);
+      }
+    }
+
     return damage;
   }
 

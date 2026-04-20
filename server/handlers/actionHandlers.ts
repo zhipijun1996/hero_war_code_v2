@@ -179,6 +179,10 @@ export const createActionHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       await ActionEngine.moveTokenToCell(gameState, playerIndex, q, r, actionHelpers, socket);
     },
+    remove_ember_zone: async (socket: any, { q, r }: { q: number, r: number }) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      await ActionEngine.removeEmberZone(gameState, playerIndex, q, r, actionHelpers, socket);
+    },
     select_action_category: (socket: any, category: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.selectActionCategory(gameState, playerIndex, category, actionHelpers, socket);
@@ -274,6 +278,12 @@ export const createActionHandlers = (deps: any) => {
         return;
       }
 
+      if (gameState.phase === 'buy') {
+        ActionEngine.cancelBuySelection(gameState, playerIndex, actionHelpers);
+        broadcastState();
+        return;
+      }
+
       // Case 1: Undoing a card play
       if (gameState.lastPlayedCardId) {
         const cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === gameState.lastPlayedCardId);
@@ -310,6 +320,13 @@ export const createActionHandlers = (deps: any) => {
 
       // Case 2: Undoing action selection (no card played)
       if (gameState.phase === 'action_select_skill_target') {
+        if (gameState.skillQueue && gameState.skillQueue.length > 0) {
+          const currentItem = gameState.skillQueue[0];
+          if (currentItem.canUndo !== false) {
+            ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
+          }
+          return;
+        }
         gameState.phase = 'action_select_skill';
         gameState.activeSkillId = null;
         broadcastState();

@@ -146,6 +146,7 @@ export default function App() {
                   gameState={gameState} 
                   selectedHeroCardId={selectedHeroCardId}
                   setSelectedHeroCardId={setSelectedHeroCardId}
+                  myPlayerIndex={gameState.seats.indexOf(playerId)}
                 />
               </div>
             )}

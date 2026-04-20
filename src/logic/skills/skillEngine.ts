@@ -81,7 +81,7 @@ export class SkillEngine {
     if (!skillDef) return { success: false, reason: '找不到该技能。' };
     if (skillDef.kind !== 'active') return { success: false, reason: '该技能不是主动技能。' };
 
-    if (skillDef.canUse) {
+    if (skillDef.canUse && !context.ignoreConditions) {
       const canUseResult = skillDef.canUse(context);
       if (typeof canUseResult === 'boolean' && !canUseResult) {
         return { success: false, reason: '当前无法使用该技能。' };
@@ -98,9 +98,12 @@ export class SkillEngine {
   /**
    * 触发被动技能 (Trigger passive skills)
    * 遍历场上所有英雄的被动技能，如果匹配 eventName 就执行
+   * 如果有技能中断了当前流程（返回 result.data.interrupt === true），则返回 true
    */
-  static async triggerEvent(eventName: SkillTrigger, gameState: any, helpers: SkillHelpers, extraContext: any = {}): Promise<void> {
-    if (!gameState || !gameState.tokens) return;
+  static async triggerEvent(eventName: SkillTrigger, gameState: any, helpers: SkillHelpers, extraContext: any = {}): Promise<boolean> {
+    if (!gameState || !gameState.tokens) return false;
+
+    let interrupted = false;
 
     for (const token of gameState.tokens) {
       if (!token.heroClass) continue;
@@ -140,10 +143,15 @@ export class SkillEngine {
         }
 
         if (canUse && skillDef.execute) {
-          await skillDef.execute(context, helpers);
+          const result = await skillDef.execute(context, helpers);
+          if (result && result.data && result.data.interrupt) {
+            interrupted = true;
+          }
         }
       }
     }
+
+    return interrupted;
   }
 
   /**
@@ -203,6 +211,16 @@ export class SkillEngine {
 
     // 2. TODO: 遍历全场光环技能 (Auras)
     // 目前先只处理英雄自身的
+
+    // 3. 应用回合临时修饰 (Turn Modifiers)
+    if (gameState.turnModifiers) {
+      for (const mod of gameState.turnModifiers) {
+        if (mod.tokenId === tokenId && mod.stat === statType) {
+          if (mod.type === 'add') bonusAdd += mod.value;
+          if (mod.type === 'multiply') bonusMult *= mod.value;
+        }
+      }
+    }
 
     return (baseValue + bonusAdd) * bonusMult;
   }

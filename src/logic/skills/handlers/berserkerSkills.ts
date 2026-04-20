@@ -172,21 +172,15 @@ async function executeDashSkill(context: SkillContext, helpers: SkillHelpers, sk
     const targetCard = gameState.tableCards.find(c => c.id === targetToken?.boundToCardId);
     if (!targetCard) return { success: false, reason: '找不到目标卡牌。' };
 
-    gameState.selectedTargetId = targetCard.id;
-    gameState.phase = 'action_defend';
-    gameState.notification = null;
-    gameState.pendingDefenseCardId = null;
-    gameState.hasDefenseCard = false;
-    gameState.canCounterAttack = false;
-    gameState.lastPlayedCardId = null;
-    gameState.isCounterAttack = false;
-    gameState.isDefended = false;
-    gameState.attackInitiatorIndex = playerIndex;
-    gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-    gameState.reachableCells = [];
-    
-    helpers.addLog(`发起阶段: ${sourceCard.heroClass} 对 ${targetCard.heroClass} 发起了冲撞攻击！`, playerIndex);
-    helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
+    const { ActionEngine } = await import('../../action/actionEngine.ts');
+    await ActionEngine.initiateAttack(
+      gameState,
+      playerIndex,
+      sourceCard.id,
+      targetCard.id,
+      helpers as any,
+      null
+    );
 
     return { success: true };
   }

@@ -10,9 +10,10 @@ interface HandProps {
   gameState: GameState;
   selectedHeroCardId: string | null;
   setSelectedHeroCardId: (id: string | null) => void;
+  myPlayerIndex: number;
 }
 
-export default function Hand({ socket, hand, setZoomedCard, gameState, selectedHeroCardId, setSelectedHeroCardId }: HandProps) {
+export default function Hand({ socket, hand, setZoomedCard, gameState, selectedHeroCardId, setSelectedHeroCardId, myPlayerIndex }: HandProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -38,6 +39,10 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
   };
 
   const handleCardClick = (cardId: string) => {
+    if (gameState.phase === 'skill_interrupt_prompt' && (gameState.pendingSkillPrompt?.promptType === 'suppression_discard' || gameState.pendingSkillPrompt?.promptType === 'hardened_discard' || gameState.pendingSkillPrompt?.promptType === 'discard_card')) {
+      socket.emit('skill_interrupt_response', { discardedCardId: cardId, discardedCardIds: [cardId] });
+      return;
+    }
     if (gameState.phase === 'discard') {
       if (hand.length <= 5) { return; }
       socket.emit('discard_card', cardId);
@@ -62,9 +67,13 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
     setZoomedCard(card);
   };
 
+  const isDiscardPrompt = gameState.phase === 'skill_interrupt_prompt' && 
+                          (gameState.pendingSkillPrompt?.promptType === 'suppression_discard' || gameState.pendingSkillPrompt?.promptType === 'hardened_discard' || gameState.pendingSkillPrompt?.promptType === 'discard_card') &&
+                          gameState.pendingSkillPrompt?.playerIndex === myPlayerIndex;
+
   return (
     <div className="flex justify-center items-end pb-4 h-48 pointer-events-none">
-      <div className="flex gap-[-20px] pointer-events-auto">
+      <div className={`flex gap-[-20px] pointer-events-auto p-4 rounded-xl transition-all duration-500 ${isDiscardPrompt ? 'bg-red-900/40 ring-4 ring-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.3)]' : ''}`}>
         {hand && hand.map((card, index) => {
           const isHovered = hoveredIndex === index;
           const isSelected = card.id === selectedHeroCardId;

@@ -106,7 +106,8 @@ export type GamePhase =
   | 'action_select_skill'
   | 'action_select_skill_target'
   | 'action_play_defense'
-  | 'skill_interrupt_prompt';
+  | 'skill_interrupt_prompt'
+  | 'action_remove_ember_zone';
 
 export interface MovementStep {
   tokenId: string;
@@ -182,6 +183,22 @@ export interface HeroesDatabase {
   heroes: HeroData[];
 }
 
+export interface EmberZone {
+  q: number;
+  r: number;
+  ownerIndex: number;
+  sourceTokenId: string;
+}
+
+export interface IcePillar {
+  id: string;
+  q: number;
+  r: number;
+  hp: number;
+  ownerIndex: number;
+  sourceTokenId: string;
+}
+
 export interface GameState {
   map?: MapConfig;
   mapConfig?: MapConfig;
@@ -203,6 +220,16 @@ export interface GameState {
     action: Card[];
   };
   counters: Counter[];
+  emberZones?: EmberZone[];
+  icePillars?: IcePillar[];
+  pendingEmberZoneParams?: {
+    q: number;
+    r: number;
+    ownerIndex: number;
+    sourceTokenId: string;
+    originalPhase?: GamePhase;
+    originalActivePlayerIndex?: number;
+  };
   imageConfig?: ImageConfig;
   heroPlayed: Record<string, boolean>;
   heroPlayedCount: Record<string, number>;
@@ -252,9 +279,46 @@ export interface GameState {
   activeHeroTokenId?: string | null;
   isCounterAttack?: boolean;
   isDefended?: boolean;
+  suppressedTokensThisTurn?: string[];
+  turnModifiers?: {
+    tokenId: string;
+    stat: 'hp' | 'ar' | 'mv' | 'atk';
+    value: number;
+    type: 'add' | 'multiply';
+    sourceSkillId: string;
+  }[];
+  statuses?: {
+    tokenId: string;
+    status: 'taunt' | 'stealth' | 'frozen' | 'scorch' | 'shield' | 'poisoned_move';
+    sourceSkillId: string;
+    sourceTokenId?: string;
+  }[];
   pendingSkillPrompt?: {
     playerIndex: number;
     promptType: string;
     context: any;
   } | null;
+  usedArrowRainThisTurn?: string[];
+  arrowRainMainTargetId?: string;
+  pendingFollowUp?: boolean;
+  commanderTokenId?: string | null;
+  isFollowUpAction?: boolean;
+  usedDispatchThisTurn?: string[];
+  skillQueue?: SkillQueueItem[];
+  activeSkillState?: {
+    step: number;
+    target1Id?: string;
+    target2Id?: string;
+  } | null;
+}
+
+export interface SkillQueueItem {
+  skillId: string;
+  sourceTokenId: string;
+  playerIndex: number;
+  presetTargetId?: string | null;
+  presetTargetHex?: { q: number, r: number } | null;
+  ignoreConditions?: boolean;
+  status?: 'pending' | 'executing';
+  canUndo?: boolean;
 }

@@ -28,10 +28,67 @@ export interface ActionHelpers {
   checkAllTokensUsed: () => void;
   updateAvailableActions: (playerIndex: number) => void;
   discardOpponentCard: (playerIndex: number) => void;
-  promptPlayer?: (playerIndex: number, promptType: string, context: any) => Promise<boolean>;
+  promptPlayer?: (playerIndex: number, promptType: string, context: any) => Promise<any>;
 }
 
 export class ActionEngine {
+  static async initiateAttack(
+    gameState: GameState,
+    playerIndex: number,
+    attackerCardId: string,
+    targetCardId: string,
+    helpers: ActionHelpers,
+    socket: any
+  ): Promise<void> {
+    const attackerCard = gameState.tableCards.find(c => c.id === attackerCardId);
+    const targetCard = gameState.tableCards.find(c => c.id === targetCardId);
+    
+    if (attackerCard && targetCard) {
+      helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 ${targetCard.heroClass} 发起了攻击`, playerIndex);
+    }
+
+    const targetToken = gameState.tokens.find(t => t.boundToCardId === targetCardId);
+    gameState.selectedTargetId = targetToken ? targetToken.boundToCardId || null : targetCardId;
+
+    // Trigger onBeforeAttack hook
+    const { SkillEngine } = await import('../skills/skillEngine.ts');
+    const interrupted = await SkillEngine.triggerEvent('onBeforeAttack', gameState, helpers as any, {
+      attackerTokenId: gameState.selectedTokenId,
+      defenderTokenId: targetToken?.id
+    });
+
+    if (interrupted) {
+      // The skill engine has taken over (e.g., prompting for Guardian Swap)
+      // We save the pending attack info so it can be resumed later
+      if (gameState.pendingSkillPrompt) {
+        gameState.pendingSkillPrompt.context = {
+          ...gameState.pendingSkillPrompt.context,
+          pendingAction: 'attack',
+          attackerCardId,
+          targetCardId
+        };
+      }
+      helpers.broadcastState();
+      helpers.checkBotTurn();
+      return;
+    }
+
+    gameState.phase = 'action_defend';
+    gameState.notification = null;
+    gameState.lastPlayedCardId = null;
+    gameState.pendingDefenseCardId = null;
+    gameState.hasDefenseCard = false;
+    gameState.canCounterAttack = false;
+    gameState.isCounterAttack = false;
+    gameState.isDefended = false;
+    gameState.attackInitiatorIndex = playerIndex;
+    gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
+    gameState.reachableCells = [];
+    helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
+    helpers.broadcastState();
+    helpers.checkBotTurn();
+  }
+
   /**
    * 处理移动逻辑 (Move logic)
    */
@@ -64,6 +121,27 @@ export class ActionEngine {
           console.log(`[moveTokenToCell] dist: ${dist}, remainingMv: ${gameState.remainingMv}`);
           
           if (dist <= gameState.remainingMv!) {
+            // Trigger onBeforeMove hook
+            const { SkillEngine } = await import('../skills/skillEngine.ts');
+            const interrupted = await SkillEngine.triggerEvent('onBeforeMove', gameState, helpers as any, {
+              movingTokenId: token.id,
+              targetHex: { q, r },
+              dist
+            });
+
+            if (interrupted) {
+              if (gameState.pendingSkillPrompt) {
+                gameState.pendingSkillPrompt.context = {
+                  ...gameState.pendingSkillPrompt.context,
+                  pendingAction: 'move',
+                  targetHex: { q, r }
+                };
+              }
+              helpers.broadcastState();
+              helpers.checkBotTurn();
+              return;
+            }
+
             if (!gameState.movementHistory) gameState.movementHistory = [];
             
             // Check if leaving a magic circle while chanting
@@ -228,25 +306,16 @@ export class ActionEngine {
             const heroCard = gameState.tableCards.find(c => c.id === token.boundToCardId);
             
             if (heroCard && targetCard) {
-              helpers.addLog(`发起阶段: ${heroCard.heroClass} 使用炮台对 ${targetCard.heroClass} 发起了攻击`, playerIndex);
+              await ActionEngine.initiateAttack(
+                gameState,
+                playerIndex,
+                heroCard.id,
+                targetCard.id,
+                helpers,
+                socket
+              );
+              return;
             }
-
-            gameState.selectedTargetId = targetToken.boundToCardId || null;
-            gameState.phase = 'action_defend';
-            gameState.notification = null;
-            gameState.lastPlayedCardId = null;
-            gameState.pendingDefenseCardId = null;
-            gameState.hasDefenseCard = false;
-            gameState.canCounterAttack = false;
-            gameState.isCounterAttack = false;
-            gameState.isDefended = false;
-            gameState.attackInitiatorIndex = playerIndex;
-            gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-            gameState.reachableCells = [];
-            helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
-            helpers.broadcastState();
-            helpers.checkBotTurn();
-            return;
           }
 
           // Finish action
@@ -314,25 +383,16 @@ export class ActionEngine {
             const heroCard = gameState.tableCards.find(c => c.id === token.boundToCardId);
             
             if (heroCard && targetCard) {
-              helpers.addLog(`发起阶段: ${heroCard.heroClass} 对 ${targetCard.heroClass} 发起了攻击`, playerIndex);
+              await ActionEngine.initiateAttack(
+                gameState,
+                playerIndex,
+                heroCard.id,
+                targetCard.id,
+                helpers,
+                socket
+              );
+              return;
             }
-
-            gameState.selectedTargetId = targetToken.boundToCardId || null;
-            gameState.phase = 'action_defend';
-            gameState.notification = null;
-            gameState.lastPlayedCardId = null;
-            gameState.pendingDefenseCardId = null;
-            gameState.hasDefenseCard = false;
-            gameState.canCounterAttack = false;
-            gameState.isCounterAttack = false;
-            gameState.isDefended = false;
-            gameState.attackInitiatorIndex = playerIndex;
-            gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-            gameState.reachableCells = [];
-            helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
-            helpers.broadcastState();
-            helpers.checkBotTurn();
-            return;
           }
         }
       }
@@ -403,8 +463,12 @@ export class ActionEngine {
       'action_select_target'
     ];
     
-    if (subPhases.includes(gameState.phase)) {
+    if (subPhases.includes(gameState.phase) || gameState.phase === 'action_select_skill_target') {
       // Reset action-specific state
+      gameState.skillQueue = [];
+      gameState.isFollowUpAction = false;
+      gameState.activeSkillState = null;
+      
       // Restore hero positions if they moved during this action
       if (gameState.movementHistory && gameState.movementHistory.length > 0) {
         // Restore in reverse order
@@ -456,6 +520,8 @@ export class ActionEngine {
       gameState.selectedOption = null;
       gameState.reachableCells = [];
       gameState.activeActionType = null;
+      gameState.skillQueue = [];
+      gameState.isFollowUpAction = false;
       gameState.notification = null;
       
       gameState.phase = 'action_options';
@@ -468,6 +534,12 @@ export class ActionEngine {
     gameState.activeEnhancementCardId = null;
     gameState.phase = 'action_play';
     gameState.notification = null;
+    
+    // 清除瞄准等临时 buff
+    if (gameState.turnModifiers) {
+      gameState.turnModifiers = gameState.turnModifiers.filter(mod => mod.sourceSkillId !== 'archer_aim');
+    }
+
     helpers.broadcastState();
   }
 
@@ -625,6 +697,23 @@ export class ActionEngine {
     helpers.broadcastState();
   }
 
+  static cancelBuySelection(gameState, playerIndex, helpers) {
+    if (playerIndex !== gameState.activePlayerIndex) return;
+
+    gameState.selectedOption = null;
+    gameState.selectedTargetId = null;
+    gameState.notification = null;
+
+    if (gameState.buySource === 'action_common') {
+      gameState.phase = 'action_common';
+    } else {
+      gameState.phase = 'shop';
+    }
+
+    gameState.buySource = null;
+    helpers.broadcastState();
+  }
+
   static startHireSelection(
     gameState: GameState,
     source: 'shop' | 'action_common',
@@ -683,7 +772,7 @@ export class ActionEngine {
       helpers.checkBotTurn();
     } else if (gameState.phase === 'action_select_substitute') {
       gameState.activeHeroTokenId = heroTokenId;
-      gameState.phase = 'action_select_action';
+      gameState.phase = 'action_options';
       gameState.notification = null;
       helpers.broadcastState();
       helpers.checkBotTurn();
@@ -840,15 +929,6 @@ export class ActionEngine {
       
       gameState.selectedTargetId = targetId;
 
-      if (gameState.phase === 'action_select_skill_target') {
-        const skillId = gameState.activeSkillId;
-        if (!skillId) return;
-        
-        // Call useSkill with the selected target
-        await this.useSkill(gameState, playerIndex, { skillId, targetTokenId: targetId }, helpers, socket);
-        return;
-      }
-
       if (gameState.activeActionType === 'fire') {
         const heroToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
         if (!heroToken) return;
@@ -906,10 +986,11 @@ export class ActionEngine {
         
         const targetCard = gameState.tableCards.find(c => c.id === targetId);
         const monster = gameState.map?.monsters?.find(m => `monster_${m.q}_${m.r}` === targetId);
-        const attackerToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
         const isCastle = targetId.startsWith('castle_');
+        const isIcePillar = targetId.startsWith('ice_pillar_');
+        const attackerToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
         
-        if (!targetCard && !monster && !isCastle) {
+        if (!targetCard && !monster && !isCastle && !isIcePillar) {
           console.error(`select_target: Target not found. targetId=${targetId}`);
           socket.emit('error_message', `目标未找到 (Target not found).`);
           return;
@@ -921,14 +1002,13 @@ export class ActionEngine {
         }
 
         const attackerCard = gameState.tableCards.find(c => c.id === attackerToken.boundToCardId);
-        const attackerHeroData = heroesDatabase?.heroes?.find((h: any) => h.name === attackerCard?.heroClass);
-        const attackerLevelData = attackerHeroData?.levels?.[attackerCard?.level || 1];
         
         const enhancementCard = gameState.activeEnhancementCardId 
           ? (gameState.playAreaCards.find(c => c.id === gameState.activeEnhancementCardId) || 
              gameState.discardPiles.action.find(c => c.id === gameState.activeEnhancementCardId))
           : null;
-        let ar = attackerLevelData?.ar || 1;
+        
+        let ar = SkillEngine.getModifiedStat(attackerToken.id, 'ar', gameState);
         ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
         if (gameState.selectedOption === 'turret_attack') ar += 1;
 
@@ -939,6 +1019,14 @@ export class ActionEngine {
         } else if (isCastle) {
           const parts = targetId.split('_');
           targetHex = { q: parseInt(parts[1]), r: parseInt(parts[2]) };
+        } else if (isIcePillar) {
+          const pillarId = targetId.replace('ice_pillar_', '');
+          const pillar = gameState.icePillars?.find(p => p.id === pillarId);
+          if (!pillar) {
+            socket.emit('error_message', `冰柱未找到 (Ice pillar not found).`);
+            return;
+          }
+          targetHex = { q: pillar.q, r: pillar.r };
         } else {
           const targetToken = gameState.tokens.find(t => t.boundToCardId === targetCard!.id);
           targetHex = targetToken ? pixelToHex(targetToken.x, targetToken.y) : pixelToHex(targetCard!.x, targetCard!.y);
@@ -954,6 +1042,13 @@ export class ActionEngine {
             helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 怪物 LV${monster.level} 发起了攻击`, playerIndex);
           }
           await CombatLogic.resolveMonsterAttack(gameState, playerIndex, monster.q, monster.r, helpers);
+          await this.finishAction(gameState, playerIndex, helpers, socket);
+          return;
+        }
+
+        if (isIcePillar) {
+          const pillarId = targetId.replace('ice_pillar_', '');
+          await CombatLogic.resolveIcePillarAttack(gameState, playerIndex, pillarId, helpers);
           await this.finishAction(gameState, playerIndex, helpers, socket);
           return;
         }
@@ -990,27 +1085,17 @@ export class ActionEngine {
           return;
         }
         
-        if (attackerCard) {
-          helpers.addLog(`发起阶段: ${attackerCard.heroClass} 对 ${targetCard!.heroClass} 发起了攻击`, playerIndex);
+        if (attackerCard && targetCard) {
+          await ActionEngine.initiateAttack(
+            gameState,
+            playerIndex,
+            attackerCard.id,
+            targetCard.id,
+            helpers,
+            socket
+          );
+          return;
         }
-
-        const targetToken = gameState.tokens.find(t => t.boundToCardId === targetCard!.id);
-        gameState.selectedTargetId = targetToken ? targetToken.boundToCardId || null : targetCard!.id;
-        gameState.phase = 'action_defend';
-        gameState.notification = null;
-        gameState.pendingDefenseCardId = null;
-        gameState.hasDefenseCard = false;
-        gameState.canCounterAttack = false;
-        gameState.lastPlayedCardId = null;
-        gameState.isCounterAttack = false;
-        gameState.isDefended = false;
-        gameState.attackInitiatorIndex = playerIndex;
-        gameState.activePlayerIndex = 1 - gameState.activePlayerIndex;
-        gameState.reachableCells = [];
-        helpers.addLog(`请玩家${gameState.activePlayerIndex + 1}打出防御卡，或选择Pass`, gameState.activePlayerIndex);
-        helpers.broadcastState();
-        helpers.checkBotTurn();
-        return;
       }
       
       helpers.broadcastState();
@@ -1133,6 +1218,80 @@ export class ActionEngine {
   }
 
   /**
+   * 处理技能队列 (Process skill queue)
+   */
+  static async processSkillQueue(
+    gameState: GameState,
+    helpers: ActionHelpers,
+    socket: any
+  ): Promise<void> {
+    if (!gameState.skillQueue || gameState.skillQueue.length === 0) {
+      return;
+    }
+
+    const item = gameState.skillQueue[0];
+    item.status = 'executing';
+    const { skillId, sourceTokenId, playerIndex, presetTargetId, presetTargetHex, ignoreConditions } = item;
+
+    // 1. 切换当前行动英雄和玩家
+    gameState.activeHeroTokenId = sourceTokenId;
+    gameState.selectedTokenId = sourceTokenId;
+    gameState.activePlayerIndex = playerIndex;
+    gameState.phase = 'action_play'; // 重置阶段，确保新技能能正确开始
+
+    // 2. 准备技能上下文
+    const context = {
+      gameState,
+      playerIndex,
+      sourceTokenId,
+      skillId,
+      targetTokenId: presetTargetId,
+      targetHex: presetTargetHex,
+      ignoreConditions
+    };
+
+    // 检查是否有合法目标（如果技能需要目标）
+    const skillDef = skillRegistry.getSkill(skillId);
+    if (skillDef && skillDef.targetType && skillDef.targetType !== 'none' && !presetTargetId && !presetTargetHex) {
+      if (skillDef.getValidTargets) {
+        const targets = skillDef.getValidTargets(context as any);
+        if (targets.length === 0) {
+          helpers.addLog(`【技能队列】${sourceTokenId} 无法发动 【${skillDef.name}】，因为没有合法目标。`, playerIndex);
+          // 自动跳过当前任务并推进队列
+          await this.finishAction(gameState, playerIndex, helpers, socket);
+          return;
+        }
+
+        // 进入目标选择阶段
+        gameState.phase = 'action_select_skill_target';
+        gameState.activeSkillId = skillId;
+        
+        const { pixelToHex } = await import('../../shared/utils/hexUtils.ts');
+        gameState.reachableCells = targets.map(target => {
+          if (typeof target === 'string') {
+            if (target.startsWith('monster_')) {
+              const parts = target.split('_');
+              return { q: parseInt(parts[1]), r: parseInt(parts[2]) };
+            }
+            const token = gameState.tokens.find(t => t.id === target);
+            if (token) return pixelToHex(token.x, token.y);
+          } else if (typeof target === 'object' && 'q' in target) {
+            return target;
+          }
+          return null;
+        }).filter(h => h !== null) as { q: number, r: number }[];
+        
+        helpers.addLog(`请选择 【${skillDef.name}】 的目标`, playerIndex);
+        helpers.broadcastState();
+        return; // 暂停队列执行，等待玩家选择目标
+      }
+    }
+
+    // 3. 执行技能
+    await this.useSkill(gameState, playerIndex, context, helpers, socket);
+  }
+
+  /**
    * 完成行动 (Finish action)
    */
   static async finishAction(
@@ -1141,8 +1300,35 @@ export class ActionEngine {
     helpers: ActionHelpers,
     socket: any
   ): Promise<void> {
+
+    // 检查是否有挂起的交互
+    if (gameState.phase === 'action_remove_ember_zone') {
+        helpers.broadcastState();
+        return; // 短路，等待玩家操作
+    }
+
     // 触发战斗结算后的技能回调
     await SkillEngine.onCombatResolved(gameState, {}, helpers);
+
+    // 清除瞄准等临时 buff
+    if (gameState.turnModifiers) {
+      gameState.turnModifiers = gameState.turnModifiers.filter(mod => mod.sourceSkillId !== 'archer_aim');
+    }
+
+    // --- 技能队列处理逻辑 ---
+    if (gameState.skillQueue && gameState.skillQueue.length > 0) {
+      if (gameState.skillQueue[0].status === 'executing') {
+        // 弹出刚刚完成的任务
+        gameState.skillQueue.shift();
+      }
+
+      if (gameState.skillQueue.length > 0) {
+        // 如果队列中还有任务，继续执行
+        await this.processSkillQueue(gameState, helpers, socket);
+        return;
+      }
+    }
+    // ----------------------
 
     if (gameState.phase === 'action_resolve' && playerIndex === gameState.activePlayerIndex) {
       if (gameState.selectedOption === 'seize') {
@@ -1183,12 +1369,28 @@ export class ActionEngine {
       }
     }
 
+    // Handle Commander's Follow-up skill
+    if (gameState.pendingFollowUp && gameState.commanderTokenId) {
+      const commanderToken = gameState.tokens.find(t => t.id === gameState.commanderTokenId);
+      if (commanderToken) {
+        gameState.activeHeroTokenId = gameState.commanderTokenId;
+        gameState.phase = 'action_select_action';
+        gameState.isFollowUpAction = true;
+        gameState.pendingFollowUp = false;
+        gameState.commanderTokenId = null;
+        gameState.notification = '指挥官发动【跟进】：请选择移动或攻击。';
+        helpers.broadcastState();
+        return;
+      }
+    }
+
     const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
     if (token) token.used = true;
 
     gameState.activeActionTokenId = null;
     gameState.activeActionType = null;
     gameState.activeEnhancementCardId = null;
+    gameState.isFollowUpAction = false;
     gameState.phase = 'action_play';
     gameState.selectedOption = null;
     gameState.selectedTargetId = null;
@@ -1210,6 +1412,53 @@ export class ActionEngine {
     gameState.attackInitiatorIndex = null;
     helpers.broadcastState();
     helpers.checkBotTurn();
+  }
+
+  static async removeEmberZone(
+    gameState: GameState,
+    playerIndex: number,
+    q: number,
+    r: number,
+    helpers: ActionHelpers,
+    socket: any
+  ): Promise<void> {
+    if (gameState.phase !== 'action_remove_ember_zone') return;
+    if (playerIndex !== gameState.activePlayerIndex) {
+      socket.emit('error_message', '当前不是你的操作阶段');
+      return;
+    }
+
+    const index = gameState.emberZones?.findIndex(e => e.q === q && e.r === r);
+    if (index === undefined || index === -1) {
+      socket.emit('error_message', '选择的格子上没有余烬区');
+      return;
+    }
+
+    // Remove the selected ember zone
+    gameState.emberZones!.splice(index, 1);
+    helpers.addLog(`移除余烬区 (${q}, ${r})`, playerIndex);
+
+    // After removing, check if we still exceed the limit (in case of double placement)
+    if (gameState.emberZones!.length > 5) {
+      helpers.addLog(`仍然超出上限，需继续移除余烬区`, playerIndex);
+      helpers.broadcastState();
+      return;
+    }
+
+    // Restore phase and active player
+    const pendingParams = gameState.pendingEmberZoneParams;
+    if (pendingParams) {
+      gameState.phase = pendingParams.originalPhase || 'action_play';
+      gameState.activePlayerIndex = pendingParams.originalActivePlayerIndex || 1 - playerIndex;
+      gameState.pendingEmberZoneParams = undefined;
+      
+      // Let the system continue finish action if needed
+      await this.finishAction(gameState, playerIndex, helpers, socket);
+    } else {
+      gameState.phase = 'action_play';
+      helpers.broadcastState();
+      helpers.checkBotTurn();
+    }
   }
 
   /**
@@ -1422,6 +1671,12 @@ export class ActionEngine {
     });
     gameState.round += 1;
     gameState.roundActionCounts = {};
+    gameState.suppressedTokensThisTurn = [];
+    gameState.usedDispatchThisTurn = [];
+    gameState.usedArrowRainThisTurn = [];
+    gameState.isFollowUpAction = false;
+    gameState.turnModifiers = [];
+    gameState.statuses = [];
     gameState.phase = 'action_play';
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     gameState.consecutivePasses = 0;
@@ -1441,12 +1696,127 @@ export class ActionEngine {
     helpers.checkBotTurn();
   }
 
+  static async addEmberZone(
+    gameState: GameState,
+    q: number,
+    r: number,
+    ownerIndex: number,
+    sourceTokenId: string,
+    helpers: ActionHelpers
+  ): Promise<{ needRemoval: boolean }> {
+    if (!gameState.emberZones) {
+      gameState.emberZones = [];
+    }
+
+    // Check if the hex already has an ember zone, if so, we can just replace it or do nothing.
+    // For now we assume placing on an existing one just refreshes it or we ignore.
+    const existingIndex = gameState.emberZones.findIndex(e => e.q === q && e.r === r);
+    if (existingIndex !== -1) {
+      // Refresh it or do nothing, let's just do nothing and return.
+      return { needRemoval: false };
+    }
+
+    gameState.emberZones.push({ q, r, ownerIndex, sourceTokenId });
+
+    if (gameState.emberZones.length > 5) {
+      if (gameState.phase !== 'action_remove_ember_zone') {
+        // Need to prompt the user to remove one
+        helpers.addLog(`余烬区数量已达上限(5个)！请移除一个已有的余烬区。`, ownerIndex);
+        
+        gameState.pendingEmberZoneParams = {
+          q, r, ownerIndex, sourceTokenId,
+          originalPhase: gameState.phase,
+          originalActivePlayerIndex: gameState.activePlayerIndex
+        };
+        
+        gameState.phase = 'action_remove_ember_zone';
+        gameState.activePlayerIndex = ownerIndex;
+      }
+      
+      // We don't broadcast here because we want the calling skill to finish its execution 
+      // and let `finishAction` or whatever handles the queue eventually hit this phase and block.
+      // But we need to return a flag so the caller knows to pause.
+      return { needRemoval: true };
+    }
+
+    return { needRemoval: false };
+  }
+
   static async resolveEndPhase(
     gameState: GameState,
     helpers: ActionHelpers
   ): Promise<void> {
     // 触发回合结束事件
     await SkillEngine.triggerEvent('onTurnEnd', gameState, helpers);
+
+    // 结算余烬区
+    if (gameState.emberZones && gameState.emberZones.length > 0) {
+      const remainingEmberZones: any[] = [];
+      for (const ember of gameState.emberZones) {
+        let triggered = false;
+        const pos = hexToPixel(ember.q, ember.r);
+
+        // 检查所有英雄（包括敌我）
+        const heroTokens = gameState.tokens.filter(t => {
+          if (!t.heroClass) return false;
+          return Math.abs(t.x - pos.x) < 10 && Math.abs(t.y - pos.y) < 10;
+        });
+
+        for (const targetToken of heroTokens) {
+          const targetCard = gameState.tableCards.find(c => c.id === targetToken.boundToCardId);
+          if (targetCard) {
+            triggered = true;
+            
+            const { CombatLogic } = await import('../combat/combatLogic.ts');
+            await CombatLogic.applySpellDamageToHero(
+              gameState,
+              targetCard,
+              targetToken,
+              1, // 1点灼烧伤害
+              ember.sourceTokenId,
+              ember.ownerIndex,
+              helpers as any,
+              '余烬区'
+            );
+          }
+        }
+
+        // 检查怪物
+        const monster = gameState.map?.monsters?.find(m => m.q === ember.q && m.r === ember.r);
+        if (monster) {
+          const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
+          if (!hasTimer) {
+            triggered = true;
+            
+            // 使用 applySpellDamageToMonster 直接造成法术伤害，不触发怪物反击，能正确处理经验和金币
+            const { CombatLogic } = await import('../combat/combatLogic.ts');
+            await CombatLogic.applySpellDamageToMonster(
+              gameState, 
+              monster, 
+              1,  // 1点伤害 
+              ember.sourceTokenId, 
+              ember.ownerIndex, 
+              helpers as any, 
+              '余烬区'
+            );
+          }
+        }
+
+        if (!triggered) {
+          remainingEmberZones.push(ember);
+        } else {
+          helpers.addLog(`【余烬区】余烬消散。`, ember.ownerIndex);
+        }
+      }
+      gameState.emberZones = remainingEmberZones;
+    }
+
+    gameState.suppressedTokensThisTurn = [];
+    gameState.usedDispatchThisTurn = [];
+    gameState.usedArrowRainThisTurn = [];
+    gameState.isFollowUpAction = false;
+    gameState.turnModifiers = [];
+    gameState.statuses = [];
 
     gameState.actionTokens.forEach(t => {
       t.used = false;
@@ -1472,7 +1842,7 @@ export class ActionEngine {
   static async useSkill(
     gameState: GameState,
     playerIndex: number,
-    payload: { skillId: string, targetTokenId?: string, targetHex?: { q: number, r: number } },
+    payload: { skillId: string, targetTokenId?: string, targetHex?: { q: number, r: number }, ignoreConditions?: boolean },
     helpers: ActionHelpers,
     socket: any
   ): Promise<void> {
@@ -1496,12 +1866,21 @@ export class ActionEngine {
       return;
     }
 
+    let ignoreConditions = payload.ignoreConditions;
+    if (gameState.skillQueue && gameState.skillQueue.length > 0) {
+      const currentQueueItem = gameState.skillQueue[0];
+      if (currentQueueItem.skillId === payload.skillId && currentQueueItem.sourceTokenId === sourceTokenId) {
+        ignoreConditions = currentQueueItem.ignoreConditions;
+      }
+    }
+
     const context: SkillContext = {
       gameState,
       playerIndex,
       sourceTokenId,
       targetTokenId: payload.targetTokenId,
-      targetHex: payload.targetHex
+      targetHex: payload.targetHex,
+      ignoreConditions
     };
 
     console.log(`[ActionEngine.useSkill] Executing skill ${payload.skillId}`);
@@ -1509,15 +1888,32 @@ export class ActionEngine {
     const result = await SkillEngine.useActiveSkill(payload.skillId, context, helpers);
     console.log(`[ActionEngine.useSkill] Execution result: ${JSON.stringify(result)}`);
 
+    if (result.inProgress) {
+      helpers.broadcastState();
+      helpers.checkBotTurn();
+      return;
+    }
+
     if (result.success) {
       helpers.addLog(`玩家${playerIndex + 1} 使用了技能【${skill.name}】`, playerIndex);
       
       // Clear skill selection state
       gameState.activeSkillId = null;
-      gameState.reachableCells = [];
       
-      // If the skill initiated combat, don't finish action yet
-      if (gameState.phase === 'action_defend' || gameState.phase === 'action_resolve_attack') {
+      // Only clear reachable cells if we're not in a phase that needs them
+      const interactivePhases = [
+        'action_defend',
+        'action_resolve_attack',
+        'action_resolve',
+        'action_select_substitute'
+      ];
+      
+      if (!interactivePhases.includes(gameState.phase)) {
+        gameState.reachableCells = [];
+      }
+      
+      // If the skill initiated combat or needs target selection, don't finish action yet
+      if (interactivePhases.includes(gameState.phase)) {
         helpers.broadcastState();
         helpers.checkBotTurn();
         return;
@@ -1527,11 +1923,18 @@ export class ActionEngine {
       await this.finishAction(gameState, playerIndex, helpers, socket);
     } else {
       helpers.addLog(`[系统] 技能使用失败: ${result.reason || '未知原因'}`, playerIndex);
-      // Return to skill selection phase if failed
-      gameState.phase = 'action_select_skill';
-      gameState.activeSkillId = null;
-      gameState.reachableCells = [];
-      helpers.broadcastState();
+      
+      if (gameState.skillQueue && gameState.skillQueue.length > 0) {
+        // Abort the queue and finish the action
+        gameState.skillQueue = [];
+        await this.finishAction(gameState, playerIndex, helpers, socket);
+      } else {
+        // Return to skill selection phase if failed
+        gameState.phase = 'action_select_skill';
+        gameState.activeSkillId = null;
+        gameState.reachableCells = [];
+        helpers.broadcastState();
+      }
     }
   }
 

@@ -26,6 +26,7 @@ export class HeroEngine {
       id: tokenId,
       x: castlePos.x,
       y: castlePos.y,
+      type: 'hero',
       image: getHeroTokenImage(card.heroClass!),
       heroClass: card.heroClass,
       label: `${card.heroClass} Lv${card.level || 1}`,

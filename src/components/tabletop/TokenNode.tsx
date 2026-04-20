@@ -15,6 +15,7 @@ interface TokenNodeProps {
   lastEvolvedId?: string | null;
   onHexClick?: (q: number, r: number) => void;
   isMyToken?: boolean;
+  hasShield?: boolean;
 }
 
 export const TokenNode: React.FC<TokenNodeProps> = ({
@@ -25,7 +26,8 @@ export const TokenNode: React.FC<TokenNodeProps> = ({
   draggable,
   lastEvolvedId,
   onHexClick,
-  isMyToken
+  isMyToken,
+  hasShield
 }) => {
   const [image] = useImage(token.image || 'https://image.pollinations.ai/prompt/A%20glowing%20golden%20star%20token%20fantasy%20anime%20art?nologo=true');
   const groupRef = useRef<any>(null);
@@ -107,6 +109,9 @@ export const TokenNode: React.FC<TokenNodeProps> = ({
       />
       {lastEvolvedId === token.boundToCardId && (
         <Circle radius={40} stroke="#fbbf24" strokeWidth={3} dash={[5, 5]} opacity={0.8} />
+      )}
+      {hasShield && (
+        <Circle radius={35} stroke="#60a5fa" strokeWidth={4} opacity={0.8} shadowColor="#3b82f6" shadowBlur={15} />
       )}
       {image && (
         <Circle radius={28} fillPatternImage={image} fillPatternScale={{ x: 56 / image.width, y: 56 / image.height }} fillPatternOffset={{ x: image.width / 2, y: image.height / 2 }} />

@@ -8,9 +8,11 @@ export type SkillTarget = { q: number; r: number } | string;
 export type SkillTrigger = 
   | 'onTurnStart' 
   | 'onTurnEnd' 
+  | 'onBeforeAttack'
   | 'onAttackStart' 
   | 'onDamageTaken' 
   | 'onHeroDeath' 
+  | 'onBeforeMove'
   | 'onMoveEnd'
   | 'onDefended'
   | 'onCounterAttackStart'
@@ -18,7 +20,9 @@ export type SkillTrigger =
   | 'onKill'
   | 'onHeal'
   | 'onHeroRevive'
-  | 'onKnockbackSuccess';
+  | 'onKnockbackSuccess'
+  | 'onCommandUsed'
+  | 'onTerrainDestroyed';
 
 export interface SkillContext {
   gameState: GameState;
@@ -26,13 +30,14 @@ export interface SkillContext {
   sourceTokenId: string;
   targetTokenId?: string;
   targetHex?: { q: number; r: number };
+  ignoreConditions?: boolean;
   [key: string]: any; // For extra contextual data
 }
 
 export interface SkillHelpers {
   addLog: (message: string, playerIndex?: number) => void;
   broadcastState: () => void;
-  promptPlayer?: (playerIndex: number, promptType: string, context: any) => Promise<boolean>;
+  promptPlayer?: (playerIndex: number, promptType: string, context: any) => Promise<any>;
   // Add more helpers as needed later
 }
 
@@ -40,6 +45,7 @@ export interface SkillResult {
   success: boolean;
   reason?: string;
   data?: any;
+  inProgress?: boolean;
 }
 
 export interface SkillUseOption {

@@ -3,7 +3,7 @@ import type { BotAction } from '../src/logic/ai/botStrategy.ts';
 type DispatchDeps = {
   migratedHandlers: any;
   gameState: any;
-  handleSkillInterruptResponse?: (response: boolean) => void;
+  handleSkillInterruptResponse?: (response: any) => void;
 };
 
 export function dispatchGameCommand(

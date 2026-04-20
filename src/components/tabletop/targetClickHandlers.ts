@@ -44,8 +44,43 @@ export const handleHexClickLogic = (
     return;
   }
 
+  if (gameState.phase === 'skill_interrupt_prompt' && gameState.pendingSkillPrompt?.promptType === 'heal_move' && gameState.pendingSkillPrompt.playerIndex === playerIndex) {
+    socket.emit('skill_interrupt_response', { targetHex: { q, r } });
+    return;
+  }
+
+  if (gameState.phase === 'action_remove_ember_zone' && isActivePlayer) {
+    socket.emit('remove_ember_zone', { q, r });
+    return;
+  }
+
   if (gameState.phase === 'action_select_skill_target' && isActivePlayer && gameState.activeSkillId) {
-    socket.emit('use_skill', { skillId: gameState.activeSkillId, targetHex: { q, r } });
+    // If the active skill needs a token but we clicked a hex, 
+    // let's try to map the hex back to a token, especially for monsters without physical proxy tokens.
+    const skillName = gameState.activeSkillId;
+    // We could do a dynamic check like targetTokenId handling, but simpler to just emit the hex and let server figure out the token based on hex OR just look up token here.
+    const targetToken = gameState.tokens.find(t => {
+      const hex = pixelToHex(t.x, t.y);
+      return hex.q === q && hex.r === r;
+    });
+
+    const monster = gameState.map?.monsters?.find((m: any) => m.q === q && m.r === r);
+
+    // If there is a token or monster on this hex, we send both targetHex and targetTokenId
+    // to cover both 'hex' type skills and 'token' type skills that were triggered via hex click
+    const payload: any = { skillId: gameState.activeSkillId, targetHex: { q, r } };
+
+    if (targetToken) {
+      if (targetToken.boundToCardId) {
+        payload.targetTokenId = targetToken.boundToCardId;
+      } else {
+        payload.targetTokenId = targetToken.id;
+      }
+    } else if (monster) {
+      payload.targetTokenId = `monster_${monster.q}_${monster.r}`;
+    }
+
+    socket.emit('use_skill', payload);
     return;
   }
 
@@ -69,6 +104,28 @@ export const handleHexClickLogic = (
       return;
     }
 
+    const icePillar = gameState.icePillars?.find(p => p.q === q && p.r === r);
+    if (icePillar) {
+      console.log(`Emitting select_target for ice_pillar at ${q},${r}`);
+      socket.emit('select_target', `ice_pillar_${icePillar.id}`);
+      return;
+    }
+
+    const targetToken = gameState.tokens.find(t => {
+      const hex = pixelToHex(t.x, t.y);
+      return hex.q === q && hex.r === r;
+    });
+    if (targetToken) {
+      if (targetToken.boundToCardId) {
+        console.log(`Emitting select_target for token ${targetToken.id} (card ${targetToken.boundToCardId})`);
+        socket.emit('select_target', targetToken.boundToCardId);
+      } else if (targetToken.id.startsWith('monster_')) {
+        console.log(`Emitting select_target for monster token ${targetToken.id}`);
+        socket.emit('select_target', targetToken.id);
+      }
+      return;
+    }
+
     const isCastle = gameState.map ? 
       (gameState.map.castles[0]?.some((c: any) => c.q === q && c.r === r) || gameState.map.castles[1]?.some((c: any) => c.q === q && c.r === r)) :
       ((q === 0 && r === 4) || (q === 4 && r === 0) || (q === 0 && r === -4) || (q === -4 && r === 0));
@@ -79,22 +136,13 @@ export const handleHexClickLogic = (
       return;
     }
 
-    const targetToken = gameState.tokens.find(t => {
-      const hex = pixelToHex(t.x, t.y);
+    const targetCard = gameState.tableCards.find(c => {
+      const hex = pixelToHex(c.x, c.y);
       return hex.q === q && hex.r === r;
     });
-    if (targetToken && targetToken.boundToCardId) {
-      console.log(`Emitting select_target for token ${targetToken.id} (card ${targetToken.boundToCardId})`);
-      socket.emit('select_target', targetToken.boundToCardId);
-    } else {
-      const targetCard = gameState.tableCards.find(c => {
-        const hex = pixelToHex(c.x, c.y);
-        return hex.q === q && hex.r === r;
-      });
-      if (targetCard) {
-        console.log(`Emitting select_target for card ${targetCard.id}`);
-        socket.emit('select_target', targetCard.id);
-      }
+    if (targetCard) {
+      console.log(`Emitting select_target for card ${targetCard.id}`);
+      socket.emit('select_target', targetCard.id);
     }
     return;
   }
@@ -107,6 +155,10 @@ export const handleTokenClickLogic = (
   const { gameState, playerIndex, isActivePlayer, socket } = params;
 
   if (isActivePlayer) {
+    if (gameState.phase === 'skill_interrupt_prompt' && gameState.pendingSkillPrompt?.promptType === 'select_priest_target' && gameState.pendingSkillPrompt.playerIndex === playerIndex) {
+      socket.emit('skill_interrupt_response', { targetTokenId: id });
+      return;
+    }
     if (gameState.phase === 'action_select_hero' || gameState.phase === 'action_select_substitute') {
       socket.emit('select_hero_for_action', id);
       return;
@@ -117,10 +169,16 @@ export const handleTokenClickLogic = (
     }
     if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
       const token = gameState.tokens.find(t => t.id === id);
-      if (token && token.boundToCardId) {
-        console.log(`handleTokenClick (attack): token ${id}, card ${token.boundToCardId}`);
-        socket.emit('select_target', token.boundToCardId);
-        return;
+      if (token) {
+        if (token.boundToCardId) {
+          console.log(`handleTokenClick (attack): token ${id}, card ${token.boundToCardId}`);
+          socket.emit('select_target', token.boundToCardId);
+          return;
+        } else if (id.startsWith('monster_')) {
+          console.log(`handleTokenClick (attack): monster token ${id}`);
+          socket.emit('select_target', id);
+          return;
+        }
       }
     }
     if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'fire') {

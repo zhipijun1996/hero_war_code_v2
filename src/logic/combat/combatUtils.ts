@@ -30,6 +30,12 @@ export async function applyKnockback(
     const hasTimer = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === targetCard!.id);
     if (hasTimer) return 0;
 
+    // 检查是否有圣盾 (免疫推拉)
+    if (gameState.statuses?.some(s => s.tokenId === targetToken!.id && s.status === 'shield')) {
+      helpers.addLog(`${targetCard.heroClass} 拥有圣盾，免疫了推拉效果！`, playerIndex);
+      return 0;
+    }
+
     targetHex = pixelToHex(targetToken.x, targetToken.y);
     targetName = targetCard.heroClass || '英雄';
   } else if (targetId.startsWith('monster_')) {

@@ -65,7 +65,14 @@ export const createShopHandlers = (deps: any) => {
     },
     pass_shop: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
-      if (playerIndex === -1 || gameState.phase !== 'shop' || playerIndex !== gameState.activePlayerIndex) return;
+      if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex) return;
+
+      if (gameState.phase === 'buy') {
+        ActionEngine.cancelBuySelection(gameState, playerIndex, actionHelpers);
+        return;
+      }
+
+      if (gameState.phase !== 'shop') return;
 
       addLog(`玩家${playerIndex + 1}结束商店阶段 (Player ${playerIndex + 1} ended shop phase)`, playerIndex);
 

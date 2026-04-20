@@ -329,102 +329,34 @@ export const warriorWhirlwindSlash: SkillDefinition = {
       const targetHex = pixelToHex(token.x, token.y);
       if (getHexDistance(sourceHex, targetHex) === 1) {
         hitCount++;
-        card.damage = (card.damage || 0) + 1;
-        
-        let damageCounter = gameState.counters.find(c => c.type === 'damage' && c.boundToCardId === card.id);
-        if (!damageCounter) {
-          damageCounter = { id: generateId(), type: 'damage', x: token.x, y: token.y, value: 0, boundToCardId: card.id };
-          gameState.counters.push(damageCounter);
-        }
-        damageCounter.value = card.damage;
-        
-        helpers.addLog(`${card.heroClass} 受到 1 点旋风斩伤害。`, playerIndex);
-
-        await SkillEngine.triggerEvent('onDamageTaken', gameState, helpers, {
-          eventSourceId: token.id,
-          damage: 1,
-          sourceType: 'hero'
-        });
-
-        await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
-          eventSourceId: sourceTokenId,
-          sourceType: 'hero',
-          targetTokenId: token.id,
-          damage: 1
-        });
-
-        if (CombatLogic.isHeroDead(card, gameState)) {
-          await CombatLogic.handleHeroDeath(card, token, ownerIndex, helpers as any, gameState);
-          
-          await SkillEngine.triggerEvent('onKill', gameState, helpers, {
-            eventSourceId: sourceTokenId,
-            targetType: 'hero'
-          });
-          
-          const rewards = CombatLogic.getCombatRewards(sourceCard, 'hero', true, card.level);
-          if (rewards.exp > 0) CombatLogic.addExp(sourceCard, rewards.exp, gameState);
-          if (rewards.gold > 0) CombatLogic.addGold(playerIndex, rewards.gold, gameState);
-          if (rewards.reputation > 0) {
-            if ((helpers as any).addReputation) {
-              (helpers as any).addReputation(playerIndex, rewards.reputation, `击杀敌方英雄`);
-            }
-          }
-        }
+        await CombatLogic.applySpellDamageToHero(
+          gameState,
+          card,
+          token,
+          1,
+          sourceTokenId,
+          playerIndex,
+          helpers as any,
+          '旋风斩'
+        );
       }
     }
 
     // 2. 伤害相邻怪物
     if (gameState.map && gameState.map.monsters) {
       for (const monster of gameState.map.monsters) {
-        const pos = hexToPixel(monster.q, monster.r);
-        const hasTimer = gameState.counters.some(c => c.type === 'time' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
-        if (hasTimer) continue;
-
         const targetHex = { q: monster.q, r: monster.r };
         if (getHexDistance(sourceHex, targetHex) === 1) {
           hitCount++;
-          let damageCounter = gameState.counters.find(c => c.type === 'damage' && Math.abs(c.x - pos.x) < 10 && Math.abs(c.y - pos.y) < 10);
-          if (!damageCounter) {
-            damageCounter = { id: generateId(), type: 'damage', x: pos.x, y: pos.y, value: 0 };
-            gameState.counters.push(damageCounter);
-          }
-          damageCounter.value += 1;
-          
-          helpers.addLog(`LV${monster.level}怪物 受到 1 点旋风斩伤害。`, playerIndex);
-
-          await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
-            eventSourceId: sourceTokenId,
-            targetType: 'monster',
-            damage: 1
-          });
-
-          if (damageCounter.value >= monster.level) {
-            gameState.counters = gameState.counters.filter(c => c.id !== damageCounter!.id);
-            const monsterIndex = gameState.map.monsters.findIndex(m => m === monster);
-            const origin = (monsterIndex !== -1) ? gameState.mapConfig?.monsters?.[monsterIndex] : null;
-            const respawnPos = origin ? hexToPixel(origin.q, origin.r) : pos;
-            
-            gameState.counters.push({ id: generateId(), type: 'time', x: respawnPos.x, y: respawnPos.y, value: 0 });
-            if (origin) {
-              monster.q = origin.q;
-              monster.r = origin.r;
-            }
-            helpers.addLog(`LV${monster.level}怪物 被旋风斩击杀！`, playerIndex);
-            
-            await SkillEngine.triggerEvent('onKill', gameState, helpers, {
-              eventSourceId: sourceTokenId,
-              targetType: 'monster'
-            });
-            
-            const rewards = CombatLogic.getCombatRewards(sourceCard, 'monster', true, monster.level);
-            if (rewards.exp > 0) CombatLogic.addExp(sourceCard, rewards.exp, gameState);
-            if (rewards.gold > 0) CombatLogic.addGold(playerIndex, rewards.gold, gameState);
-            if (rewards.reputation > 0) {
-              if ((helpers as any).addReputation) {
-                (helpers as any).addReputation(playerIndex, rewards.reputation, `击杀LV${monster.level}怪物`);
-              }
-            }
-          }
+          await CombatLogic.applySpellDamageToMonster(
+             gameState,
+             monster,
+             1,
+             sourceTokenId,
+             playerIndex,
+             helpers as any,
+             '旋风斩'
+          );
         }
       }
     }

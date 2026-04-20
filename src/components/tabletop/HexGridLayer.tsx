@@ -15,6 +15,8 @@ interface HexGridLayerProps {
   pendingRevivals?: any[];
   mapConfig?: any;
   magicCircles?: any[];
+  emberZones?: any[];
+  icePillars?: any[];
   activeActionType?: string;
 }
 
@@ -29,6 +31,8 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   pendingRevivals,
   mapConfig,
   magicCircles,
+  emberZones,
+  icePillars,
   activeActionType
 }) => {
   const hexes = [];
@@ -94,6 +98,37 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
       const isReachable = reachableCells?.some(c => c.q === q && c.r === r);
       const isAttack = selectedOption === 'attack' || selectedOption === 'turret_attack' || (phase === 'action_resolve' && activeActionType === 'attack') || phase === 'action_select_skill_target';
       let highlightColor = isReachable ? (isAttack ? "rgba(239, 68, 68, 0.4)" : "rgba(253, 224, 71, 0.4)") : undefined;
+
+      // Render ember zones
+      const hasEmber = emberZones?.some(e => e.q === q && e.r === r);
+      if (hasEmber) {
+        // If it's not already highlighted for attack/move, give it an orange overlay
+        if (!highlightColor) {
+          highlightColor = "rgba(249, 115, 22, 0.4)"; // Orange-500 with opacity
+        }
+        
+        // Highlight specifically for removal
+        if (phase === 'action_remove_ember_zone') {
+          highlightColor = "rgba(244, 63, 94, 0.7)"; // Rose-500 for removal prompt
+        }
+
+        // If it doesn't have an icon, or if it's just a basic tile, we could add a fire icon
+        if (!icon) {
+          icon = "🔥";
+        }
+      }
+
+      // Render ice pillars
+      const icePillar = icePillars?.find(p => p.q === q && p.r === r);
+      if (icePillar) {
+        // Give it an icy blue glow if not already highlighted
+        if (!highlightColor) {
+          highlightColor = "rgba(14, 165, 233, 0.4)"; // Sky-500 opacity
+        }
+        
+        // Use an icicle / crystal icon
+        icon = "🧊";
+      }
 
       // Highlight castles for deployment/hiring/revival
       const isCastle = mapConfig ? 

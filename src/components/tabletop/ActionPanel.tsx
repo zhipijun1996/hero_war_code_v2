@@ -23,7 +23,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const isActivePlayer = gameState.activePlayerIndex === playerIndex;
   const isPlayer1 = playerIndex === 0;
 
-  if (!isActivePlayer && gameState.phase !== 'supply' && gameState.phase !== 'end' && gameState.phase !== 'discard') return null;
+  if (!isActivePlayer && gameState.phase !== 'supply' && gameState.phase !== 'end' && gameState.phase !== 'discard' && gameState.phase !== 'skill_interrupt_prompt') return null;
 
   const renderHireUI = () => {
     const goldY = isPlayer1 ? 550 : -700;
@@ -102,6 +102,71 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   if (gameState.phase === 'skill_interrupt_prompt') {
     const prompt = gameState.pendingSkillPrompt;
     if (prompt && prompt.playerIndex === playerIndex) {
+      if (prompt.promptType === 'suppression_discard' || prompt.promptType === 'hardened_discard' || prompt.promptType === 'discard_card') {
+        return (
+          <div className="flex flex-col gap-2 items-center">
+            <div className="text-white font-bold">{prompt.context?.message || '请选择一张手牌弃置'}</div>
+            <div className="flex gap-4">
+              <button onClick={() => socket.emit('skill_interrupt_response', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+                {prompt.promptType === 'suppression_discard' ? '取消移动 (Cancel Move)' : prompt.promptType === 'hardened_discard' ? '取消攻击 (Cancel Attack)' : '取消 (Cancel)'}
+              </button>
+            </div>
+            <div className="text-zinc-400 text-sm mt-2">点击下方手牌进行弃置</div>
+          </div>
+        );
+      }
+
+      if (prompt.promptType === 'select_skill') {
+        const skills = prompt.context?.skills || [];
+        return (
+          <div className="flex flex-col gap-2 items-center">
+            <div className="text-white font-bold">{prompt.context?.message || '请选择要发动的技能'}</div>
+            <div className="flex gap-2 flex-wrap justify-center">
+              {skills.map((s: any) => (
+                <button
+                  key={s.id}
+                  onClick={() => socket.emit('skill_interrupt_response', s.id)}
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs"
+                >
+                  {s.name}
+                </button>
+              ))}
+              <button onClick={() => socket.emit('skill_interrupt_response', null)} className="px-3 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-xs">
+                取消 (Cancel)
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (prompt.promptType === 'heal_move') {
+        return (
+          <div className="flex flex-col gap-2 items-center">
+            <div className="text-white font-bold">{prompt.context?.message || '请选择移动目标'}</div>
+            <div className="flex gap-4">
+              <button onClick={() => socket.emit('skill_interrupt_response', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+                跳过 (Skip)
+              </button>
+            </div>
+            <div className="text-zinc-400 text-sm mt-2">点击地图上的高亮格子进行移动</div>
+          </div>
+        );
+      }
+
+      if (prompt.promptType === 'select_priest_target') {
+        return (
+          <div className="flex flex-col gap-2 items-center">
+            <div className="text-white font-bold">{prompt.context?.message || '请选择目标'}</div>
+            <div className="flex gap-4">
+              <button onClick={() => socket.emit('skill_interrupt_response', null)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+                取消 (Cancel)
+              </button>
+            </div>
+            <div className="text-zinc-400 text-sm mt-2">点击地图上的高亮友军进行选择</div>
+          </div>
+        );
+      }
+
       return (
         <div className="flex flex-col gap-2 items-center">
           <div className="text-white font-bold">{prompt.context?.message || '是否使用技能？'}</div>
@@ -263,14 +328,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
 
   if ((gameState.phase as string) === 'action_select_skill_target') {
     const skillName = skillRegistry?.getSkill(gameState.activeSkillId || '')?.name || '技能';
+    const canUndo = !gameState.skillQueue || gameState.skillQueue.length === 0 || gameState.skillQueue[0].canUndo !== false;
+    
     return (
       <div className="flex flex-col gap-4 items-center w-full max-w-md">
         <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm text-center">
           请在地图上选择【{skillName}】的目标
         </div>
-        <button onClick={() => socket.emit('undo_play')} className="w-full py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm mt-2">
-          返回上一级 (Undo)
-        </button>
+        {canUndo && (
+          <button onClick={() => socket.emit('undo_play')} className="w-full py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm mt-2">
+            返回上一级 (Undo)
+          </button>
+        )}
       </div>
     );
   }
@@ -347,23 +416,27 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <div className="flex gap-2 flex-wrap justify-center w-full">
           <button onClick={() => socket.emit('select_hero_action', 'move')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm">移动 (Move)</button>
           <button onClick={() => socket.emit('select_hero_action', 'attack')} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm">攻击 (Attack)</button>
-          <button onClick={() => socket.emit('select_hero_action', 'skill')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm">技能 (Skill)</button>
-          <button onClick={() => socket.emit('select_hero_action', 'evolve')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm">进化 (Evolve)</button>
-          {(() => {
-            if (!selectedToken) return false;
-            const hex = pixelToHex(selectedToken.x, selectedToken.y);
-            const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
-            return mc && mc.state === 'idle';
-          })() && (
-            <button onClick={() => socket.emit('select_hero_action', 'chant')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm">咏唱 (Chant)</button>
-          )} 
-          {(() => {
-            if (!selectedToken) return false;
-            const hex = pixelToHex(selectedToken.x, selectedToken.y);
-            const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
-            return mc && mc.state === 'chanting' && mc.chantingTokenId === selectedToken?.id;
-          })() && (
-            <button onClick={() => socket.emit('select_hero_action', 'fire')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">开火 (Fire)</button>
+          {!gameState.isFollowUpAction && (
+            <>
+              <button onClick={() => socket.emit('select_hero_action', 'skill')} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-sm">技能 (Skill)</button>
+              <button onClick={() => socket.emit('select_hero_action', 'evolve')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm">进化 (Evolve)</button>
+              {(() => {
+                if (!selectedToken) return false;
+                const hex = pixelToHex(selectedToken.x, selectedToken.y);
+                const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+                return mc && mc.state === 'idle';
+              })() && (
+                <button onClick={() => socket.emit('select_hero_action', 'chant')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm">咏唱 (Chant)</button>
+              )} 
+              {(() => {
+                if (!selectedToken) return false;
+                const hex = pixelToHex(selectedToken.x, selectedToken.y);
+                const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
+                return mc && mc.state === 'chanting' && mc.chantingTokenId === selectedToken?.id;
+              })() && (
+                <button onClick={() => socket.emit('select_hero_action', 'fire')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">开火 (Fire)</button>
+              )}
+            </>
           )}
           <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm">返回 (Back)</button>
         </div>
@@ -443,8 +516,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   if (gameState.phase === 'buy') {
     return (
       <div className="flex gap-4">
-        <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold">
-          Pass
+        <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+          返回 (Back)
         </button>
       </div>
     );

@@ -12,12 +12,12 @@ export function isTargetInAttackRange(
   gameState: GameState
 ): boolean {
   const dist = getHexDistance(attackerHex, targetHex);
-  if (dist <= ar) return true;
 
+  // Check base range
   if (ar <= 1) {
-    if( dist === 1 ) return true;
+    if (dist === 1) return true;
   } else {
-    if( dist >=2 && dist <= ar ) return true;
+    if (dist >= 2 && dist <= ar) return true;
   }
 
   // 瞭望塔奖励逻辑
@@ -153,7 +153,7 @@ export function getPathDist(
 }
 
 /**
- * 计算可移动范围 (BFS)
+ * 计算可移动范围 (带权重的 Dijkstra / BFS)
  */
 export function getReachableHexes(
   start: Hex,
@@ -162,38 +162,70 @@ export function getReachableHexes(
   gameState: GameState
 ): Hex[] {
   const reachable = new Set<string>();
+  // 按照消耗(dist)从小到大排序的优先队列 (因为移动力非常小，可以直接用简单的数组sort)
   const queue = [{ q: start.q, r: start.r, dist: 0 }];
-  const visited = new Set<string>();
-  visited.add(`${start.q},${start.r}`);
+  
+  // 记录到达每个格子的最小消耗 (Dijkstra)
+  const minCost = new Map<string, number>();
+  minCost.set(`${start.q},${start.r}`, 0);
+
+  // 内部辅助函数：判断某格子是否与任何冰柱相邻
+  const isAdjacentToIcePillar = (q: number, r: number): boolean => {
+    if (!gameState.icePillars || gameState.icePillars.length === 0) return false;
+    for (const pillar of gameState.icePillars) {
+      if (getHexDistance({ q, r }, { q: pillar.q, r: pillar.r }) === 1) return true;
+    }
+    return false;
+  };
 
   while (queue.length > 0) {
-    const { q, r, dist } = queue.shift()!;
-    if (dist > 0) reachable.add(`${q},${r}`);
-    if (dist < mv) {
-      for (const neighbor of getNeighbors(q, r)) {
+    // Dijkstra: 每次取消耗最小的节点扩展
+    queue.sort((a, b) => a.dist - b.dist);
+    const current = queue.shift()!;
+    const currentKey = `${current.q},${current.r}`;
+    
+    // 如果已经有更优路径，跳过
+    if (minCost.get(currentKey)! < current.dist) continue;
+
+    if (current.dist > 0) reachable.add(currentKey);
+
+    if (current.dist < mv) {
+      // 核心路障ZOC逻辑：从“与冰柱相邻的区域”移动（离开当前格），需额外消耗1点移动力
+      const zocPenalty = isAdjacentToIcePillar(current.q, current.r) ? 1 : 0;
+      
+      for (const neighbor of getNeighbors(current.q, current.r)) {
         const key = `${neighbor.q},${neighbor.r}`;
         // 检查地图边界 (假设 4x4x4 的六边形地图)
         const inBounds = Math.abs(neighbor.q) <= 4 && Math.abs(neighbor.r) <= 4 && Math.abs(-neighbor.q - neighbor.r) <= 4;
         
-        if (!visited.has(key) && inBounds) {
-          // 检查障碍物 (怪物、其他 Token、敌方王城)
-          const isMonster = gameState.map?.monsters.some(m => m.q === neighbor.q && m.r === neighbor.r);
-          const hasTimeCounter = gameState.counters.some(c => c.type === 'time' && pixelToHex(c.x, c.y).q === neighbor.q && pixelToHex(c.x, c.y).r === neighbor.r);
-          const hasOtherToken = gameState.tokens.some(t => {
-            const th = pixelToHex(t.x, t.y);
-            return th.q === neighbor.q && th.r === neighbor.r;
-          });
-          
-          const enemyIndex = 1 - playerIndex;
-          const enemyCastles = gameState.map?.castles[enemyIndex as 0 | 1];
-          const isEnemyCastle = enemyCastles?.some(c => c.q === neighbor.q && c.r === neighbor.r);
-          
-          if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle) {
-            continue;
+        if (inBounds) {
+          // 移动消耗 = 基础1 + 当前格子带来的ZOC惩罚
+          const nextDist = current.dist + 1 + zocPenalty;
+          if (nextDist <= mv) {
+            // 检查障碍物 (怪物、其他 Token、敌方王城、冰柱)
+            const isMonster = gameState.map?.monsters.some(m => m.q === neighbor.q && m.r === neighbor.r);
+            const hasTimeCounter = gameState.counters.some(c => c.type === 'time' && pixelToHex(c.x, c.y).q === neighbor.q && pixelToHex(c.x, c.y).r === neighbor.r);
+            const hasOtherToken = gameState.tokens.some(t => {
+              const th = pixelToHex(t.x, t.y);
+              return th.q === neighbor.q && th.r === neighbor.r;
+            });
+            const isIcePillar = gameState.icePillars?.some(p => p.q === neighbor.q && p.r === neighbor.r);
+            
+            const enemyIndex = 1 - playerIndex;
+            const enemyCastles = gameState.map?.castles[enemyIndex as 0 | 1];
+            const isEnemyCastle = enemyCastles?.some(c => c.q === neighbor.q && c.r === neighbor.r);
+            
+            if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle || isIcePillar) {
+              continue;
+            }
+            
+            // 如果发现了更短到达neighbor的路径，更新并加入队列
+            const prevCost = minCost.get(key) ?? Infinity;
+            if (nextDist < prevCost) {
+              minCost.set(key, nextDist);
+              queue.push({ q: neighbor.q, r: neighbor.r, dist: nextDist });
+            }
           }
-          
-          visited.add(key);
-          queue.push({ ...neighbor, dist: dist + 1 });
         }
       }
     }
@@ -305,8 +337,8 @@ export function getAttackableHexes(
       }
     }
 
-    // 3. Alive monster (Lv3 heroes don't attack monsters)
-    if (!targetType && heroLevel < 3) {
+    // 3. Alive monster
+    if (!targetType) {
       const monster = gameState.map!.monsters.find((m) => m.q === nq && m.r === nr);
       if (monster) {
         const pos = hexToPixel(nq, nr);
@@ -326,9 +358,9 @@ export function getAttackableHexes(
       const nr = startR + dr;
       const dist = getHexDistance({ q: startQ, r: startR}, { q: nq, r: nr });
       if (ar <= 1) {
-        if( dist !== 1 ) continue;
+        if (dist !== 1) continue;
       } else {
-        if( dist < 2 || dist > ar ) continue;
+        if (dist < 2 || dist > ar) continue;
       }
 
       const targetType = checkCell(nq, nr);
@@ -359,6 +391,20 @@ export function getAttackableHexes(
         cells.push({ q: nq, r: nr, targetType });
       }
     }
+  }
+
+  // Handle Taunt: if any enemy hero in range has the taunt status, we can ONLY target taunting enemies
+  const tauntingCells = cells.filter(cell => {
+    if (cell.targetType !== 'hero') return false;
+    const tokensAtCell = gameState.tokens.filter(t => {
+      const hex = pixelToHex(t.x, t.y);
+      return hex.q === cell.q && hex.r === cell.r;
+    });
+    return tokensAtCell.some(t => gameState.statuses?.some(s => s.tokenId === t.id && s.status === 'taunt'));
+  });
+
+  if (tauntingCells.length > 0) {
+    return tauntingCells;
   }
 
   return cells;

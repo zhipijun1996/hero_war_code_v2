@@ -52,7 +52,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
     zoomIn,
     zoomOut,
     resetZoom,
-  } = useStageInteraction(window.innerWidth, window.innerHeight);
+  } = useStageInteraction(0, 0);
 
   const [menu, setMenu] = useState<{ x: number, y: number, type: 'deck' | 'card' | 'hex', targetId: string, targetX?: number, targetY?: number } | null>(null);
   const [showExplosion, setShowExplosion] = useState<{ x: number, y: number } | null>(null);
@@ -81,11 +81,6 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
           setSize({ width, height });
-          setStagePos((prev) => {
-            // Only center if it's the first time or if we want to keep it centered
-            // For now, let's just keep it centered on resize if it was already centered
-            return { x: width / 2, y: height / 2 };
-          });
         }
       }
     });
@@ -224,6 +219,8 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           pendingRevivals={gameState.pendingRevivals}
           mapConfig={gameState.map}
           magicCircles={gameState.magicCircles}
+          emberZones={gameState.emberZones}
+          icePillars={gameState.icePillars}
           activeActionType={gameState.activeActionType}
         />
         
@@ -353,6 +350,8 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
               return (isPlayer1 && card.y > 0) || (isPlayer2 && card.y < 0);
             })();
 
+            const hasShield = gameState.statuses?.some(s => s.tokenId === token.id && s.status === 'shield');
+
             return (
               <TokenNode 
                 key={token.id} 
@@ -364,6 +363,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
                 isSelected={isSelected}
                 draggable={!gameState.gameStarted || (!gameState.selectedOption && !gameState.selectedTokenId && isMyToken)}
                 lastEvolvedId={gameState.lastEvolvedId}
+                hasShield={hasShield}
               />
             );
           })}

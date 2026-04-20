@@ -174,21 +174,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 2,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.scorch]
+          "skills": [SKILLS_LIBRARY.fire_mage_fireball]
         },
         "2": {
           "hp": 3,
           "ar": 2,
           "mv": 2,
           "xp": 5,
-          "skills": [SKILLS_LIBRARY.scorch, SKILLS_LIBRARY.blast_impact]
+          "skills": [SKILLS_LIBRARY.fire_mage_fireball, SKILLS_LIBRARY.fire_mage_spread]
         },
         "3": {
           "hp": 3,
           "ar": 2,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.scorch, SKILLS_LIBRARY.blast_impact, SKILLS_LIBRARY.combustion]
+          "skills": [SKILLS_LIBRARY.fire_mage_fireball, SKILLS_LIBRARY.fire_mage_spread, SKILLS_LIBRARY.fire_mage_deflagration]
         }
       }
     },
@@ -201,21 +201,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 2,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.eagle_eye]
+          "skills": [SKILLS_LIBRARY.aim]
         },
         "2": {
           "hp": 3,
           "ar": 2,
           "mv": 1,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.poison_arrow]
+          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.poison_arrow, SKILLS_LIBRARY.poison_arrow_effect]
         },
         "3": {
           "hp": 3,
           "ar": 3,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.poison_arrow, SKILLS_LIBRARY.arrow_rain]
+          "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.poison_arrow, SKILLS_LIBRARY.arrow_rain, SKILLS_LIBRARY.poison_arrow_effect]
         }
       }
     },
@@ -227,22 +227,22 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "hp": 3,
           "ar": 1,
           "mv": 1,
-          "xp": 2,
-          "skills": [SKILLS_LIBRARY.lifesteal_counter]
+          "xp": 3,
+          "skills": [SKILLS_LIBRARY.suppression]
         },
         "2": {
           "hp": 4,
           "ar": 1,
           "mv": 1,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.lifesteal_counter, SKILLS_LIBRARY.suppression]
+          "skills": [SKILLS_LIBRARY.suppression, SKILLS_LIBRARY.guardian_swap]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.lifesteal_counter, SKILLS_LIBRARY.suppression, SKILLS_LIBRARY.guardian_swap]
+          "skills": [SKILLS_LIBRARY.suppression, SKILLS_LIBRARY.guardian_swap]
         }
       }
     },
@@ -289,14 +289,14 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 2,
           "mv": 1,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.heal, SKILLS_LIBRARY.holy_echo]
+          "skills": [SKILLS_LIBRARY.heal, SKILLS_LIBRARY.holy_shield]
         },
         "3": {
           "hp": 3,
           "ar": 2,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.heal, SKILLS_LIBRARY.holy_echo, SKILLS_LIBRARY.holy_prayer]
+          "skills": [SKILLS_LIBRARY.heal, SKILLS_LIBRARY.holy_shield, SKILLS_LIBRARY.holy_prayer]
         }
       }
     },
@@ -309,21 +309,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.coordinated_move]
+          "skills": [SKILLS_LIBRARY.command]
         },
         "2": {
           "hp": 3,
           "ar": 1,
           "mv": 1,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.coordinated_move, SKILLS_LIBRARY.tactical_move]
+          "skills": [SKILLS_LIBRARY.command, SKILLS_LIBRARY.follow_up]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.coordinated_move, SKILLS_LIBRARY.tactical_move, SKILLS_LIBRARY.tactical_command]
+          "skills": [SKILLS_LIBRARY.command, SKILLS_LIBRARY.follow_up, SKILLS_LIBRARY.dispatch]
         }
       }
     }

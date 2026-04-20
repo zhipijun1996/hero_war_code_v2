@@ -78,48 +78,58 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
   },
   "ice_pillar": {
     id: "ice_pillar",
-    "name": "冰柱",
-    "description": "在攻击范围内的空格生成1个冰柱（hp1，路障），场上最多3个"
+    "name": "凝冰结阵",
+    "description": "主动技：在射程内的空地生成1个冰柱。冰柱 HP1，且视为不可通行的路障。英雄从与冰柱相邻的区域移动时，需额外消耗 1 点移动力。场上最多存在 3 个由你召唤的冰柱，超过上限时最早生成的冰柱将被移除。",
+    type: "active"
   },
   "pillar_burst": {
     id: "pillar_burst",
-    "name": "冰柱爆裂",
-    "description": "当冰柱被摧毁时，其相邻敌方单位受到1伤害。"
+    "name": "冰霜爆裂",
+    "description": "被动技：当你召唤的冰柱被破坏时，会对与该冰柱相邻格的所有单位造成 1 点魔法伤害。",
+    type: "passive"
   },
   "deep_freeze": {
     id: "deep_freeze",
     "name": "深度冻结",
     "description": "攻击成功后，使目标冻结（必须先移动1次才能行动，若被冻结时受到攻击，伤害+1并解除冻结）"
   },
-  "scorch": {
-    id: "scorch",
-    "name": "灼烧",
-    "description": "当你的攻击命中目标时，目标进入灼烧（该单位及其相邻单位，直到回合结束前不能防御或反击）"
+  "fire_mage_fireball": {
+    id: "fire_mage_fireball",
+    "name": "火球",
+    "description": "攻击，并选择目标相邻的一个区域，使其成为余烬区。",
+    type: "active"
   },
-  "blast_impact": {
-    id: "blast_impact",
-    "name": "爆炸冲击",
-    "description": "攻击后，可以将目标移动1格。"
+  "fire_mage_spread": {
+    id: "fire_mage_spread",
+    "name": "火势蔓延",
+    "description": "选择 2 格内的任意两个不同区域，使其成为余烬区。",
+    type: "active"
   },
-  "combustion": {
-    id: "combustion",
+  "fire_mage_deflagration": {
+    id: "fire_mage_deflagration",
     "name": "爆燃",
-    "description": "攻击目标时，其相邻敌人也受到1点不可防御或反击的伤害。"
+    "description": "所有余烬区爆炸。余烬区及其相邻区域中的单位各受到 1 点伤害。每个单位只受 1 次伤害。所有余烬区随后消失。",
+    type: "active"
   },
   "aim": {
     id: "aim",
     "name": "瞄准",
-    "description": "若你在攻击前没有移动，攻击距离 +1。若使用该效果，本回合不能移动。"
+    "description": "弃置 1 张手牌，本次ar+1进行攻击。"
   },
   "poison_arrow": {
     id: "poison_arrow",
     "name": "毒箭",
-    "description": "被你攻击的敌人，本回合移动力 -1。"
+    "description": "被你攻击的敌方英雄，本回合第一次移动时，须弃置 1 张手牌；否则不能移动。"
+  },
+  "poison_arrow_effect": {
+    id: "poison_arrow_effect",
+    "name": "毒箭效果",
+    "description": "（内部效果）处理毒箭的移动限制逻辑。"
   },
   "arrow_rain": {
     id: "arrow_rain",
     "name": "箭雨",
-    "description": "攻击目标时，其相邻敌人也受到1点不可防御或反击的伤害。"
+    "description": "主动技（终极技）：进行一次攻击。若命中，可额外选择目标相邻的一名敌方单位（英雄或怪物），对其造成 1 点伤害。"
   },
   "lifesteal_counter": {
     id: "lifesteal_counter",
@@ -128,13 +138,15 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
   },
   "suppression": {
     id: "suppression",
-    "name": "压制",
-    "description": "敌方单位离开与你相邻的格子时，需额外耗费1移动力"
+    name: "压制",
+    description: "每名敌方英雄每回合第一次从重甲战士的相邻格移动时（包括经过），须弃置 1 张手牌；否则不能执行此次移动。",
+    type: "passive"
   },
   "guardian_swap": {
     id: "guardian_swap",
-    "name": "守护换位",
-    "description": "相邻友军受到攻击时，你可以与其交换位置，并成为攻击目标"
+    name: "守护换位",
+    description: "当距离 2 以内的我方英雄受到攻击时，你可以与其交换位置，并成为该次攻击的目标。",
+    type: "semi_passive"
   },
   "hardened": {
     id: "hardened",
@@ -154,32 +166,35 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
   "heal": {
     id: "heal",
     "name": "治疗",
-    "description": "选择攻击范围内一个友单位，回复1HP，可以选择自己"
+    "description": "选择 2 格内一名友方英雄，其回复 1 点生命并移动 1 格。"
   },
-  "holy_echo": {
-    id: "holy_echo",
-    "name": "神圣回响",
-    "description": "当你为友军回复HP时，该单位可以移动1格。"
+  "holy_shield": {
+    id: "holy_shield",
+    "name": "圣盾",
+    "description": "选择 2 格内一名友方英雄，其获得护盾并移动 1 格。护盾：不能被推/拉，受到的伤害 -1；受到一次攻击后，护盾破碎。"
   },
   "holy_prayer": {
     id: "holy_prayer",
     "name": "神圣祈愿",
-    "description": "选择一项：① 你和目标各回复1HP  ②目标及其一个相邻单位各回复1HP  ③弃1张手牌：目标回复2HP"
+    "description": "一回合只能使用一次。依次结算一次【治疗】与一次【圣盾】。"
   },
-  "coordinated_move": {
-    id: "coordinated_move",
-    "name": "协同移动",
-    "description": "当你移动后，可以选择1个相邻友方单位移动1格"
+  "command": {
+    id: "command",
+    "name": "指挥",
+    "description": "弃置 1 张手牌：本次行动点改为由另一名英雄行动。",
+    "type": "active"
   },
-  "tactical_move": {
-    id: "tactical_move",
-    "name": "战术移动",
-    "description": "当你移动后，可以选择1个2格范围内的友方单位移动1格，与“协同移动”可以先后执行"
+  "follow_up": {
+    id: "follow_up",
+    "name": "跟进",
+    "description": "使用【指挥】后，指挥官可以进行一次移动或进行一次攻击。",
+    "type": "passive"
   },
-  "tactical_command": {
-    id: "tactical_command",
-    "name": "战术指令",
-    "description": "移动或攻击，然后选择1个相邻友方单位，立刻执行一次移动、攻击或技能"
+  "dispatch": {
+    id: "dispatch",
+    "name": "临场调度",
+    "description": "每回合一次，选择 2 格内一名友方英雄。该英雄使用一次主动技能；然后指挥官使用一次相同技能。若所选为终极技，则该英雄须消耗其对应的行动 token。",
+    "type": "active"
   },
   "warrior_knockback_slash": {
     id: "warrior_knockback_slash",

@@ -55,6 +55,10 @@ export const getPhasePrompt = ({
   if (gameState.phase === 'action_select_substitute') {
     return `请选择替身英雄 (Select substitute hero)`;
   }
+  if (gameState.phase === 'action_remove_ember_zone') {
+    if (gameState.activePlayerIndex !== playerIndex) return `等待对方移除余烬区 (Waiting for opponent to remove ember zone)`;
+    return `余烬区已达上限 (5个)！请点击移除1个已有的余烬区`;
+  }
   if (gameState.phase === 'action_resolve') {
     if (gameState.activePlayerIndex !== playerIndex) return `等待对方结算行动 (Waiting for opponent to resolve action)`;
     if (gameState.activeActionType === 'move') {

@@ -29,7 +29,7 @@ export type BotAction =
   | { type: 'declare_defend' }
   | { type: 'declare_counter' }
   | { type: 'pass_defend' }  
-  | { type: 'skill_interrupt_response'; payload: { response: boolean } }
+  | { type: 'skill_interrupt_response'; payload: { response: any } }
   | { type: 'none' };
 
 export class BotStrategy {
@@ -77,6 +77,7 @@ export class BotStrategy {
 
       case 'action_resolve_attack':
       case 'action_resolve_attack_counter':
+        return { type: 'none' };
 
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
@@ -102,7 +103,21 @@ export class BotStrategy {
   private static decideSkillInterruptAction(gameState: GameState, playerIndex: number): BotAction {
     const prompt = gameState.pendingSkillPrompt;
     if (prompt && prompt.playerIndex === playerIndex) {
-      // For now, bots always say yes to skills
+      if (prompt.promptType === 'suppression_discard' || prompt.promptType === 'discard_card') {
+        const botPlayer = gameState.players[gameState.seats[playerIndex]];
+        if (botPlayer && botPlayer.hand && botPlayer.hand.length > 0) {
+          // Discard the first card
+          const response = prompt.promptType === 'suppression_discard' 
+            ? { discardedCardId: botPlayer.hand[0].id }
+            : { discardedCardIds: [botPlayer.hand[0].id] };
+          return { type: 'skill_interrupt_response', payload: { response } };
+        } else {
+          // Cannot discard, cancel move
+          return { type: 'skill_interrupt_response', payload: { response: null } };
+        }
+      }
+
+      // For other skills like guardian_swap, bots always say yes
       return { type: 'skill_interrupt_response', payload: { response: true } };
     }
     return { type: 'none' };

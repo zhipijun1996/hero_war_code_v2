@@ -357,7 +357,7 @@ const broadcastState = () => {
           dispatchGameCommand(botSocket, action, { 
             migratedHandlers, 
             gameState,
-            handleSkillInterruptResponse: (response: boolean) => {
+            handleSkillInterruptResponse: (response: any) => {
               if (pendingSkillPromptResolve) {
                 const resolve = pendingSkillPromptResolve;
                 pendingSkillPromptResolve = null;
@@ -629,7 +629,7 @@ const broadcastState = () => {
 
   let migratedHandlers: any;
 
-  let pendingSkillPromptResolve: ((response: boolean) => void) | null = null;
+  let pendingSkillPromptResolve: ((response: any) => void) | null = null;
 
   const actionHelpers: ActionHelpers = {
     addLog,
@@ -652,9 +652,9 @@ const broadcastState = () => {
       }
     },
     promptPlayer: (playerIndex: number, promptType: string, context: any) => {
-      return new Promise<boolean>((resolve) => {
+      return new Promise<any>((resolve) => {
         const previousPhase = gameState.phase;
-        pendingSkillPromptResolve = (response: boolean) => {
+        pendingSkillPromptResolve = (response: any) => {
           gameState.phase = previousPhase;
           resolve(response);
         };
@@ -664,6 +664,7 @@ const broadcastState = () => {
           context
         };
         setPhase('skill_interrupt_prompt');
+        checkBotTurn();
       });
     }
   };
@@ -732,7 +733,7 @@ const broadcastState = () => {
     socket.on('sit_down', (payload) => migratedHandlers.sit_down(socket, payload));
     socket.on('leave_seat', () => migratedHandlers.leave_seat(socket));
 
-    socket.on('skill_interrupt_response', (response: boolean) => {
+    socket.on('skill_interrupt_response', (response: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       if (gameState.phase !== 'skill_interrupt_prompt') return;
       if (gameState.pendingSkillPrompt?.playerIndex !== playerIndex) return;
