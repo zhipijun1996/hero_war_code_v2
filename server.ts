@@ -785,6 +785,8 @@ const broadcastState = () => {
 
     socket.on('pass_enhancement', () => migratedHandlers.pass_enhancement(socket));
 
+    socket.on('deep_freeze_break', () => migratedHandlers.deep_freeze_break(socket));
+
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
 
     socket.on('start_buy', () => migratedHandlers.start_buy(socket));

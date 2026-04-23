@@ -187,6 +187,10 @@ export const createActionHandlers = (deps: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.selectActionCategory(gameState, playerIndex, category, actionHelpers, socket);
     },
+    deep_freeze_break: async (socket: any) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      await ActionEngine.deepFreezeBreak(gameState, playerIndex, actionHelpers, socket);
+    },
     select_common_action: async (socket: any, action: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       await ActionEngine.selectCommonAction(gameState, playerIndex, action, actionHelpers, socket);
@@ -236,6 +240,10 @@ export const createActionHandlers = (deps: any) => {
             if (target.startsWith('monster_')) {
               const parts = target.split('_');
               return { q: parseInt(parts[1]), r: parseInt(parts[2]) };
+            }
+            if (target.includes('_')) {
+              const parts = target.split('_');
+              return { q: parseInt(parts[0]), r: parseInt(parts[1]) };
             }
             const token = gameState.tokens.find(t => t.id === target);
             if (token) return pixelToHex(token.x, token.y);

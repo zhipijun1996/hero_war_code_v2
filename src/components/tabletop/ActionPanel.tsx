@@ -189,6 +189,19 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     }
   }
 
+  if (gameState.phase === 'action_deep_freeze_break') {
+    return (
+      <div className="flex gap-4">
+        <button onClick={() => socket.emit('deep_freeze_break')} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
+          破冰 (Break Ice)
+        </button>
+        <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+          返回 (Back)
+        </button>
+      </div>
+    );
+  }
+
   if (gameState.phase === 'action_play') {
     return (
       <button onClick={() => socket.emit('pass_action')} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-bold">

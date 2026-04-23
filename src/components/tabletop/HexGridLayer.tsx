@@ -17,6 +17,7 @@ interface HexGridLayerProps {
   magicCircles?: any[];
   emberZones?: any[];
   icePillars?: any[];
+  blizzardZones?: any;
   activeActionType?: string;
 }
 
@@ -33,6 +34,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   magicCircles,
   emberZones,
   icePillars,
+  blizzardZones,
   activeActionType
 }) => {
   const hexes = [];
@@ -144,6 +146,19 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
           } else if (phase === 'revival' && pendingRevivals?.some(r => r.playerIndex === playerIndex)) {
             highlightColor = "rgba(139, 92, 246, 0.6)"; // Violet highlight
           }
+        }
+      }
+
+      // Render blizzard zones
+      if (blizzardZones) {
+        const distToSource = Math.max(Math.abs(q - blizzardZones.sourceHex.q), Math.abs(r - blizzardZones.sourceHex.r), Math.abs(-q - r - (-blizzardZones.sourceHex.q - blizzardZones.sourceHex.r)));
+        const distToPillar = Math.max(Math.abs(q - blizzardZones.pillarHex.q), Math.abs(r - blizzardZones.pillarHex.r), Math.abs(-q - r - (-blizzardZones.pillarHex.q - blizzardZones.pillarHex.r)));
+        
+        if (distToSource <= 1 || distToPillar <= 1) {
+          if (!highlightColor) {
+             highlightColor = "rgba(224, 242, 254, 0.5)"; // Light sky blue glow
+          }
+          if (!icon) icon = "❄️";
         }
       }
 

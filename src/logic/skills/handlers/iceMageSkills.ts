@@ -66,7 +66,7 @@ export const iceMageIcePillar: SkillDefinition = {
     const sourceHex = pixelToHex(sourceToken.x, sourceToken.y);
     const ar = SkillEngine.getModifiedStat(sourceTokenId, 'ar', gameState);
     
-    const validHexes: string[] = [];
+    const validHexes: any[] = [];
     
     // 遍历射程内所有格子
     for (let dq = -ar; dq <= ar; dq++) {
@@ -75,7 +75,7 @@ export const iceMageIcePillar: SkillDefinition = {
         const targetR = sourceHex.r + dr;
         
         if (isValidIcePillarTarget(targetQ, targetR, gameState)) {
-          validHexes.push(`${targetQ}_${targetR}`);
+          validHexes.push({ q: targetQ, r: targetR });
         }
       }
     }
@@ -208,6 +208,51 @@ export const iceMagePillarBurst: SkillDefinition = {
         }
       }
     }
+
+    return { success: true };
+  }
+};
+
+export const iceMageDeepFreeze: SkillDefinition = {
+  id: 'deep_freeze',
+  name: '深度冻结',
+  description: '被动技：深度冻结该英雄下次行动前，第一次受到攻击时伤害 +1，并解除深度冻结；若其未受到攻击，则其下次行动改为“破冰并移动 1 格”。',
+  kind: 'passive',
+  trigger: 'onTurnStart',
+
+  // 这只是声明占位，真正的深度冻结结算逻辑会下放到 ActionEngine 与 CombatLogic，
+  // 因为截断判定比较硬核
+};
+
+export const iceMageBlizzard: SkillDefinition = {
+  id: 'ice_mage_blizzard',
+  name: '暴风雪',
+  targetType: 'hex',
+  kind: 'active',
+  description: '本回合一次，选择一根冰柱，其相邻区域，以及施法者相邻区域，直到你的回合结束视为暴风雪区域。单位在暴风雪区域中结束回合时，获得深度冻结。',
+  getValidTargets: (context: SkillContext) => {
+    const { gameState } = context;
+    if (!gameState.icePillars) return [];
+    return gameState.icePillars.map(p => ({ q: p.q, r: p.r }));
+  },
+  execute: async (context: SkillContext, helpers: SkillHelpers): Promise<{ success: boolean; reason?: string }> => {
+    const { gameState, targetHex, playerIndex, sourceTokenId } = context;
+    if (!targetHex) return { success: false, reason: '未选择冰柱' };
+
+    const pillar = gameState.icePillars?.find(p => p.q === targetHex.q && p.r === targetHex.r);
+    if (!pillar) return { success: false, reason: '目标位置没有冰柱' };
+
+    const sourceToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!sourceToken) return { success: false, reason: '施法者不存在' };
+    const sourceHex = pixelToHex(sourceToken.x, sourceToken.y);
+
+    gameState.blizzardZones = {
+      sourceHex,
+      pillarHex: { q: pillar.q, r: pillar.r },
+      playerIndex
+    };
+
+    helpers.addLog(`施放暴风雪！施法者及选中冰柱的相邻区域现在是暴风雪区域，直到回合结束。`, playerIndex);
 
     return { success: true };
   }

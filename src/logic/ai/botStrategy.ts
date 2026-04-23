@@ -4,6 +4,7 @@ import { getHeroStat } from '../hero/heroLogic.ts';
 import { isTargetInAttackRange, getReachableHexes, getAttackableHexes } from '../map/mapLogic.ts';
 import { canHeroEvolve } from '../hero/heroLogic.ts';
 import { isEnhancementCardName } from '../card/enhancementModifiers.ts';
+import { skillRegistry } from '../skills/skillRegistry.ts';
 
 export type BotAction = 
   | { type: 'play_card'; payload: { cardId: string; targetCastleIndex?: number; targetId?: string } }
@@ -30,6 +31,8 @@ export type BotAction =
   | { type: 'declare_counter' }
   | { type: 'pass_defend' }  
   | { type: 'skill_interrupt_response'; payload: { response: any } }
+  | { type: 'use_skill'; payload: { skillId: string; targetTokenId?: string; targetHex?: { q: number; r: number } } }
+  | { type: 'select_skill_target'; payload: { skillId: string } }
   | { type: 'none' };
 
 export class BotStrategy {
@@ -65,6 +68,12 @@ export class BotStrategy {
 
       case 'action_select_action':
         return this.decideActionSelectActionAction(gameState, playerIndex, heroesDatabase);
+
+      case 'action_select_skill':
+        return this.decideActionSelectSkillAction(gameState, playerIndex, heroesDatabase);
+
+      case 'action_select_skill_target':
+        return this.decideActionSelectSkillTargetAction(gameState, playerIndex);
 
       case 'action_play_enhancement':
         return this.decideActionPlayEnhancementAction(gameState, botPlayer, playerIndex);
@@ -223,11 +232,61 @@ export class BotStrategy {
     return { type: 'pass_action' };
   }
 
+  private static getValidActiveSkills(gameState: GameState, playerIndex: number, heroesDatabase: any, heroTokenId: string) {
+    const validSkills: any[] = [];
+    const heroToken = gameState.tokens.find(t => t.id === heroTokenId);
+    if (!heroToken) return validSkills;
+    const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+    if (!heroCard) return validSkills;
+    
+    const heroData = heroesDatabase?.heroes?.find((h: any) => h.name === heroCard.heroClass || h.id === heroCard.heroClass);
+    if (!heroData) return validSkills;
+    
+    const levelData = heroData.levels[heroCard.level.toString() || '1'];
+    const skills = levelData?.skills || [];
+    
+    for (const s of skills) {
+      const skillId = s.id || s.name;
+      const skillDef = skillRegistry.getSkill(skillId);
+      if (skillDef && skillDef.kind === 'active') {
+        const context = { gameState, playerIndex, sourceTokenId: heroTokenId };
+        
+        let canUse = true;
+        if (skillDef.canUse) {
+          const result = skillDef.canUse(context);
+          if (typeof result === 'boolean') {
+            canUse = result;
+          } else {
+            canUse = result.canUse;
+          }
+        }
+        
+        if (canUse && skillDef.getValidTargets) {
+          const targets = skillDef.getValidTargets(context);
+          if (targets.length === 0) {
+            canUse = false;
+          }
+        }
+        
+        if (canUse) {
+          validSkills.push(skillId);
+        }
+      }
+    }
+    return validSkills;
+  }
+
   private static decideActionSelectActionAction(gameState: GameState, playerIndex: number, heroesDatabase: any): BotAction {
     const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
     if (!heroToken) {
       return { type: 'pass_action' };
     }
+
+    // Deep freeze check: if active action is deep freeze break, bot must break it
+    if (gameState.phase === 'action_deep_freeze_break') {
+      return { type: 'select_common_action', payload: { action: 'deep_freeze_break' } };
+    }
+
     const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
     const ar = getHeroStat(heroCard?.heroClass || '', heroCard?.level || 1, 'ar');
     const hex = pixelToHex(heroToken.x, heroToken.y);
@@ -251,7 +310,13 @@ export class BotStrategy {
       }
     }
 
-    // 2. High-Value Attack Priority (Hero or Castle)
+    // 2. Active Skill Priority
+    const validSkills = this.getValidActiveSkills(gameState, playerIndex, heroesDatabase, heroToken.id);
+    if (validSkills.length > 0) {
+      return { type: 'select_hero_action', payload: { action: 'skill' } };
+    }
+
+    // 3. High-Value Attack Priority (Hero or Castle)
     const hasHighValueTarget = attackableCells.some(cell => cell.targetType === 'hero' || cell.targetType === 'castle');
     if (hasHighValueTarget) {
       return { type: 'select_hero_action', payload: { action: 'attack' } };
@@ -275,6 +340,71 @@ export class BotStrategy {
 
     // 5. Default to Move
     return { type: 'select_hero_action', payload: { action: 'move' } };
+  }
+
+  private static decideActionSelectSkillAction(gameState: GameState, playerIndex: number, heroesDatabase: any): BotAction {
+    if (!gameState.activeHeroTokenId) {
+      return { type: 'pass_action' };
+    }
+    const validSkills = this.getValidActiveSkills(gameState, playerIndex, heroesDatabase, gameState.activeHeroTokenId);
+    
+    if (validSkills.length > 0) {
+      const chosenSkillId = validSkills[0]; // Simplest: just pick the first valid active skill
+      
+      const skillDef = skillRegistry.getSkill(chosenSkillId);
+      if (skillDef?.targetType && skillDef.targetType !== 'none') {
+        return { type: 'select_skill_target', payload: { skillId: chosenSkillId } };
+      } else {
+        return { type: 'use_skill', payload: { skillId: chosenSkillId } };
+      }
+    }
+    return { type: 'pass_action' };
+  }
+
+  private static decideActionSelectSkillTargetAction(gameState: GameState, playerIndex: number): BotAction {
+    if (!gameState.activeSkillId || !gameState.reachableCells || gameState.reachableCells.length === 0) {
+      return { type: 'pass_action' };
+    }
+
+    // Pick the first available valid target
+    const target = gameState.reachableCells[0]; 
+    const skillDef = skillRegistry.getSkill(gameState.activeSkillId);
+    if (!skillDef) return { type: 'pass_action' };
+    
+    // In reachableCells, they are {q, r} objects (sometimes with targetType).
+    // The use_skill handler takes targetTokenId or targetHex.
+    // If targetType is token, we need to extract the token ID?
+    // Wait, let's check what socket action we should emit here.
+    // If we use 'use_skill' directly, we can supply targetHex or targetTokenId
+    
+    const hex = { q: target.q, r: target.r };
+    let targetTokenId: string | undefined = undefined;
+    
+    // Try to find if there's a token taking up this hex (for token targeting)
+    if (skillDef.targetType === 'token') {
+      // Find enemy token there
+      const enemyToken = gameState.tokens.find(t => {
+        const tHex = pixelToHex(t.x, t.y);
+        return tHex.q === target.q && tHex.r === target.r;
+      });
+      if (enemyToken) {
+        targetTokenId = enemyToken.id;
+      } else {
+        // Monster check
+        if (gameState.map?.monsters) {
+          const monster = gameState.map.monsters.find(m => m.q === target.q && m.r === target.r);
+          if (monster) {
+            targetTokenId = `monster_${monster.q}_${monster.r}`;
+          }
+        }
+      }
+    }
+    
+    if (skillDef.targetType === 'token' && targetTokenId) {
+      return { type: 'use_skill', payload: { skillId: gameState.activeSkillId, targetTokenId } };
+    } else {
+      return { type: 'use_skill', payload: { skillId: gameState.activeSkillId, targetHex: hex } };
+    }
   }
 
   private static decideActionResolveAction(gameState: GameState, playerIndex: number): BotAction {

@@ -425,7 +425,15 @@ export class ActionEngine {
       const heroToken = gameState.tokens.find(t => t.boundToCardId === token.heroCardId);
       if (heroToken) {
         gameState.activeHeroTokenId = heroToken.id;
-        gameState.phase = 'action_options';
+
+        // Check if hero has deep_freeze status
+        const isFrozen = gameState.statuses?.some(s => s.tokenId === heroToken.id && s.status === 'deep_freeze');
+        if (isFrozen) {
+          gameState.phase = 'action_deep_freeze_break';
+        } else {
+          gameState.phase = 'action_options';
+        }
+        
         gameState.notification = null;
       } else {
         // Hero might be dead/waiting revival
@@ -439,6 +447,42 @@ export class ActionEngine {
     }
     helpers.broadcastState();
     helpers.checkBotTurn();
+  }
+
+  /**
+   * Deep freeze break action
+   */
+  static async deepFreezeBreak(
+    gameState: GameState,
+    playerIndex: number,
+    helpers: ActionHelpers,
+    socket: any
+  ): Promise<void> {
+    if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_deep_freeze_break') return;
+
+    if (!gameState.activeHeroTokenId) return;
+
+    const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
+    if (!heroToken) return;
+
+    // Do NOT remove status here. We set a flag and remove it in finishAction 
+    // so that cancelling the action safely preserves the frozen status.
+    gameState.wasDeepFreezeBroken = true;
+
+    // Force move action with mv=1
+    gameState.phase = 'action_resolve';
+    gameState.selectedOption = 'move';
+    gameState.activeActionType = 'move';
+    gameState.remainingMv = 1;
+    gameState.selectedTokenId = heroToken.id;
+    
+    // Calculate reachable hexes for move = 1
+    const tokenHex = pixelToHex(heroToken.x, heroToken.y);
+    const reachableHexes = getReachableHexes(tokenHex, 1, playerIndex, gameState);
+    gameState.reachableCells = reachableHexes;
+    
+    helpers.addLog(`玩家${playerIndex + 1}的英雄准备破冰并移动... (Hero preparing to break ice)`, playerIndex);
+    helpers.broadcastState();
   }
 
   /**
@@ -524,7 +568,12 @@ export class ActionEngine {
       gameState.isFollowUpAction = false;
       gameState.notification = null;
       
-      gameState.phase = 'action_options';
+      if (gameState.wasDeepFreezeBroken) {
+        gameState.wasDeepFreezeBroken = false;
+        gameState.phase = 'action_deep_freeze_break';
+      } else {
+        gameState.phase = 'action_options';
+      }
       helpers.broadcastState();
       return;
     }
@@ -532,6 +581,7 @@ export class ActionEngine {
     gameState.activeActionTokenId = null;
     gameState.activeHeroTokenId = null;
     gameState.activeEnhancementCardId = null;
+    gameState.wasDeepFreezeBroken = false;
     gameState.phase = 'action_play';
     gameState.notification = null;
     
@@ -1384,12 +1434,19 @@ export class ActionEngine {
       }
     }
 
+    if (gameState.wasDeepFreezeBroken && gameState.activeHeroTokenId) {
+      if (gameState.statuses) {
+        gameState.statuses = gameState.statuses.filter(s => !(s.tokenId === gameState.activeHeroTokenId && s.status === 'deep_freeze'));
+      }
+    }
+
     const token = gameState.actionTokens.find((t: any) => t.id === gameState.activeActionTokenId);
     if (token) token.used = true;
 
     gameState.activeActionTokenId = null;
     gameState.activeActionType = null;
     gameState.activeEnhancementCardId = null;
+    gameState.wasDeepFreezeBroken = false;
     gameState.isFollowUpAction = false;
     gameState.phase = 'action_play';
     gameState.selectedOption = null;
@@ -1676,7 +1733,13 @@ export class ActionEngine {
     gameState.usedArrowRainThisTurn = [];
     gameState.isFollowUpAction = false;
     gameState.turnModifiers = [];
-    gameState.statuses = [];
+    // Only clear statuses that shouldn't persist across rounds
+    if (gameState.statuses) {
+      gameState.statuses = gameState.statuses.filter(s => s.status === 'deep_freeze' || s.status === 'shield');
+    } else {
+      gameState.statuses = [];
+    }
+    
     gameState.phase = 'action_play';
     gameState.activePlayerIndex = gameState.firstPlayerIndex;
     gameState.consecutivePasses = 0;
@@ -1749,6 +1812,62 @@ export class ActionEngine {
     // 触发回合结束事件
     await SkillEngine.triggerEvent('onTurnEnd', gameState, helpers);
 
+    // Apply Deep Freeze from Blizzard Zones
+    if (gameState.blizzardZones) {
+       // Apply to heroes
+       if (gameState.tokens) {
+          for (const targetToken of gameState.tokens) {
+             if (!targetToken.heroClass) continue;
+             
+             const targetHex = pixelToHex(targetToken.x, targetToken.y);
+             const blizzardZones = gameState.blizzardZones;
+             const distToSource = Math.max(Math.abs(targetHex.q - blizzardZones.sourceHex.q), Math.abs(targetHex.r - blizzardZones.sourceHex.r), Math.abs(-targetHex.q - targetHex.r - (-blizzardZones.sourceHex.q - blizzardZones.sourceHex.r)));
+             const distToPillar = Math.max(Math.abs(targetHex.q - blizzardZones.pillarHex.q), Math.abs(targetHex.r - blizzardZones.pillarHex.r), Math.abs(-targetHex.q - targetHex.r - (-blizzardZones.pillarHex.q - blizzardZones.pillarHex.r)));
+             
+             if (distToSource === 1 || distToPillar === 1) {
+                const targetCard = gameState.tableCards.find(c => c.id === targetToken.boundToCardId);
+                if (targetCard) {
+                   if (!gameState.statuses) gameState.statuses = [];
+                   // Apply if not already deeply frozen
+                   if (!gameState.statuses.some(s => s.tokenId === targetToken.id && s.status === 'deep_freeze')) {
+                     gameState.statuses.push({
+                       tokenId: targetToken.id,
+                       status: 'deep_freeze',
+                       sourceSkillId: 'ice_mage_blizzard'
+                     });
+                     helpers.addLog(`${targetCard.heroClass} 在暴风雪区域中结束回合，被【深度冻结】！`, -1);
+                   }
+                }
+             }
+          }
+       }
+       
+       // Apply to monsters
+       if (gameState.map?.monsters) {
+          for (const monster of gameState.map.monsters) {
+             const blizzardZones = gameState.blizzardZones;
+             const distToSource = Math.max(Math.abs(monster.q - blizzardZones.sourceHex.q), Math.abs(monster.r - blizzardZones.sourceHex.r), Math.abs(-monster.q - monster.r - (-blizzardZones.sourceHex.q - blizzardZones.sourceHex.r)));
+             const distToPillar = Math.max(Math.abs(monster.q - blizzardZones.pillarHex.q), Math.abs(monster.r - blizzardZones.pillarHex.r), Math.abs(-monster.q - monster.r - (-blizzardZones.pillarHex.q - blizzardZones.pillarHex.r)));
+
+             if (distToSource === 1 || distToPillar === 1) {
+                if (!gameState.statuses) gameState.statuses = [];
+                const monsterTokenId = `monster_${monster.q}_${monster.r}`;
+                if (!gameState.statuses.some(s => s.tokenId === monsterTokenId && s.status === 'deep_freeze')) {
+                   gameState.statuses.push({
+                     tokenId: monsterTokenId,
+                     status: 'deep_freeze',
+                     sourceSkillId: 'ice_mage_blizzard'
+                   });
+                   helpers.addLog(`LV${monster.level}怪物 在暴风雪区域中结束回合，被【深度冻结】！`, -1);
+                }
+             }
+          }
+       }
+
+       // Blizzard zone dissipates at the end of the turn
+       delete gameState.blizzardZones;
+    }
+
     // 结算余烬区
     if (gameState.emberZones && gameState.emberZones.length > 0) {
       const remainingEmberZones: any[] = [];
@@ -1816,7 +1935,13 @@ export class ActionEngine {
     gameState.usedArrowRainThisTurn = [];
     gameState.isFollowUpAction = false;
     gameState.turnModifiers = [];
-    gameState.statuses = [];
+    
+    // Only clear statuses that shouldn't persist across rounds
+    if (gameState.statuses) {
+      gameState.statuses = gameState.statuses.filter(s => s.status === 'deep_freeze' || s.status === 'shield');
+    } else {
+      gameState.statuses = [];
+    }
 
     gameState.actionTokens.forEach(t => {
       t.used = false;

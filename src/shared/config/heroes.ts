@@ -161,7 +161,7 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 2,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.ice_pillar, SKILLS_LIBRARY.pillar_burst, SKILLS_LIBRARY.deep_freeze]
+          "skills": [SKILLS_LIBRARY.ice_pillar, SKILLS_LIBRARY.pillar_burst, SKILLS_LIBRARY.deep_freeze, SKILLS_LIBRARY.ice_mage_blizzard]
         }
       }
     },

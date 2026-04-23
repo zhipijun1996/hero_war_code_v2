@@ -221,6 +221,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           magicCircles={gameState.magicCircles}
           emberZones={gameState.emberZones}
           icePillars={gameState.icePillars}
+          blizzardZones={gameState.blizzardZones}
           activeActionType={gameState.activeActionType}
         />
         
@@ -351,6 +352,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
             })();
 
             const hasShield = gameState.statuses?.some(s => s.tokenId === token.id && s.status === 'shield');
+            const hasDeepFreeze = gameState.statuses?.some(s => s.tokenId === token.id && s.status === 'deep_freeze');
 
             return (
               <TokenNode 
@@ -364,6 +366,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
                 draggable={!gameState.gameStarted || (!gameState.selectedOption && !gameState.selectedTokenId && isMyToken)}
                 lastEvolvedId={gameState.lastEvolvedId}
                 hasShield={hasShield}
+                hasDeepFreeze={hasDeepFreeze}
               />
             );
           })}

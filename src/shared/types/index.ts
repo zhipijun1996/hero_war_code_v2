@@ -107,7 +107,8 @@ export type GamePhase =
   | 'action_select_skill_target'
   | 'action_play_defense'
   | 'skill_interrupt_prompt'
-  | 'action_remove_ember_zone';
+  | 'action_remove_ember_zone'
+  | 'action_deep_freeze_break';
 
 export interface MovementStep {
   tokenId: string;
@@ -280,6 +281,12 @@ export interface GameState {
   isCounterAttack?: boolean;
   isDefended?: boolean;
   suppressedTokensThisTurn?: string[];
+  blizzardZones?: {
+    sourceHex: HexCoord;
+    pillarHex: HexCoord;
+    playerIndex: number;
+  };
+  wasDeepFreezeBroken?: boolean;
   turnModifiers?: {
     tokenId: string;
     stat: 'hp' | 'ar' | 'mv' | 'atk';
@@ -289,7 +296,7 @@ export interface GameState {
   }[];
   statuses?: {
     tokenId: string;
-    status: 'taunt' | 'stealth' | 'frozen' | 'scorch' | 'shield' | 'poisoned_move';
+    status: 'taunt' | 'stealth' | 'frozen' | 'scorch' | 'shield' | 'poisoned_move' | 'deep_freeze';
     sourceSkillId: string;
     sourceTokenId?: string;
   }[];

@@ -91,7 +91,14 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
   "deep_freeze": {
     id: "deep_freeze",
     "name": "深度冻结",
-    "description": "攻击成功后，使目标冻结（必须先移动1次才能行动，若被冻结时受到攻击，伤害+1并解除冻结）"
+    "description": "说明：该英雄下次行动前，第一次受到攻击时伤害 +1，并解除深度冻结；若其未受到攻击，则其下次行动改为“破冰并移动 1 格”。",
+    type: "passive"
+  },
+  "ice_mage_blizzard": {
+    id: "ice_mage_blizzard",
+    "name": "暴风雪",
+    "description": "主动技：本回合一次，选择一根冰柱，其相邻区域以及施法者相邻区域，直到你的回合结束视为暴风雪区域。单位在暴风雪区域中结束回合时，获得深度冻结。",
+    type: "active"
   },
   "fire_mage_fireball": {
     id: "fire_mage_fireball",

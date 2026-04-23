@@ -16,6 +16,7 @@ interface TokenNodeProps {
   onHexClick?: (q: number, r: number) => void;
   isMyToken?: boolean;
   hasShield?: boolean;
+  hasDeepFreeze?: boolean;
 }
 
 export const TokenNode: React.FC<TokenNodeProps> = ({
@@ -27,7 +28,8 @@ export const TokenNode: React.FC<TokenNodeProps> = ({
   lastEvolvedId,
   onHexClick,
   isMyToken,
-  hasShield
+  hasShield,
+  hasDeepFreeze
 }) => {
   const [image] = useImage(token.image || 'https://image.pollinations.ai/prompt/A%20glowing%20golden%20star%20token%20fantasy%20anime%20art?nologo=true');
   const groupRef = useRef<any>(null);
@@ -100,10 +102,10 @@ export const TokenNode: React.FC<TokenNodeProps> = ({
       <Circle
         radius={30}
         fill={isSelected ? "#4f46e5" : "#27272a"}
-        stroke={isSelected || lastEvolvedId === token.boundToCardId ? "#fbbf24" : "#52525b"}
-        strokeWidth={isSelected || lastEvolvedId === token.boundToCardId ? 5 : 2}
-        shadowColor={lastEvolvedId === token.boundToCardId ? "#fbbf24" : "black"}
-        shadowBlur={lastEvolvedId === token.boundToCardId ? 30 : 10}
+        stroke={isSelected || lastEvolvedId === token.boundToCardId ? "#fbbf24" : hasDeepFreeze ? '#60A5FA' : "#52525b"}
+        strokeWidth={isSelected || lastEvolvedId === token.boundToCardId ? 5 : hasDeepFreeze ? 4 : 2}
+        shadowColor={lastEvolvedId === token.boundToCardId ? "#fbbf24" : hasDeepFreeze ? '#3B82F6' : "black"}
+        shadowBlur={lastEvolvedId === token.boundToCardId ? 30 : hasDeepFreeze ? 15 : 10}
         shadowOpacity={0.9}
         shadowOffset={{ x: 2, y: 2 }}
       />
@@ -112,6 +114,15 @@ export const TokenNode: React.FC<TokenNodeProps> = ({
       )}
       {hasShield && (
         <Circle radius={35} stroke="#60a5fa" strokeWidth={4} opacity={0.8} shadowColor="#3b82f6" shadowBlur={15} />
+      )}
+      {hasDeepFreeze && (
+        <Circle
+          radius={38}
+          stroke="#93C5FD"
+          strokeWidth={4}
+          opacity={0.6}
+          dash={[8, 8]}
+        />
       )}
       {image && (
         <Circle radius={28} fillPatternImage={image} fillPatternScale={{ x: 56 / image.width, y: 56 / image.height }} fillPatternOffset={{ x: image.width / 2, y: image.height / 2 }} />

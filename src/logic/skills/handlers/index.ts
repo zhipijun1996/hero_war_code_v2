@@ -8,7 +8,7 @@ import { heal, holy_shield, holy_prayer } from './priestSkills.ts';
 import { archerAim, archerPoisonArrow, archerPoisonArrowEffect, archerArrowRain } from './archerSkills.ts';
 import { commanderCommand, commanderFollowUp, commanderDispatch } from './commanderSkills.ts';
 import { fireMageFireball, fireMageSpread, fireMageDeflagration } from './fireMageSkills.ts';
-import { iceMageIcePillar, iceMagePillarBurst } from './iceMageSkills.ts';
+import { iceMageIcePillar, iceMagePillarBurst, iceMageDeepFreeze, iceMageBlizzard } from './iceMageSkills.ts';
 
 /**
  * 注册所有游戏内的英雄技能
@@ -64,4 +64,6 @@ export function registerAllSkills() {
   // 注册冰法师技能
   skillRegistry.registerSkill(iceMageIcePillar);
   skillRegistry.registerSkill(iceMagePillarBurst);
+  skillRegistry.registerSkill(iceMageDeepFreeze);
+  skillRegistry.registerSkill(iceMageBlizzard);
 }

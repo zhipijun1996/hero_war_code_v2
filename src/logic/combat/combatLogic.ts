@@ -42,7 +42,19 @@ export class CombatLogic {
           eventTargetId: targetToken.id 
         });
 
-        const damage = this.calculateDamage(attackerCard, targetCard, false, gameState);
+        let damage = this.calculateDamage(attackerCard, targetCard, false, gameState);
+
+        // Apply deep_freeze modifier
+        let isFrozen = false;
+        if (gameState.statuses) {
+          const frozenIndex = gameState.statuses.findIndex(s => s.tokenId === targetToken.id && s.status === 'deep_freeze');
+          if (frozenIndex !== -1) {
+            gameState.statuses.splice(frozenIndex, 1);
+            isFrozen = true;
+            damage += 1; // 破冰伤害+1
+            helpers.addLog(`${targetCard.heroClass} 被打破了深度冻结状态！受到额外碎冰伤害。`, playerIndex);
+          }
+        }
 
         targetCard.damage = (targetCard.damage || 0) + damage;
         let damageCounter = gameState.counters.find((c: any) => c.type === 'damage' && c.boundToCardId === targetCard.id);
@@ -131,8 +143,19 @@ export class CombatLogic {
       gameState.counters.push(damageCounter);
     }
     
-    damageCounter.value += damage;
-    helpers.addLog(`【${skillName}】LV${monster.level}怪物 受到 ${damage} 点魔法伤害！(当前受伤: ${damageCounter.value})`, playerIndex);
+    let actualDamage = damage;
+    if (gameState.statuses) {
+      const monsterTokenId = `monster_${monster.q}_${monster.r}`;
+      const frozenIndex = gameState.statuses.findIndex(s => s.tokenId === monsterTokenId && s.status === 'deep_freeze');
+      if (frozenIndex !== -1) {
+        gameState.statuses.splice(frozenIndex, 1);
+        actualDamage += 1;
+        helpers.addLog(`【${skillName}】LV${monster.level}怪物 被打破了深度冻结状态！受到额外碎冰伤害。`, playerIndex);
+      }
+    }
+
+    damageCounter.value += actualDamage;
+    helpers.addLog(`【${skillName}】LV${monster.level}怪物 受到 ${actualDamage} 点魔法伤害！(当前受伤: ${damageCounter.value})`, playerIndex);
 
     // 触发魔法伤害Dealt事件 (如果有技能监听魔法伤害的话)
     await SkillEngine.triggerEvent('onDamageDealt', gameState, helpers, {
@@ -202,6 +225,18 @@ export class CombatLogic {
   ): Promise<boolean> {
     const ownerIndex = targetCard.y > 0 ? 0 : 1;
     let actualDamage = damage;
+
+    // Apply deep_freeze modifier
+    let isFrozen = false;
+    if (gameState.statuses) {
+      const frozenIndex = gameState.statuses.findIndex(s => s.tokenId === targetToken.id && s.status === 'deep_freeze');
+      if (frozenIndex !== -1) {
+        gameState.statuses.splice(frozenIndex, 1);
+        isFrozen = true;
+        actualDamage += 1; // 破冰伤害+1
+        helpers.addLog(`${targetCard.heroClass} 被打破了深度冻结状态！受到额外碎冰伤害。`, playerIndex);
+      }
+    }
 
     // Apply shield reduction if present
     if (gameState.statuses) {
@@ -407,6 +442,19 @@ export class CombatLogic {
       : null;
 
     damage += getAttackDamageBonusFromEnhancement(enhancementCard?.name);
+
+    // Apply deep freeze modifier
+    let isFrozen = false;
+    if (gameState.statuses) {
+      const monsterTokenId = `monster_${monster.q}_${monster.r}`;
+      const frozenIndex = gameState.statuses.findIndex(s => s.tokenId === monsterTokenId && s.status === 'deep_freeze');
+      if (frozenIndex !== -1) {
+        gameState.statuses.splice(frozenIndex, 1);
+        isFrozen = true;
+        damage += 1;
+        helpers.addLog(`LV${monster.level}怪物 被打破了深度冻结状态！受到额外碎冰伤害。`, playerIndex);
+      }
+    }
     
     if (heroCard) {
       helpers.addLog(`发起阶段: ${heroCard.heroClass} 对 LV${monster.level}怪物 发起了攻击`, playerIndex);
