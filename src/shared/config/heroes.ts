@@ -66,21 +66,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.ambush]
+          "skills": [SKILLS_LIBRARY.assassin_pierce_slash]
         },
         "2": {
           "hp": 3,
           "ar": 1,
           "mv": 2,
           "xp": 5,
-          "skills": [SKILLS_LIBRARY.ambush, SKILLS_LIBRARY.shadow_step]
+          "skills": [SKILLS_LIBRARY.assassin_pierce_slash, SKILLS_LIBRARY.assassin_shadow_pierce]
         },
         "3": {
           "hp": 3,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.ambush, SKILLS_LIBRARY.shadow_step, SKILLS_LIBRARY.lethal_assault]
+          "skills": [SKILLS_LIBRARY.assassin_pierce_slash, SKILLS_LIBRARY.assassin_shadow_pierce, SKILLS_LIBRARY.assassin_shadow_clone]
         }
       }
     },

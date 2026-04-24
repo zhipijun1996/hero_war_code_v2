@@ -230,6 +230,13 @@ export const iceMageBlizzard: SkillDefinition = {
   targetType: 'hex',
   kind: 'active',
   description: '本回合一次，选择一根冰柱，其相邻区域，以及施法者相邻区域，直到你的回合结束视为暴风雪区域。单位在暴风雪区域中结束回合时，获得深度冻结。',
+  canUse: (context: SkillContext) => {
+    const { gameState, playerIndex } = context;
+    if (gameState.blizzardZones && gameState.blizzardZones.playerIndex === playerIndex) {
+      return { canUse: false, reason: '本回合已经施放过暴风雪' };
+    }
+    return true;
+  },
   getValidTargets: (context: SkillContext) => {
     const { gameState } = context;
     if (!gameState.icePillars) return [];

@@ -575,6 +575,7 @@ export class ActionEngine {
         gameState.phase = 'action_options';
       }
       helpers.broadcastState();
+      helpers.checkBotTurn();
       return;
     }
 
@@ -591,6 +592,7 @@ export class ActionEngine {
     }
 
     helpers.broadcastState();
+    helpers.checkBotTurn();
   }
 
   /**
@@ -1354,6 +1356,7 @@ export class ActionEngine {
     // 检查是否有挂起的交互
     if (gameState.phase === 'action_remove_ember_zone') {
         helpers.broadcastState();
+        helpers.checkBotTurn();
         return; // 短路，等待玩家操作
     }
 
@@ -1430,6 +1433,7 @@ export class ActionEngine {
         gameState.commanderTokenId = null;
         gameState.notification = '指挥官发动【跟进】：请选择移动或攻击。';
         helpers.broadcastState();
+        helpers.checkBotTurn();
         return;
       }
     }
@@ -1499,6 +1503,7 @@ export class ActionEngine {
     if (gameState.emberZones!.length > 5) {
       helpers.addLog(`仍然超出上限，需继续移除余烬区`, playerIndex);
       helpers.broadcastState();
+      helpers.checkBotTurn();
       return;
     }
 
@@ -2057,8 +2062,10 @@ export class ActionEngine {
         // Return to skill selection phase if failed
         gameState.phase = 'action_select_skill';
         gameState.activeSkillId = null;
+        gameState.activeSkillState = null;
         gameState.reachableCells = [];
         helpers.broadcastState();
+        helpers.checkBotTurn();
       }
     }
   }

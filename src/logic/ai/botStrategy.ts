@@ -26,13 +26,14 @@ export type BotAction =
   | { type: 'pass_shop' }  
   | { type: 'finish_action'}
   | { type: 'discard_card'; payload: { cardId: string } }
-  | { type: 'finish_discard' }
+  | { type: 'undo_play' }
   | { type: 'declare_defend' }
   | { type: 'declare_counter' }
   | { type: 'pass_defend' }  
   | { type: 'skill_interrupt_response'; payload: { response: any } }
   | { type: 'use_skill'; payload: { skillId: string; targetTokenId?: string; targetHex?: { q: number; r: number } } }
   | { type: 'select_skill_target'; payload: { skillId: string } }
+  | { type: 'remove_ember_zone'; payload: { q: number; r: number } }
   | { type: 'none' };
 
 export class BotStrategy {
@@ -88,6 +89,9 @@ export class BotStrategy {
       case 'action_resolve_attack_counter':
         return { type: 'none' };
 
+      case 'action_remove_ember_zone':
+        return this.decideActionRemoveEmberZoneAction(gameState, playerIndex);
+
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
 
@@ -107,6 +111,15 @@ export class BotStrategy {
       default:
         return { type: 'none' };
     }
+  }
+
+  private static decideActionRemoveEmberZoneAction(gameState: GameState, playerIndex: number): BotAction {
+    // Just remove the first one 
+    if (gameState.emberZones && gameState.emberZones.length > 0) {
+      const zoneToRemove = gameState.emberZones[0];
+      return { type: 'remove_ember_zone', payload: { q: zoneToRemove.q, r: zoneToRemove.r } };
+    }
+    return { type: 'none' };
   }
 
   private static decideSkillInterruptAction(gameState: GameState, playerIndex: number): BotAction {
@@ -312,7 +325,8 @@ export class BotStrategy {
 
     // 2. Active Skill Priority
     const validSkills = this.getValidActiveSkills(gameState, playerIndex, heroesDatabase, heroToken.id);
-    if (validSkills.length > 0) {
+    // Add a 30% chance to skip skill and move/attack instead, to prevent AI from getting stuck spamming 0-cost skills
+    if (validSkills.length > 0 && Math.random() > 0.3) {
       return { type: 'select_hero_action', payload: { action: 'skill' } };
     }
 
@@ -344,12 +358,13 @@ export class BotStrategy {
 
   private static decideActionSelectSkillAction(gameState: GameState, playerIndex: number, heroesDatabase: any): BotAction {
     if (!gameState.activeHeroTokenId) {
-      return { type: 'pass_action' };
+      return { type: 'undo_play' };
     }
     const validSkills = this.getValidActiveSkills(gameState, playerIndex, heroesDatabase, gameState.activeHeroTokenId);
     
     if (validSkills.length > 0) {
-      const chosenSkillId = validSkills[0]; // Simplest: just pick the first valid active skill
+      // Pick randomly to avoid getting stuck on the same valid skill
+      const chosenSkillId = validSkills[Math.floor(Math.random() * validSkills.length)]; 
       
       const skillDef = skillRegistry.getSkill(chosenSkillId);
       if (skillDef?.targetType && skillDef.targetType !== 'none') {
@@ -358,53 +373,89 @@ export class BotStrategy {
         return { type: 'use_skill', payload: { skillId: chosenSkillId } };
       }
     }
-    return { type: 'pass_action' };
+    return { type: 'undo_play' };
   }
 
   private static decideActionSelectSkillTargetAction(gameState: GameState, playerIndex: number): BotAction {
     if (!gameState.activeSkillId || !gameState.reachableCells || gameState.reachableCells.length === 0) {
-      return { type: 'pass_action' };
+      return { type: 'undo_play' };
     }
 
-    // Pick the first available valid target
-    const target = gameState.reachableCells[0]; 
-    const skillDef = skillRegistry.getSkill(gameState.activeSkillId);
-    if (!skillDef) return { type: 'pass_action' };
-    
-    // In reachableCells, they are {q, r} objects (sometimes with targetType).
-    // The use_skill handler takes targetTokenId or targetHex.
-    // If targetType is token, we need to extract the token ID?
-    // Wait, let's check what socket action we should emit here.
-    // If we use 'use_skill' directly, we can supply targetHex or targetTokenId
-    
-    const hex = { q: target.q, r: target.r };
-    let targetTokenId: string | undefined = undefined;
-    
-    // Try to find if there's a token taking up this hex (for token targeting)
-    if (skillDef.targetType === 'token') {
-      // Find enemy token there
-      const enemyToken = gameState.tokens.find(t => {
+    // Simple target value scoring to pick the best skill target, with random shuffle for tie-breaking
+    const shuffledCells = [...gameState.reachableCells].sort(() => Math.random() - 0.5);
+    let bestTarget = shuffledCells[0];
+    let bestScore = -9999;
+
+    for (const cell of shuffledCells) {
+      let score = 0;
+      const targetToken = gameState.tokens.find(t => {
         const tHex = pixelToHex(t.x, t.y);
-        return tHex.q === target.q && tHex.r === target.r;
+        return tHex.q === cell.q && tHex.r === cell.r;
       });
-      if (enemyToken) {
-        targetTokenId = enemyToken.id;
+      const isCastle0 = gameState.map?.castles?.[0]?.some(c => c.q === cell.q && c.r === cell.r);
+      const isCastle1 = gameState.map?.castles?.[1]?.some(c => c.q === cell.q && c.r === cell.r);
+      const monster = gameState.map?.monsters?.find((m: any) => m.q === cell.q && m.r === cell.r);
+
+      if (targetToken) {
+        if (targetToken.playerId !== undefined && targetToken.playerId !== playerIndex) {
+          score += 100; // Found enemy unit
+          if (targetToken.heroClass) score += 50; // Priority to heroes
+        } else {
+          score -= 100; // Found ally unit (avoid friendly fire, though heals would reverse this logic)
+        }
+      } else if (monster) {
+        score += 50; // Found monster
+      } else if ((isCastle0 && playerIndex !== 0) || (isCastle1 && playerIndex !== 1)) {
+        score += 80; // Enemy castle
       } else {
-        // Monster check
-        if (gameState.map?.monsters) {
-          const monster = gameState.map.monsters.find(m => m.q === target.q && m.r === target.r);
-          if (monster) {
-            targetTokenId = `monster_${monster.q}_${monster.r}`;
-          }
+        score += 10; // Empty hex
+        
+        // Ice Mage's blizzard penalty for already-frozen hexes
+        if (gameState.blizzardZones?.some(b => b.q === cell.q && b.r === cell.r)) {
+          score -= 50;
+        }
+        // Fire Mage's ember zone penalty for existing ember hexes
+        if (gameState.emberZones?.some(e => e.q === cell.q && e.r === cell.r)) {
+          score -= 50;
         }
       }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestTarget = cell;
+      }
     }
-    
-    if (skillDef.targetType === 'token' && targetTokenId) {
-      return { type: 'use_skill', payload: { skillId: gameState.activeSkillId, targetTokenId } };
-    } else {
-      return { type: 'use_skill', payload: { skillId: gameState.activeSkillId, targetHex: hex } };
+
+    const hex = { q: bestTarget.q, r: bestTarget.r };
+
+    let targetTokenId: string | undefined = undefined;
+
+    // Simulate what the UI does in targetClickHandlers.ts
+    const finalTargetToken = gameState.tokens.find(t => {
+      const tHex = pixelToHex(t.x, t.y);
+      return tHex.q === hex.q && tHex.r === hex.r;
+    });
+
+    const isFinalCastle0 = gameState.map?.castles?.[0]?.some(c => c.q === hex.q && c.r === hex.r);
+    const isFinalCastle1 = gameState.map?.castles?.[1]?.some(c => c.q === hex.q && c.r === hex.r);
+    const finalMonster = gameState.map?.monsters?.find((m: any) => m.q === hex.q && m.r === hex.r);
+
+    if (finalTargetToken) {
+      targetTokenId = finalTargetToken.id;
+    } else if (finalMonster) {
+      targetTokenId = `monster_${finalMonster.q}_${finalMonster.r}`;
+    } else if (isFinalCastle0 || isFinalCastle1) {
+      targetTokenId = `castle_${hex.q}_${hex.r}`;
     }
+
+    return { 
+      type: 'use_skill', 
+      payload: { 
+        skillId: gameState.activeSkillId, 
+        targetTokenId, 
+        targetHex: hex 
+      } 
+    };
   }
 
   private static decideActionResolveAction(gameState: GameState, playerIndex: number): BotAction {

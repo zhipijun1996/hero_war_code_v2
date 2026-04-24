@@ -71,11 +71,7 @@ export const handleHexClickLogic = (
     const payload: any = { skillId: gameState.activeSkillId, targetHex: { q, r } };
 
     if (targetToken) {
-      if (targetToken.boundToCardId) {
-        payload.targetTokenId = targetToken.boundToCardId;
-      } else {
-        payload.targetTokenId = targetToken.id;
-      }
+      payload.targetTokenId = targetToken.id;
     } else if (monster) {
       payload.targetTokenId = `monster_${monster.q}_${monster.r}`;
     }

@@ -31,20 +31,23 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
     "name": "狂怒",
     "description": "当你本回合受到伤害后，你的攻击伤害 +1，直到回合结束。"
   },
-  "ambush": {
-    id: "ambush",
-    "name": "偷袭",
-    "description": "移动，然后攻击。若该攻击被防御，你弃1张手牌"
+  "assassin_pierce_slash": {
+    id: "assassin_pierce_slash",
+    "name": "穿身斩",
+    "description": "主动技：选择一名相邻敌方单位。若其背后相邻区域为空，你可以移动至该区域，并对其进行一次攻击。",
+    type: "active"
   },
-  "shadow_step": {
-    id: "shadow_step",
-    "name": "影步",
-    "description": "攻击后可以移动1格"
+  "assassin_shadow_pierce": {
+    id: "assassin_shadow_pierce",
+    "name": "影袭穿斩",
+    "description": "主动技：执行一次移动。若移动后与敌方单位相邻，你可以立即对其使用【穿身斩】或进行攻击。",
+    type: "active"
   },
-  "lethal_assault": {
-    id: "lethal_assault",
-    "name": "致命突袭",
-    "description": "当你使用【突袭】时，选择一项：① 移动力 +1  ② 攻击伤害 +1 ③ 敌人不能防御或反击"
+  "assassin_shadow_clone": {
+    id: "assassin_shadow_clone",
+    "name": "暗影替身",
+    "description": "被动技/半被动：你的回合开始时，移除旧暗影，并在你所在区域放置 1 个暗影。暗影 HP1，对敌方视为路障。每回合一次，当你成为攻击目标时，你可以与暗影交换位置，并使该次攻击改为以暗影为目标。",
+    type: "passive"
   },
   "parry": {
     id: "parry",

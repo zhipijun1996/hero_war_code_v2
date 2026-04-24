@@ -140,8 +140,14 @@ export const fireMageFireball: SkillDefinition = {
         await CombatLogic.resolveCastleAttack(gameState, playerIndex, castleIdx, helpers as any);
       } else {
         const sourceCard = gameState.tableCards.find(c => c.id === gameState.tokens.find(t=>t.id===sourceTokenId)?.boundToCardId);
+        let targetCardId = mainTargetId;
+        const targetToken = gameState.tokens.find(t => t.id === mainTargetId);
+        if (targetToken && targetToken.boundToCardId) {
+          targetCardId = targetToken.boundToCardId;
+        }
+
         if (sourceCard) {
-          await ActionEngine.initiateAttack(gameState, playerIndex, sourceCard.id, mainTargetId, helpers as any, { emit: () => {} });
+          await ActionEngine.initiateAttack(gameState, playerIndex, sourceCard.id, targetCardId, helpers as any, { emit: () => {} });
         }
       }
 

@@ -109,7 +109,7 @@ export const warriorKnockbackSlash: SkillDefinition = {
       
       return { success: true };
     } else {
-      const targetToken = gameState.tokens.find(t => t.id === resolvedTargetTokenId);
+      const targetToken = gameState.tokens.find(t => t.id === resolvedTargetTokenId || t.boundToCardId === resolvedTargetTokenId);
       const targetCard = gameState.tableCards.find(c => c.id === targetToken?.boundToCardId);
       
       if (!targetToken || !targetCard) return { success: false, reason: '找不到目标。' };

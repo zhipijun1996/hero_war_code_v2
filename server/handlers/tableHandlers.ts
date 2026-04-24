@@ -73,6 +73,12 @@ export const createTableHandlers = (deps: any) => {
       const players = { ...gameState.players };
       const map = gameState.map;
       const mapConfig = gameState.mapConfig;
+      const imageConfig = gameState.imageConfig;
+      
+      // Completely clear gameState to remove any optional runtime fields (e.g. emberZones, icePillars, blizzardZones)
+      for (const key in gameState) {
+        delete (gameState as any)[key];
+      }
       
       const newState = createInitialState();
       Object.assign(gameState, newState);
@@ -81,6 +87,9 @@ export const createTableHandlers = (deps: any) => {
       gameState.players = players;
       gameState.map = map;
       gameState.mapConfig = mapConfig;
+      if (imageConfig) {
+        gameState.imageConfig = imageConfig;
+      }
       
       gameState.notification = null;
       gameState.gameStarted = false;
@@ -89,6 +98,7 @@ export const createTableHandlers = (deps: any) => {
         p.hand = [];
         p.gold = 0;
         p.discardFinished = false;
+        p.discardHistory = [];
       });
       
       addLog('游戏已重置 (Game Reset)', -1);

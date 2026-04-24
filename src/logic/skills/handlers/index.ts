@@ -9,6 +9,7 @@ import { archerAim, archerPoisonArrow, archerPoisonArrowEffect, archerArrowRain 
 import { commanderCommand, commanderFollowUp, commanderDispatch } from './commanderSkills.ts';
 import { fireMageFireball, fireMageSpread, fireMageDeflagration } from './fireMageSkills.ts';
 import { iceMageIcePillar, iceMagePillarBurst, iceMageDeepFreeze, iceMageBlizzard } from './iceMageSkills.ts';
+import { assassinPierceSlash } from './assassinSkills.ts';
 
 /**
  * 注册所有游戏内的英雄技能
@@ -66,4 +67,7 @@ export function registerAllSkills() {
   skillRegistry.registerSkill(iceMagePillarBurst);
   skillRegistry.registerSkill(iceMageDeepFreeze);
   skillRegistry.registerSkill(iceMageBlizzard);
+
+  // 注册刺客技能
+  skillRegistry.registerSkill(assassinPierceSlash);
 }

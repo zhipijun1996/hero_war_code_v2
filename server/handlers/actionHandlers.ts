@@ -256,6 +256,7 @@ export const createActionHandlers = (deps: any) => {
 
       console.log(`[select_skill_target] phase changed to action_select_skill_target, activeSkillId=${gameState.activeSkillId}, reachableCells=${gameState.reachableCells.length}`);
       broadcastState();
+      checkBotTurn();
     },
     select_target: async (socket: any, targetId: string) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -283,12 +284,14 @@ export const createActionHandlers = (deps: any) => {
       if (gameState.phase === 'hire') {
         ActionEngine.cancelHireSelection(gameState, playerIndex, actionHelpers);
         broadcastState();
+        checkBotTurn();
         return;
       }
 
       if (gameState.phase === 'buy') {
         ActionEngine.cancelBuySelection(gameState, playerIndex, actionHelpers);
         broadcastState();
+        checkBotTurn();
         return;
       }
 
@@ -307,6 +310,7 @@ export const createActionHandlers = (deps: any) => {
             gameState.pendingDefenseCardId = null;
             gameState.canCounterAttack = false;
             broadcastState();
+            checkBotTurn();
             return;
           }
           
@@ -322,6 +326,7 @@ export const createActionHandlers = (deps: any) => {
           
           addLog(`玩家${playerIndex + 1}撤回了出牌 (Player ${playerIndex + 1} undid card play)`, playerIndex);
           broadcastState();
+          checkBotTurn();
           return;
         }
       }
@@ -338,12 +343,14 @@ export const createActionHandlers = (deps: any) => {
         gameState.phase = 'action_select_skill';
         gameState.activeSkillId = null;
         broadcastState();
+        checkBotTurn();
         return;
       }
 
       if (gameState.phase === 'action_select_skill') {
         gameState.phase = 'action_select_action';
         broadcastState();
+        checkBotTurn();
         return;
       }
 
@@ -355,6 +362,7 @@ export const createActionHandlers = (deps: any) => {
       }
       
       broadcastState();
+      checkBotTurn();
     },
     cancel_play_card: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -381,6 +389,7 @@ export const createActionHandlers = (deps: any) => {
           
           addLog(`玩家${playerIndex + 1}撤回了出牌 (Player ${playerIndex + 1} undid card play)`, playerIndex);
           broadcastState();
+          checkBotTurn();
         }
       }
     },

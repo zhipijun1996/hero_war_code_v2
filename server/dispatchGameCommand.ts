@@ -68,6 +68,10 @@ export function dispatchGameCommand(
       migratedHandlers.use_skill(socketLike, action.payload);
       break;
 
+    case 'remove_ember_zone':
+      migratedHandlers.remove_ember_zone(socketLike, action.payload);
+      break;
+
     case 'select_target':
       migratedHandlers.select_target(socketLike, action.payload.targetId);
       break;
@@ -102,6 +106,10 @@ export function dispatchGameCommand(
 
     case 'finish_discard':
       migratedHandlers.finish_discard(socketLike);
+      break;
+
+    case 'undo_play':
+      migratedHandlers.undo_play(socketLike);
       break;
 
     case 'select_hire_cost':

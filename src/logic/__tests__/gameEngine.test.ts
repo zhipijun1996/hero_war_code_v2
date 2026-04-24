@@ -21,7 +21,7 @@ describe('Game Engine Core Operations', () => {
       const playerIndex = 0;
       const cardId = 'hero-card-1';
       
-      gameState.phase = 'shop';
+      gameState.phase = 'hire';
       gameState.activePlayerIndex = playerIndex;
       gameState.hireAreaCards = [{
         id: cardId,
@@ -55,18 +55,18 @@ describe('Game Engine Core Operations', () => {
   });
 
   describe('Combat', () => {
-    it('should resolve an attack and apply damage', () => {
+    it('should resolve an attack and apply damage', async () => {
       const playerIndex = 0;
       const attackerId = 'attacker-token';
       const targetCardId = 'target-card';
       
       gameState.tokens = [
-        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: 'Warrior' },
-        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: 'Mage' }
+        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: '战士', lv: 1 },
+        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: '法师', lv: 1 }
       ];
       gameState.tableCards = [
-        { id: 'attacker-card', heroClass: 'Warrior', level: 1, damage: 0 },
-        { id: targetCardId, heroClass: 'Mage', level: 1, damage: 0 }
+        { id: 'attacker-card', type: 'hero', heroClass: '战士', level: 1, damage: 0 },
+        { id: targetCardId, type: 'hero', heroClass: '法师', level: 1, damage: 0 }
       ];
       gameState.selectedTokenId = attackerId;
       gameState.selectedTargetId = targetCardId;
@@ -75,25 +75,25 @@ describe('Game Engine Core Operations', () => {
       // Mock calculateDamage to return a fixed value
       vi.spyOn(CombatLogic, 'calculateDamage').mockReturnValue(2);
 
-      CombatLogic.resolveAttack(gameState, playerIndex, helpers);
+      await CombatLogic.resolveAttack(gameState, playerIndex, helpers);
 
       const targetCard = gameState.tableCards.find(c => c.id === targetCardId);
       expect(targetCard.damage).toBe(2);
       expect(helpers.addLog).toHaveBeenCalledWith(expect.stringContaining('造成了 2 点伤害'), playerIndex);
     });
 
-    it('should resolve a counter-attack', () => {
+    it('should resolve a counter-attack', async () => {
       const playerIndex = 0;
       const attackerId = 'attacker-token';
       const targetCardId = 'target-card';
       
       gameState.tokens = [
-        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: 'Warrior' },
-        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: 'Mage' }
+        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: '战士', lv: 1 },
+        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: '法师', lv: 1 }
       ];
       gameState.tableCards = [
-        { id: 'attacker-card', heroClass: 'Warrior', level: 1, damage: 0 },
-        { id: targetCardId, heroClass: 'Mage', level: 1, damage: 0 }
+        { id: 'attacker-card', type: 'hero', heroClass: '战士', level: 1, damage: 0 },
+        { id: targetCardId, type: 'hero', heroClass: '法师', level: 1, damage: 0 }
       ];
       gameState.selectedTokenId = attackerId;
       gameState.selectedTargetId = targetCardId;
@@ -101,25 +101,25 @@ describe('Game Engine Core Operations', () => {
 
       vi.spyOn(CombatLogic, 'calculateDamage').mockReturnValue(1);
 
-      CombatLogic.resolveCounterAttack(gameState, 1 - playerIndex, helpers);
+      await CombatLogic.resolveCounterAttack(gameState, 1 - playerIndex, helpers);
 
       const attackerCard = gameState.tableCards.find(c => c.id === 'attacker-card');
       expect(attackerCard.damage).toBe(1);
       expect(helpers.addLog).toHaveBeenCalledWith(expect.stringContaining('进行了反击'), 1 - playerIndex);
     });
 
-    it('should handle defense with a card', () => {
+    it('should handle defense with a card', async () => {
       const playerIndex = 0;
       const attackerId = 'attacker-token';
       const targetCardId = 'target-card';
       
       gameState.tokens = [
-        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: 'Warrior' },
-        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: 'Mage' }
+        { id: attackerId, x: 0, y: 0, boundToCardId: 'attacker-card', heroClass: '战士', lv: 1 },
+        { id: 'target-token', x: 100, y: 0, boundToCardId: targetCardId, heroClass: '法师', lv: 1 }
       ];
       gameState.tableCards = [
-        { id: 'attacker-card', heroClass: 'Warrior', level: 1, damage: 0 },
-        { id: targetCardId, heroClass: 'Mage', level: 1, damage: 0 }
+        { id: 'attacker-card', type: 'hero', heroClass: '战士', level: 1, damage: 0 },
+        { id: targetCardId, type: 'hero', heroClass: '法师', level: 1, damage: 0 }
       ];
       gameState.selectedTokenId = attackerId;
       gameState.selectedTargetId = targetCardId;
@@ -128,7 +128,7 @@ describe('Game Engine Core Operations', () => {
       gameState.lastPlayedCardId = 'defense-card-id';
       gameState.playAreaCards = [{ id: 'defense-card-id', name: 'Shield' }];
 
-      CombatLogic.resolveAttack(gameState, playerIndex, helpers);
+      await CombatLogic.resolveAttack(gameState, playerIndex, helpers);
 
       const targetCard = gameState.tableCards.find(c => c.id === targetCardId);
       expect(targetCard.damage).toBe(0);
@@ -143,7 +143,7 @@ describe('Game Engine Core Operations', () => {
       const cardId = 'hero-card';
       
       gameState.tokens = [{ id: tokenId, x: 0, y: 0, boundToCardId: cardId, heroClass: '战士', lv: 1 }];
-      gameState.tableCards = [{ id: cardId, heroClass: '战士', level: 1, damage: 0 }];
+      gameState.tableCards = [{ id: cardId, type: 'hero', heroClass: '战士', level: 1, damage: 0 }];
       gameState.counters = [{ id: 'exp-counter', type: 'exp', boundToCardId: cardId, value: 5 }];
       gameState.selectedTokenId = tokenId;
       gameState.activeHeroTokenId = tokenId;
