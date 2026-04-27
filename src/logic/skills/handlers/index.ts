@@ -9,7 +9,9 @@ import { archerAim, archerPoisonArrow, archerPoisonArrowEffect, archerArrowRain 
 import { commanderCommand, commanderFollowUp, commanderDispatch } from './commanderSkills.ts';
 import { fireMageFireball, fireMageSpread, fireMageDeflagration } from './fireMageSkills.ts';
 import { iceMageIcePillar, iceMagePillarBurst, iceMageDeepFreeze, iceMageBlizzard } from './iceMageSkills.ts';
-import { assassinPierceSlash } from './assassinSkills.ts';
+import { assassinPierceSlash, assassinShadowPierce, assassinShadowClone } from './assassinSkills.ts';
+import { thiefSneakAttack, thiefSleightOfHand, thiefStealSkills } from './thiefSkills.ts';
+import { duelistPullingSlash, duelistChasingStep, duelistInfiniteSwordDomain } from './duelistSkills.ts';
 
 /**
  * 注册所有游戏内的英雄技能
@@ -70,4 +72,16 @@ export function registerAllSkills() {
 
   // 注册刺客技能
   skillRegistry.registerSkill(assassinPierceSlash);
+  skillRegistry.registerSkill(assassinShadowPierce);
+  skillRegistry.registerSkill(assassinShadowClone);
+
+  // 注册盗贼技能
+  skillRegistry.registerSkill(thiefSneakAttack);
+  skillRegistry.registerSkill(thiefSleightOfHand);
+  skillRegistry.registerSkill(thiefStealSkills);
+
+  // 注册决斗大师技能
+  skillRegistry.registerSkill(duelistPullingSlash);
+  skillRegistry.registerSkill(duelistChasingStep);
+  skillRegistry.registerSkill(duelistInfiniteSwordDomain);
 }

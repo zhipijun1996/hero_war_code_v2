@@ -93,21 +93,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.parry]
+          "skills": [SKILLS_LIBRARY.duelist_pulling_slash]
         },
         "2": {
           "hp": 3,
           "ar": 1,
           "mv": 2,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.parry, SKILLS_LIBRARY.counter_measure]
+          "skills": [SKILLS_LIBRARY.duelist_pulling_slash, SKILLS_LIBRARY.duelist_chasing_step]
         },
         "3": {
           "hp": 4,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.parry, SKILLS_LIBRARY.counter_measure, SKILLS_LIBRARY.knockback]
+          "skills": [SKILLS_LIBRARY.duelist_pulling_slash, SKILLS_LIBRARY.duelist_chasing_step, SKILLS_LIBRARY.duelist_infinite_sword_domain]
         }
       }
     },
@@ -120,21 +120,21 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.stealth, SKILLS_LIBRARY.swift_foot]
+          "skills": [SKILLS_LIBRARY.sneak_attack]
         },
         "2": {
           "hp": 3,
           "ar": 1,
           "mv": 2,
           "xp": 4,
-          "skills": [SKILLS_LIBRARY.stealth, SKILLS_LIBRARY.disarm]
+          "skills": [SKILLS_LIBRARY.sneak_attack, SKILLS_LIBRARY.sleight_of_hand]
         },
         "3": {
           "hp": 3,
           "ar": 1,
           "mv": 2,
           "xp": 0,
-          "skills": [SKILLS_LIBRARY.stealth, SKILLS_LIBRARY.disarm, SKILLS_LIBRARY.theft]
+          "skills": [SKILLS_LIBRARY.sneak_attack, SKILLS_LIBRARY.sleight_of_hand, SKILLS_LIBRARY.steal_skills]
         }
       }
     },
@@ -152,14 +152,14 @@ export const HEROES_DATABASE: HeroesDatabase = {
         "2": {
           "hp": 3,
           "ar": 2,
-          "mv": 2,
+          "mv": 1,
           "xp": 5,
           "skills": [SKILLS_LIBRARY.ice_pillar, SKILLS_LIBRARY.pillar_burst]
         },
         "3": {
           "hp": 3,
           "ar": 2,
-          "mv": 2,
+          "mv": 1,
           "xp": 0,
           "skills": [SKILLS_LIBRARY.ice_pillar, SKILLS_LIBRARY.pillar_burst, SKILLS_LIBRARY.deep_freeze, SKILLS_LIBRARY.ice_mage_blizzard]
         }
@@ -179,14 +179,14 @@ export const HEROES_DATABASE: HeroesDatabase = {
         "2": {
           "hp": 3,
           "ar": 2,
-          "mv": 2,
+          "mv": 1,
           "xp": 5,
           "skills": [SKILLS_LIBRARY.fire_mage_fireball, SKILLS_LIBRARY.fire_mage_spread]
         },
         "3": {
           "hp": 3,
           "ar": 2,
-          "mv": 2,
+          "mv": 1,
           "xp": 0,
           "skills": [SKILLS_LIBRARY.fire_mage_fireball, SKILLS_LIBRARY.fire_mage_spread, SKILLS_LIBRARY.fire_mage_deflagration]
         }
@@ -213,7 +213,7 @@ export const HEROES_DATABASE: HeroesDatabase = {
         "3": {
           "hp": 3,
           "ar": 3,
-          "mv": 2,
+          "mv": 1,
           "xp": 0,
           "skills": [SKILLS_LIBRARY.aim, SKILLS_LIBRARY.poison_arrow, SKILLS_LIBRARY.arrow_rain, SKILLS_LIBRARY.poison_arrow_effect]
         }

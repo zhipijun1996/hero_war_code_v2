@@ -221,6 +221,7 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
           magicCircles={gameState.magicCircles}
           emberZones={gameState.emberZones}
           icePillars={gameState.icePillars}
+          shadows={gameState.shadows}
           blizzardZones={gameState.blizzardZones}
           activeActionType={gameState.activeActionType}
         />

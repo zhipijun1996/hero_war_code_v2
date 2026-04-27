@@ -200,6 +200,15 @@ export interface IcePillar {
   sourceTokenId: string;
 }
 
+export interface ShadowEntity {
+  id: string;
+  q: number;
+  r: number;
+  hp: number;
+  ownerIndex: number;
+  sourceTokenId: string;
+}
+
 export interface GameState {
   map?: MapConfig;
   mapConfig?: MapConfig;
@@ -223,6 +232,7 @@ export interface GameState {
   counters: Counter[];
   emberZones?: EmberZone[];
   icePillars?: IcePillar[];
+  shadows?: ShadowEntity[];
   pendingEmberZoneParams?: {
     q: number;
     r: number;
@@ -313,9 +323,10 @@ export interface GameState {
   usedDispatchThisTurn?: string[];
   skillQueue?: SkillQueueItem[];
   activeSkillState?: {
-    step: number;
+    step?: number;
     target1Id?: string;
     target2Id?: string;
+    [key: string]: any;
   } | null;
 }
 

@@ -76,7 +76,7 @@ export function getRecoilHex(
       const isOccupied = gameState.tokens.some((t) => {
         const h = pixelToHex(t.x, t.y);
         return h.q === neighbor.q && h.r === neighbor.r;
-      });
+      }) || gameState.shadows?.some(s => s.q === neighbor.q && s.r === neighbor.r);
 
       // 检查怪物
       const isMonster = gameState.map?.monsters.some((m) => {
@@ -214,8 +214,9 @@ export function getReachableHexes(
             const enemyIndex = 1 - playerIndex;
             const enemyCastles = gameState.map?.castles[enemyIndex as 0 | 1];
             const isEnemyCastle = enemyCastles?.some(c => c.q === neighbor.q && c.r === neighbor.r);
+            const isEnemyShadow = gameState.shadows?.some(s => s.q === neighbor.q && s.r === neighbor.r && s.ownerIndex !== playerIndex);
             
-            if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle || isIcePillar) {
+            if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle || isIcePillar || isEnemyShadow) {
               continue;
             }
             

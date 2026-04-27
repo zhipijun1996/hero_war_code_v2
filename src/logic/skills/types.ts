@@ -22,7 +22,8 @@ export type SkillTrigger =
   | 'onHeroRevive'
   | 'onKnockbackSuccess'
   | 'onCommandUsed'
-  | 'onTerrainDestroyed';
+  | 'onTerrainDestroyed'
+  | 'onCardsDiscardedEffect';
 
 export interface SkillContext {
   gameState: GameState;
@@ -71,7 +72,7 @@ export interface SkillDefinition {
   name: string;
   description: string;
   kind: SkillKind;
-  trigger?: SkillTrigger; // Used for passive/semi_passive
+  trigger?: SkillTrigger | SkillTrigger[]; // Used for passive/semi_passive
   
   // Target selection for active skills
   targetType?: SkillTargetType;

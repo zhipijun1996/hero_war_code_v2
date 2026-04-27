@@ -41,7 +41,12 @@ export class SkillEngine {
 
     const options: SkillUseOption[] = [];
 
-    for (const skill of levelData.skills) {
+    const activeSkills = [...levelData.skills];
+    if ((gameState as any).stolenSkill && (gameState as any).stolenSkill.sourceTokenId === sourceTokenId) {
+      activeSkills.push({ id: (gameState as any).stolenSkill.skillId } as any);
+    }
+
+    for (const skill of activeSkills) {
       if (!skill.id) continue;
 
       const skillDef = skillRegistry.getSkill(skill.id);
@@ -117,17 +122,26 @@ export class SkillEngine {
       const levelData = heroData.levels[token.lv.toString()];
       if (!levelData || !levelData.skills) continue;
 
-      for (const skill of levelData.skills) {
+      const passiveSkills = [...levelData.skills];
+      if ((gameState as any).stolenSkill && (gameState as any).stolenSkill.sourceTokenId === token.id) {
+        passiveSkills.push({ id: (gameState as any).stolenSkill.skillId } as any);
+      }
+
+      for (const skill of passiveSkills) {
         if (!skill.id) continue;
 
         const skillDef = skillRegistry.getSkill(skill.id);
-        if (!skillDef || (skillDef.kind !== 'passive' && skillDef.kind !== 'semi_passive')) continue;
-        if (skillDef.trigger !== eventName) continue;
+        if (!skillDef) continue;
+        if (skillDef.kind === 'active' && !skillDef.trigger) continue;
+        
+        const triggers = Array.isArray(skillDef.trigger) ? skillDef.trigger : [skillDef.trigger];
+        if (!triggers.includes(eventName)) continue;
 
         const context: SkillContext = {
           gameState,
           playerIndex,
           sourceTokenId: token.id,
+          eventName,
           ...extraContext
         };
 
@@ -180,8 +194,12 @@ export class SkillEngine {
     let bonusMult = 1;
 
     // 1. 遍历该英雄自己的技能
-    if (levelData.skills) {
-      for (const skill of levelData.skills) {
+    const statSkills = levelData.skills ? [...levelData.skills] : [];
+    if ((gameState as any).stolenSkill && (gameState as any).stolenSkill.sourceTokenId === tokenId) {
+      statSkills.push({ id: (gameState as any).stolenSkill.skillId } as any);
+    }
+
+    for (const skill of statSkills) {
         const skillDef = skillRegistry.getSkill(skill.id);
         if (!skillDef) continue;
 
@@ -207,7 +225,6 @@ export class SkillEngine {
           baseValue = skillDef.applyStaticModifier(baseValue, context);
         }
       }
-    }
 
     // 2. TODO: 遍历全场光环技能 (Auras)
     // 目前先只处理英雄自身的

@@ -17,6 +17,7 @@ interface HexGridLayerProps {
   magicCircles?: any[];
   emberZones?: any[];
   icePillars?: any[];
+  shadows?: any[];
   blizzardZones?: any;
   activeActionType?: string;
 }
@@ -34,6 +35,7 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
   magicCircles,
   emberZones,
   icePillars,
+  shadows,
   blizzardZones,
   activeActionType
 }) => {
@@ -130,6 +132,16 @@ export const HexGridLayer: React.FC<HexGridLayerProps> = ({
         
         // Use an icicle / crystal icon
         icon = "🧊";
+      }
+
+      // Render shadows
+      const shadow = shadows?.find(s => s.q === q && s.r === r);
+      if (shadow && shadow.hp > 0) {
+        // Dark purple highlight
+        if (!highlightColor) {
+          highlightColor = "rgba(147, 51, 234, 0.4)"; // Purple-600 opacity
+        }
+        icon = "👤"; // Shadow icon
       }
 
       // Highlight castles for deployment/hiring/revival

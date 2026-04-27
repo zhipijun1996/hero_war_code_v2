@@ -49,6 +49,24 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
     "description": "被动技/半被动：你的回合开始时，移除旧暗影，并在你所在区域放置 1 个暗影。暗影 HP1，对敌方视为路障。每回合一次，当你成为攻击目标时，你可以与暗影交换位置，并使该次攻击改为以暗影为目标。",
     type: "passive"
   },
+  "duelist_pulling_slash": {
+    id: "duelist_pulling_slash",
+    "name": "牵引斩",
+    "description": "主动技：选择直线 2 格内一名敌方单位。若你与其之间无阻挡，将其拉至你相邻的合法空格，并对其进行一次攻击。",
+    type: "active"
+  },
+  "duelist_chasing_step": {
+    id: "duelist_chasing_step",
+    "name": "追步",
+    "description": "被动技：被你攻击过的相邻敌方单位离开你相邻区域后，你可以移动 1 格。",
+    type: "passive"
+  },
+  "duelist_infinite_sword_domain": {
+    id: "duelist_infinite_sword_domain",
+    "name": "无限剑域",
+    "description": "主动技：本回合一次，直到回合结束前，你 2 格范围内的区域成为剑域。每名敌方单位每回合第一次主动进入或离开剑域时，你可以对其进行一次攻击。",
+    type: "active"
+  },
   "parry": {
     id: "parry",
     "name": "招架",
@@ -64,20 +82,23 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
     "name": "反击震退",
     "description": "当你攻击或反击后，将目标沿攻击方向直线推开2格"
   },
-  "stealth": {
-    id: "stealth",
-    "name": "潜伏",
-    "description": "若你本回合尚未进行行动，你不能被指令为攻击或技能的对象"
+  "sneak_attack": {
+    id: "sneak_attack",
+    "name": "偷袭",
+    "description": "主动技：对相邻敌方英雄进行一次攻击。若造成伤害，随机弃置其 1 张手牌。",
+    type: "active"
   },
-  "disarm": {
-    id: "disarm",
-    "name": "拍落",
-    "description": "当你攻击命中目标时，目标需要弃一张牌"
+  "sleight_of_hand": {
+    id: "sleight_of_hand",
+    "name": "顺手牵羊",
+    "description": "被动技：当你使敌方英雄弃置手牌后，你可以移动 1 格，或从牌库抽 1 张牌。",
+    type: "passive"
   },
-  "theft": {
-    id: "theft",
-    "name": "盗窃",
-    "description": "若你本回合尚未进行行动，你的攻击不能被防御或反击，且获得因“拍落”弃掉的那张牌"
+  "steal_skills": {
+    id: "steal_skills",
+    "name": "偷天换日",
+    "description": "被动技：回合开始时，选择一名敌方英雄已解锁的一个技能。直到回合结束前，你获得该技能。",
+    type: "passive"
   },
   "ice_pillar": {
     id: "ice_pillar",

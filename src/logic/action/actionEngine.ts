@@ -1450,6 +1450,7 @@ export class ActionEngine {
     gameState.activeActionTokenId = null;
     gameState.activeActionType = null;
     gameState.activeEnhancementCardId = null;
+    gameState.activeSkillState = null;
     gameState.wasDeepFreezeBroken = false;
     gameState.isFollowUpAction = false;
     gameState.phase = 'action_play';

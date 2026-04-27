@@ -1,5 +1,91 @@
 import { SkillDefinition, SkillContext, SkillHelpers, SkillResult } from '../types.ts';
 import { getHexDistance, hexToPixel, pixelToHex } from '../../../shared/utils/hexUtils.ts';
+import { getReachableHexes } from '../../map/mapLogic.ts';
+
+export const assassinShadowClone: SkillDefinition = {
+  id: 'assassin_shadow_clone',
+  name: '暗影替身',
+  description: '被动技/半被动：你的回合开始时，移除旧暗影，并在你所在区域放置 1 个暗影。暗影 HP1，对敌方视为路障。每回合一次，当你成为攻击目标时，你可以与暗影交换位置，并使该次攻击改为以暗影为目标。',
+  kind: 'passive',
+  trigger: ['onTurnStart', 'onBeforeAttack'],
+  execute: async (context: SkillContext, helpers: SkillHelpers): Promise<SkillResult> => {
+    const { gameState, sourceTokenId, playerIndex, defenderTokenId } = context;
+    const heroToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!heroToken) return { success: false };
+
+    // We can differentiate 'onTurnStart' from 'onBeforeAttack' based on whether defenderTokenId is passed
+    if (!defenderTokenId) {
+      if (!gameState.shadows) gameState.shadows = [];
+      
+      gameState.shadows = gameState.shadows.filter(s => s.sourceTokenId !== sourceTokenId);
+      (heroToken as any).usedShadowCloneSwapThisTurn = false;
+      const hHex = pixelToHex(heroToken.x, heroToken.y);
+      
+      gameState.shadows.push({
+        id: `shadow_${sourceTokenId}`,
+        sourceTokenId: sourceTokenId,
+        ownerIndex: playerIndex,
+        q: hHex.q,
+        r: hHex.r,
+        hp: 1
+      });
+      
+      helpers.addLog(`刺客在场上留下了【暗影替身】。`, playerIndex);
+      return { success: true };
+    } else {
+      if (defenderTokenId !== sourceTokenId) return { success: true };
+      if ((heroToken as any).usedShadowCloneSwapThisTurn) return { success: true };
+      
+      if (!gameState.shadows) return { success: true };
+      const shadowIndex = gameState.shadows.findIndex(s => s.sourceTokenId === sourceTokenId && s.hp > 0);
+      if (shadowIndex === -1) return { success: true };
+      
+      const shadow = gameState.shadows[shadowIndex];
+
+      if (helpers.promptPlayer) {
+        const swapChoice = await helpers.promptPlayer(playerIndex, 'yes_no', {
+          message: '你成为了攻击目标！是否与【暗影替身】交换位置，让暗影承受攻击？',
+          yesText: '交换并让暗影承受',
+          noText: '不使用'
+        });
+
+        if (swapChoice) {
+          (heroToken as any).usedShadowCloneSwapThisTurn = true;
+          
+          const hHex = pixelToHex(heroToken.x, heroToken.y);
+          const tempQ = hHex.q;
+          const tempR = hHex.r;
+          
+          const newPos = hexToPixel(shadow.q, shadow.r);
+          heroToken.x = newPos.x;
+          heroToken.y = newPos.y;
+
+          shadow.q = tempQ;
+          shadow.r = tempR;
+
+          shadow.hp = 0;
+          
+          helpers.addLog(`刺客发动了【暗影替身】，与暗影交换了位置！攻击击中了暗影替身，替身被摧毁！`, playerIndex);
+          helpers.broadcastState();
+
+          gameState.phase = 'action_play';
+          gameState.notification = null;
+          gameState.activeActionType = null;
+          gameState.selectedTokenId = null;
+          gameState.reachableCells = [];
+          gameState.selectedTargetId = null;
+
+          const { ActionEngine } = await import('../../action/actionEngine.ts');
+          await ActionEngine.finishAction(gameState, 1 - playerIndex, helpers as any, (helpers as any).socket || {});
+          
+          return { success: true, data: { interrupt: true } };
+        }
+      }
+    }
+    
+    return { success: true };
+  }
+};
 
 export const assassinPierceSlash: SkillDefinition = {
   id: 'assassin_pierce_slash',
@@ -243,5 +329,167 @@ export const assassinPierceSlash: SkillDefinition = {
       
       return { success: true };
     }
+  }
+};
+
+export const assassinShadowPierce: SkillDefinition = {
+  id: 'assassin_shadow_pierce',
+  kind: 'active',
+  targetType: 'hex',
+  name: '影袭穿斩',
+  description: '主动技：执行一次移动。若移动后与敌方单位相邻，你可以立即对其使用【穿身斩】或进行攻击。',
+  getValidTargets: (context: SkillContext) => {
+    const { gameState, sourceTokenId } = context;
+    const token = gameState.tokens.find(t => t.id === sourceTokenId || t.boundToCardId === sourceTokenId);
+    if (!token) return [];
+    
+    // We only need valid targets for the first step (the initial movement)
+    // The second step targets are handled interactively through prompt
+    if (!gameState.activeSkillState) {
+      const heroCard = gameState.tableCards.find(c => c.id === token.boundToCardId);
+      const tHex = pixelToHex(token.x, token.y);
+      return getReachableHexes(
+        { q: tHex.q, r: tHex.r },
+        heroCard?.level === 1 ? 1 : 2,
+        gameState.activePlayerIndex,
+        gameState
+      );
+    }
+    return [];
+  },
+  execute: async (context: SkillContext, helpers: SkillHelpers): Promise<SkillResult> => {
+    const { gameState, playerIndex, sourceTokenId } = context;
+    const heroToken = gameState.tokens.find(t => t.id === sourceTokenId || t.boundToCardId === sourceTokenId);
+    if (!heroToken) return { success: false, reason: '未找到施法者。' };
+
+    const { getReachableHexes, getNeighbors } = await import('../../map/mapLogic.ts');
+
+    if (!gameState.activeSkillState) {
+      // Step 1: Move setup
+      const heroHex = pixelToHex(heroToken.x, heroToken.y);
+      const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+      gameState.reachableCells = getReachableHexes(
+        { q: heroHex.q, r: heroHex.r },
+        heroCard?.level === 1 ? 1 : 2,
+        playerIndex,
+        gameState
+      );
+      gameState.activeSkillState = { step: 1 };
+      gameState.phase = 'action_select_skill_target';
+      return { success: true, inProgress: true };
+    }
+
+    if (gameState.activeSkillState?.step === 1) {
+      const targetHex = context.targetHex;
+      if (!targetHex) return { success: false, reason: '未选择移动目标。' };
+
+      // Make sure the target is valid
+      const isValid = (gameState.reachableCells || []).some(
+        c => c.q === targetHex.q && c.r === targetHex.r
+      );
+      if (!isValid) return { success: false, reason: '无效的移动位置。' };
+
+      // Move the token
+      const heroHex = pixelToHex(heroToken.x, heroToken.y);
+      const { hexToPixel } = await import('../../../shared/utils/hexUtils.ts');
+      const newPos = hexToPixel(targetHex.q, targetHex.r);
+      heroToken.x = newPos.x;
+      heroToken.y = newPos.y;
+      
+      helpers.addLog(`刺客发动【影袭穿斩】，移动到了目标格。`, playerIndex);
+      helpers.broadcastState();
+
+      // Check adjacent enemies
+      const neighbors = getNeighbors(targetHex.q, targetHex.r);
+      let enemyNearby = false;
+      
+      for (const hex of neighbors) {
+        const token = gameState.tokens.find(t => {
+          const tHex = pixelToHex(t.x, t.y);
+          return tHex.q === hex.q && tHex.r === hex.r && (t as any).playerIndex !== playerIndex;
+        });
+        if (token) {
+          enemyNearby = true;
+          break;
+        }
+        const monster = gameState.map?.monsters?.find((m: any) => m.q === hex.q && m.r === hex.r && (m as any).level > 0);
+        if (monster) {
+          enemyNearby = true;
+          break;
+        }
+        const pillar = gameState.icePillars?.find(p => p.q === hex.q && p.r === hex.r);
+        if (pillar && pillar.ownerIndex !== playerIndex) {
+            enemyNearby = true;
+            break;
+        }
+      }
+
+      if (!enemyNearby) {
+        gameState.activeSkillState = null;
+        return { success: true };
+      }
+
+      // Prompt to choose follow-up action
+      const selectedSkillId = await helpers.promptPlayer!(playerIndex, 'select_skill', {
+        skills: [
+          { id: 'attack', name: '攻击', description: '进行一次普通攻击' },
+          { id: 'assassin_pierce_slash', name: '穿身斩', description: '使用主动技能【穿身斩】' },
+          { id: 'cancel', name: '不出手', description: '结束技能' }
+        ],
+        message: '移动后与敌方单位相邻，你可以立即对其使用【穿身斩】或进行攻击。'
+      });
+
+      if (!selectedSkillId || selectedSkillId === 'cancel') {
+        gameState.activeSkillState = null;
+        return { success: true };
+      }
+
+      if (selectedSkillId === 'attack') {
+        gameState.activeSkillState = null;
+        const { getAttackableHexes } = await import('../../map/mapLogic.ts');
+        const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+        const heroHex = pixelToHex(heroToken.x, heroToken.y);
+        gameState.reachableCells = getAttackableHexes(heroHex.q, heroHex.r, 1, playerIndex, gameState, heroCard?.level || 1);
+        gameState.phase = 'action_resolve';
+        gameState.activeActionType = 'attack';
+        gameState.selectedOption = 'attack';
+        gameState.notification = '请选择攻击目标';
+        return { success: true, inProgress: true };
+      }
+
+      if (selectedSkillId === 'assassin_pierce_slash') {
+        gameState.activeSkillState = null;
+        const { assassinPierceSlash } = await import('./assassinSkills.ts');
+        const validContext = { ...context };
+        const validTargets = assassinPierceSlash.getValidTargets!(validContext);
+        
+        if (validTargets && validTargets.length > 0) {
+          const { pixelToHex } = await import('../../../shared/utils/hexUtils.ts');
+          gameState.reachableCells = validTargets.map(target => {
+            if (typeof target === 'string') {
+                if (target.startsWith('monster_') || target.startsWith('icepillar_')) {
+                    const parts = target.split('_');
+                    return { q: parseInt(parts[1]), r: parseInt(parts[2]) };
+                }
+                const t = gameState.tokens.find(tok => tok.id === target || tok.boundToCardId === target);
+                if (t) return pixelToHex(t.x, t.y);
+            } else if (typeof target === 'object' && target !== null && 'q' in target && 'r' in target) {
+                return target;
+            }
+            return null;
+          }).filter(Boolean) as { q: number, r: number }[];
+          
+          gameState.phase = 'action_select_skill_target';
+          gameState.activeSkillId = 'assassin_pierce_slash';
+          gameState.notification = '请选择穿身斩的目标';
+          return { success: true, inProgress: true };
+        } else {
+          helpers.addLog(`无可用的穿身斩目标，动作结束。`, playerIndex);
+          return { success: true };
+        }
+      }
+    }
+
+    return { success: false, reason: '未知的状态' };
   }
 };

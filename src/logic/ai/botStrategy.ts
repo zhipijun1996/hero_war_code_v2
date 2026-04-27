@@ -26,6 +26,7 @@ export type BotAction =
   | { type: 'pass_shop' }  
   | { type: 'finish_action'}
   | { type: 'discard_card'; payload: { cardId: string } }
+  | { type: 'finish_discard' }
   | { type: 'undo_play' }
   | { type: 'declare_defend' }
   | { type: 'declare_counter' }
@@ -137,6 +138,23 @@ export class BotStrategy {
           // Cannot discard, cancel move
           return { type: 'skill_interrupt_response', payload: { response: null } };
         }
+      }
+
+      if (prompt.promptType === 'select_skill') {
+        const skills = prompt.context?.skills || [];
+        if (skills.length > 0) {
+          // Pick a random skill (or the first one)
+          const choice = skills[Math.floor(Math.random() * (skills.length > 1 ? skills.length - 1 : 1))].id;
+          return { type: 'skill_interrupt_response', payload: { response: choice } };
+        }
+      }
+
+      if (prompt.promptType === 'heal_move' || prompt.promptType === 'thief_move') {
+        if (gameState.reachableCells && gameState.reachableCells.length > 0) {
+          const randomHex = gameState.reachableCells[Math.floor(Math.random() * gameState.reachableCells.length)];
+          return { type: 'skill_interrupt_response', payload: { response: { targetHex: randomHex } } };
+        }
+        return { type: 'skill_interrupt_response', payload: { response: null } };
       }
 
       // For other skills like guardian_swap, bots always say yes
@@ -397,7 +415,9 @@ export class BotStrategy {
       const monster = gameState.map?.monsters?.find((m: any) => m.q === cell.q && m.r === cell.r);
 
       if (targetToken) {
-        if (targetToken.playerId !== undefined && targetToken.playerId !== playerIndex) {
+        const tOwner = (targetToken as any).playerIndex || (targetToken as any).playerIdx;
+        const isEnemy = tOwner !== undefined ? tOwner !== playerIndex : ((playerIndex === 0 && targetToken.y < 0) || (playerIndex === 1 && targetToken.y > 0));
+        if (isEnemy) {
           score += 100; // Found enemy unit
           if (targetToken.heroClass) score += 50; // Priority to heroes
         } else {
@@ -411,7 +431,7 @@ export class BotStrategy {
         score += 10; // Empty hex
         
         // Ice Mage's blizzard penalty for already-frozen hexes
-        if (gameState.blizzardZones?.some(b => b.q === cell.q && b.r === cell.r)) {
+        if (gameState.blizzardZones && gameState.blizzardZones.sourceHex.q === cell.q && gameState.blizzardZones.sourceHex.r === cell.r) {
           score -= 50;
         }
         // Fire Mage's ember zone penalty for existing ember hexes
