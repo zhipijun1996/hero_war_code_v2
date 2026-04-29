@@ -376,6 +376,7 @@ export const assassinShadowPierce: SkillDefinition = {
       );
       gameState.activeSkillState = { step: 1 };
       gameState.phase = 'action_select_skill_target';
+      gameState.activeSkillId = 'assassin_stealth_dash';
       return { success: true, inProgress: true };
     }
 

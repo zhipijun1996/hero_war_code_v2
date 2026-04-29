@@ -9,9 +9,17 @@ export function isTargetInAttackRange(
   attackerHex: Hex,
   targetHex: Hex,
   ar: number,
-  gameState: GameState
+  gameState: GameState,
+  isTurretAttack: boolean = false
 ): boolean {
+  const dq = targetHex.q - attackerHex.q;
+  const dr = targetHex.r - attackerHex.r;
   const dist = getHexDistance(attackerHex, targetHex);
+
+  if (isTurretAttack) {
+    if (dist >= 1 && (dq === 0 || dr === 0 || dq + dr === 0)) return true;
+    return false;
+  }
 
   // Check base range
   if (ar <= 1) {
@@ -78,6 +86,9 @@ export function getRecoilHex(
         return h.q === neighbor.q && h.r === neighbor.r;
       }) || gameState.shadows?.some(s => s.q === neighbor.q && s.r === neighbor.r);
 
+      // 检查固定路障
+      const isMapObstacle = gameState.map?.obstacles?.some(o => o.q === neighbor.q && o.r === neighbor.r) || gameState.map?.obstacles_v2?.some(o => o.q === neighbor.q && o.r === neighbor.r);
+
       // 检查怪物
       const isMonster = gameState.map?.monsters.some((m) => {
         if (m.q !== neighbor.q || m.r !== neighbor.r) return false;
@@ -92,7 +103,7 @@ export function getRecoilHex(
       // 检查地图边界 (假设 4x4x4 的六边形地图)
       const inBounds = Math.abs(neighbor.q) <= 4 && Math.abs(neighbor.r) <= 4 && Math.abs(-neighbor.q - neighbor.r) <= 4;
 
-      if (!isOccupied && !isMonster && inBounds) {
+      if (!isOccupied && !isMonster && !isMapObstacle && inBounds) {
         const dist = getHexDistance(neighbor, enemyCastleHex);
         if (dist > maxDist) {
           maxDist = dist;
@@ -135,14 +146,15 @@ export function getPathDist(
       const key = `${neighbor.q},${neighbor.r}`;
       if (visited.has(key)) continue;
 
-      // 检查地形阻挡 (简单示例，可根据需求扩展)
-      const isObstacle = gameState.tokens.some(t => {
+      // 检查地形阻挡 (包含Token障碍物、地图固定路障)
+      const isTokenObstacle = gameState.tokens.some(t => {
           if (t.type !== 'obstacle') return false;
           const h = pixelToHex(t.x, t.y);
           return h.q === neighbor.q && h.r === neighbor.r;
       });
+      const isMapObstacle = gameState.map?.obstacles?.some(o => o.q === neighbor.q && o.r === neighbor.r) || gameState.map?.obstacles_v2?.some(o => o.q === neighbor.q && o.r === neighbor.r);
 
-      if (!isObstacle) {
+      if (!isTokenObstacle && !isMapObstacle) {
         visited.add(key);
         queue.push({ ...neighbor, dist: dist + 1 });
       }
@@ -202,7 +214,7 @@ export function getReachableHexes(
           // 移动消耗 = 基础1 + 当前格子带来的ZOC惩罚
           const nextDist = current.dist + 1 + zocPenalty;
           if (nextDist <= mv) {
-            // 检查障碍物 (怪物、其他 Token、敌方王城、冰柱)
+      // 检查障碍物 (怪物、其他 Token、敌方王城、冰柱、固定路障)
             const isMonster = gameState.map?.monsters.some(m => m.q === neighbor.q && m.r === neighbor.r);
             const hasTimeCounter = gameState.counters.some(c => c.type === 'time' && pixelToHex(c.x, c.y).q === neighbor.q && pixelToHex(c.x, c.y).r === neighbor.r);
             const hasOtherToken = gameState.tokens.some(t => {
@@ -210,13 +222,14 @@ export function getReachableHexes(
               return th.q === neighbor.q && th.r === neighbor.r;
             });
             const isIcePillar = gameState.icePillars?.some(p => p.q === neighbor.q && p.r === neighbor.r);
+            const isMapObstacle = gameState.map?.obstacles?.some(o => o.q === neighbor.q && o.r === neighbor.r) || gameState.map?.obstacles_v2?.some(o => o.q === neighbor.q && o.r === neighbor.r);
             
             const enemyIndex = 1 - playerIndex;
             const enemyCastles = gameState.map?.castles[enemyIndex as 0 | 1];
             const isEnemyCastle = enemyCastles?.some(c => c.q === neighbor.q && c.r === neighbor.r);
             const isEnemyShadow = gameState.shadows?.some(s => s.q === neighbor.q && s.r === neighbor.r && s.ownerIndex !== playerIndex);
             
-            if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle || isIcePillar || isEnemyShadow) {
+            if ((isMonster && !hasTimeCounter) || hasOtherToken || isEnemyCastle || isIcePillar || isEnemyShadow || isMapObstacle) {
               continue;
             }
             
@@ -306,7 +319,8 @@ export function getAttackableHexes(
   ar: number,
   playerIndex: number,
   gameState: GameState,
-  heroLevel: number = 1
+  heroLevel: number = 1,
+  isTurretAttack: boolean = false
 ): { q: number; r: number; targetType?: 'hero' | 'castle' | 'empty' | 'monster' }[] {
   const cells: { q: number; r: number; targetType?: 'hero' | 'castle' | 'empty' | 'monster' }[] = [];
   const radius = 4; // 地图半径限制
@@ -353,43 +367,63 @@ export function getAttackableHexes(
     return targetType;
   };
 
-  for (let dq = -ar; dq <= ar; dq++) {
-    for (let dr = Math.max(-ar, -dq - ar); dr <= Math.min(ar, -dq + ar); dr++) {
-      const nq = startQ + dq;
-      const nr = startR + dr;
-      const dist = getHexDistance({ q: startQ, r: startR}, { q: nq, r: nr });
-      if (ar <= 1) {
-        if (dist !== 1) continue;
-      } else {
-        if (dist < 2 || dist > ar) continue;
-      }
-
-      const targetType = checkCell(nq, nr);
-      if (targetType) {
-        cells.push({ q: nq, r: nr, targetType });
-      }
-    }
-  }
-
-  // Watchtower bonus
-  const attackerHex = { q: startQ, r: startR };
-  const isOnWatchtower = gameState.map?.watchtowers?.some(
-    (w) => w.q === attackerHex.q && w.r === attackerHex.r
-  );
-
-  if (isOnWatchtower) {
-    // Check cells at distance ar + 1 along straight lines
+  if (isTurretAttack) {
     const directions: Hex[] = [
       { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
       { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
     ];
-    
     for (const dir of directions) {
-      const nq = startQ + dir.q * (ar + 1);
-      const nr = startR + dir.r * (ar + 1);
-      const targetType = checkCell(nq, nr);
-      if (targetType && !cells.some(c => c.q === nq && c.r === nr)) {
-        cells.push({ q: nq, r: nr, targetType });
+      for (let dist = 1; dist <= radius * 2; dist++) {
+        const nq = startQ + dir.q * dist;
+        const nr = startR + dir.r * dist;
+        if (Math.abs(nq) > radius || Math.abs(nr) > radius || Math.abs(-nq - nr) > radius) break;
+        const targetType = checkCell(nq, nr);
+        if (targetType) {
+          if (!cells.some(c => c.q === nq && c.r === nr)) {
+            cells.push({ q: nq, r: nr, targetType });
+          }
+        }
+      }
+    }
+  } else {
+    for (let dq = -ar; dq <= ar; dq++) {
+      for (let dr = Math.max(-ar, -dq - ar); dr <= Math.min(ar, -dq + ar); dr++) {
+        const nq = startQ + dq;
+        const nr = startR + dr;
+        const dist = getHexDistance({ q: startQ, r: startR}, { q: nq, r: nr });
+        if (ar <= 1) {
+          if (dist !== 1) continue;
+        } else {
+          if (dist < 2 || dist > ar) continue;
+        }
+
+        const targetType = checkCell(nq, nr);
+        if (targetType) {
+          cells.push({ q: nq, r: nr, targetType });
+        }
+      }
+    }
+
+    // Watchtower bonus
+    const attackerHex = { q: startQ, r: startR };
+    const isOnWatchtower = gameState.map?.watchtowers?.some(
+      (w) => w.q === attackerHex.q && w.r === attackerHex.r
+    );
+
+    if (isOnWatchtower) {
+      // Check cells at distance ar + 1 along straight lines
+      const directions: Hex[] = [
+        { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+        { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+      ];
+      
+      for (const dir of directions) {
+        const nq = startQ + dir.q * (ar + 1);
+        const nr = startR + dir.r * (ar + 1);
+        const targetType = checkCell(nq, nr);
+        if (targetType && !cells.some(c => c.q === nq && c.r === nr)) {
+          cells.push({ q: nq, r: nr, targetType });
+        }
       }
     }
   }

@@ -255,7 +255,7 @@ export const HEROES_DATABASE: HeroesDatabase = {
           "ar": 1,
           "mv": 1,
           "xp": 2,
-          "skills": [SKILLS_LIBRARY.hardened]
+          "skills": [SKILLS_LIBRARY.resolute]
         },
         "2": {
           "hp": 4,

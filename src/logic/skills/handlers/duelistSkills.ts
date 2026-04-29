@@ -102,7 +102,7 @@ export const duelistPullingSlash: SkillDefinition = {
           }
         }
 
-        gameState.phase = 'action_resolve';
+        gameState.phase = 'action_select_skill_target';
         gameState.activeActionType = 'skill';
         gameState.selectedOption = 'skill';
         gameState.activeSkillId = 'duelist_pulling_slash';

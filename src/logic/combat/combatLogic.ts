@@ -790,7 +790,12 @@ export class CombatLogic {
 
     if (!attackerToken || !attackerCard || !defenderCard || !defenderToken) return false;
 
-    // Check if defender has 'hardened' skill
+    // Check if defender used resolute skill instead of normal defense card
+    if ((gameState as any).usedResoluteForDefense) {
+      return false;
+    }
+
+    // Check if defender has 'hardened' skill (legacy)
     if (defenderToken.heroClass) {
       const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);
       if (heroData) {

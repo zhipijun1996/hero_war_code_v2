@@ -449,6 +449,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               })() && (
                 <button onClick={() => socket.emit('select_hero_action', 'fire')} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">开火 (Fire)</button>
               )}
+              {(() => {
+                if (!selectedToken) return false;
+                const hex = pixelToHex(selectedToken.x, selectedToken.y);
+                return (gameState.map?.turrets || []).some(t => t.q === hex.q && t.r === hex.r);
+              })() && (
+                <button onClick={() => socket.emit('select_hero_action', 'turret_attack')} className="px-4 py-2 bg-orange-400 hover:bg-orange-300 text-white rounded-lg font-bold text-sm">炮台攻击</button>
+              )}
             </>
           )}
           <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm">返回 (Back)</button>

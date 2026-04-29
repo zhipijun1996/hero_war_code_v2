@@ -1,6 +1,7 @@
 import { MapConfig } from '../../types/index.ts';
 import { defaultMap } from './mapDefault.ts';
 import { mapTower } from './mapTower.tsx';
+import { mapSymmetry } from './mapSymmetry.ts';
 
 export type BuiltinMap = {
   id: string;
@@ -21,8 +22,15 @@ export const BUILTIN_MAPS: BuiltinMap[] = [
     name: '瞭望塔地图',
     description: '用塔对抢',
     config: mapTower
+  },
+  {
+    id: 'mapSymmetry',
+    name: '镜像峡谷',
+    description: '极致对称，包含所有地形与机关',
+    config: mapSymmetry
   }
 ];
 
 export const DEFAULT_MAP = BUILTIN_MAPS[0].config;
 export const MAP_TOWER   = BUILTIN_MAPS[1].config;
+export const MAP_SYMMETRY = BUILTIN_MAPS[2].config;

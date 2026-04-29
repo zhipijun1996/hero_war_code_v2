@@ -4,6 +4,7 @@ import { getHeroTokenImage } from '../../shared/utils/assetUtils';
 import { applyEnhancementImmediateEffect } from './enhancementImmediateEffects';
 import { isEnhancementCardName, requiresSubstituteSelection } from './enhancementModifiers.ts';
 import { HeroEngine } from '../hero/heroEngine';
+import { HEROES_DATABASE } from '../../shared/config/heroes.ts';
 
 /**
  * 卡牌效果引擎
@@ -27,7 +28,20 @@ export class CardLogic {
 
     if (gameState.phase === 'action_defend') {
       if (card.name !== '防御') {
-        return { canPlay: false, reason: '只能打出防御卡。' };
+        const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
+        let hasResolute = false;
+        if (defenderToken?.heroClass) {
+          const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);
+          if (heroData) {
+            const levelData = heroData.levels[defenderToken.lv.toString()];
+            if (levelData?.skills?.some(s => s.id === 'resolute')) {
+              hasResolute = true;
+            }
+          }
+        }
+        if (!hasResolute) {
+          return { canPlay: false, reason: '只能打出防御卡。' };
+        }
       }
     }
 
@@ -81,6 +95,10 @@ export class CardLogic {
 
     // 2. 移除手牌
     player.hand.splice(cardIndex, 1);
+
+    if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
+      card.type = 'action';
+    }
 
     // 3. 分支处理：英雄牌
     if (card.type === 'hero') {
@@ -166,13 +184,37 @@ export class CardLogic {
       gameState.lastPlayedCardId = tableCard.id;
       
       if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
-        if (card.name === '防御') {
+        const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
+        let hasResolute = false;
+        if (defenderToken?.heroClass) {
+          const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);
+          if (heroData) {
+            const levelData = heroData.levels[defenderToken.lv.toString()];
+            if (levelData?.skills?.some(s => s.id === 'resolute')) {
+              hasResolute = true;
+            }
+          }
+        }
+
+        if (card.name === '防御' || hasResolute) {
           gameState.hasDefenseCard = true;
           gameState.pendingDefenseCardId = tableCard.id;
           gameState.lastPlayedCardId = tableCard.id;
           gameState.isDefended = false;
           gameState.isCounterAttack = false;
+          // If using resolute with a non-defense card, they cannot counter attack!
           gameState.canCounterAttack = false;
+
+          // Note: we'll let ActionEngine and CombatLogic know about the state via `canCounterAttack` 
+          // However, ActionEngine explicitly recalculates canCounterAttack after playing card:
+          //   gameState.canCounterAttack = CombatLogic.canCounterAttack(gameState, playerIndex);
+          // Therefore, we must pass the knowledge that we used resolute down.
+          // Let's add a flag on gameState tracking if resolute was used for this defense.
+          if (card.name !== '防御') {
+             (gameState as any).usedResoluteForDefense = true;
+          } else {
+             (gameState as any).usedResoluteForDefense = false;
+          }
         }
       }
       
@@ -229,6 +271,12 @@ export class CardLogic {
     if (gameState.phase === 'action_play' || gameState.phase === 'setup') {
       logs.push(`玩家${playerIndex + 1}打出了${card.name}`);
       nextPhase = 'action_play';
+    } else if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
+      if (card.name !== '防御') {
+        logs.push(`玩家${playerIndex + 1}消耗了一张【${card.name}】发动了坚毅防御！`);
+      } else {
+        logs.push(`玩家${playerIndex + 1}打出了防御！`);
+      }
     } else if (
       gameState.phase === 'action_play_enhancement'
     ) {

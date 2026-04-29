@@ -8,6 +8,29 @@ export const thiefSneakAttack: SkillDefinition = {
   description: '主动技：对相邻敌方英雄进行一次攻击。若造成伤害，随机弃置其 1 张手牌。',
   kind: 'active',
   trigger: ['onDamageDealt'],
+  canUse: (context: SkillContext) => {
+    const { gameState, sourceTokenId, playerIndex } = context;
+    const heroToken = gameState.tokens.find(t => t.id === sourceTokenId);
+    if (!heroToken) return false;
+    
+    const hHex = pixelToHex(heroToken.x, heroToken.y);
+    const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+    const reachableCells = getAttackableHexes(hHex.q, hHex.r, 1, playerIndex, gameState, heroCard?.level || 1);
+    
+    return reachableCells.some(cell => {
+      const targetToken = gameState.tokens.find(t => {
+        const tHex = pixelToHex(t.x, t.y);
+        if (tHex.q !== cell.q || tHex.r !== cell.r) return false;
+        
+        const card = gameState.tableCards.find(c => c.id === t.boundToCardId);
+        if (!card) return false;
+        
+        const ownerIndex = card.y > 0 ? 0 : 1;
+        return ownerIndex !== playerIndex;
+      });
+      return !!targetToken;
+    });
+  },
   execute: async (context: SkillContext, helpers: SkillHelpers): Promise<SkillResult> => {
     const { gameState, sourceTokenId, playerIndex, eventName, targetTokenId, damage, targetType } = context;
     const heroToken = gameState.tokens.find(t => t.id === sourceTokenId);
@@ -51,8 +74,13 @@ export const thiefSneakAttack: SkillDefinition = {
     gameState.reachableCells = gameState.reachableCells.filter(cell => {
       const targetToken = gameState.tokens.find(t => {
         const tHex = pixelToHex(t.x, t.y);
-        const isEnemy = tHex.q === cell.q && tHex.r === cell.r && ((t as any).playerIndex !== playerIndex && (t as any).playerIdx !== playerIndex);
-        return isEnemy;
+        if (tHex.q !== cell.q || tHex.r !== cell.r) return false;
+        
+        const card = gameState.tableCards.find(c => c.id === t.boundToCardId);
+        if (!card) return false;
+        
+        const ownerIndex = card.y > 0 ? 0 : 1;
+        return ownerIndex !== playerIndex;
       });
       return !!targetToken;
     });
@@ -61,11 +89,13 @@ export const thiefSneakAttack: SkillDefinition = {
       return { success: false, reason: '没有相邻的敌方英雄可攻击。' };
     }
 
-    gameState.phase = 'action_resolve';
-    gameState.activeActionType = 'attack';
+    gameState.phase = 'action_select_skill_target';
+    gameState.activeActionType = 'skill';
     gameState.selectedOption = 'attack';
     gameState.notification = '请选择偷袭目标';
     gameState.activeSkillState = { skillId: 'sneak_attack', sourceTokenId };
+    gameState.selectedTokenId = sourceTokenId;
+    gameState.activeSkillId = 'sneak_attack';
 
     return { success: true, inProgress: true };
   }

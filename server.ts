@@ -77,9 +77,6 @@ const getHeroBackImage = (level: number) => {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
-const getPlayerIndex = (socketId: string) => {
-  return gameState.seats.indexOf(socketId);
-};
 
 const T1_CARDS = ['冲刺卷轴', '治疗药水', '移动号角', '经验卷轴', '远程战术', '防御符文'].map(n => `${BASE_URL}t1_${encodeURIComponent(n)}.png`);
 const T2_CARDS = ['侦察镜', '战术盾', '战术腰带', '指挥旗', '防御手套', '骑士战靴'].map(n => `${BASE_URL}t2_${encodeURIComponent(n)}.png`);
@@ -224,17 +221,33 @@ const createInitialState = (mapConfig: MapConfig = DEFAULT_MAP): GameState => {
   return state;
 };
 
-let gameState = createInitialState();
 
 const HEX_SIZE = 45;
 
-async function startServer() {
-  const app = express();
-  const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: '*' } });
-  const PORT = 3000;
 
-  const alignHireArea = () => {
+export interface GameRoom {
+  roomId: string;
+  gameState: GameState;
+  migratedHandlers: any;
+  actionHelpers: any;
+  pendingBotTurnTimeout: NodeJS.Timeout | null;
+  pendingSkillPromptResolve: ((response: any) => void) | null;
+  lastActivity: number;
+}
+
+const rooms = new Map<string, GameRoom>();
+
+function createGameRoom(roomId: string, io: Server): GameRoom {
+  let gameState = createInitialState();
+  let pendingBotTurnTimeout: NodeJS.Timeout | null = null;
+  let pendingSkillPromptResolve: ((response: any) => void) | null = null;
+  let migratedHandlers: any;
+
+  const getPlayerIndex = (socketId: string) => {
+    return gameState.seats.indexOf(socketId);
+  };
+
+const alignHireArea = () => {
     const startX = 140;
     const startY = -500;
     gameState.hireAreaCards.forEach((card, i) => {
@@ -284,7 +297,7 @@ async function startServer() {
   };
 
 const broadcastState = () => {
-    io.emit('state_update', gameState);
+    io.to(roomId).emit('state_update', gameState);
   };
 
   const MONSTER_HEXES = [
@@ -332,8 +345,7 @@ const broadcastState = () => {
     (gameState as any).canOpenChest = onChest;
   };
 
-  let pendingBotTurnTimeout: NodeJS.Timeout | null = null;
-
+  
   const checkBotTurn = () => {
     if (pendingBotTurnTimeout) {
       clearTimeout(pendingBotTurnTimeout);
@@ -627,10 +639,8 @@ const broadcastState = () => {
     addLog(`进入商店阶段`, -1);
   }
 
-  let migratedHandlers: any;
-
-  let pendingSkillPromptResolve: ((response: any) => void) | null = null;
-
+  
+  
   const actionHelpers: ActionHelpers = {
     addLog,
     broadcastState,
@@ -711,22 +721,85 @@ const broadcastState = () => {
     getHeroBackImage,
     createInitialState
   });
+  
+  return {
+    roomId,
+    gameState,
+    migratedHandlers,
+    actionHelpers,
+    pendingBotTurnTimeout,
+    pendingSkillPromptResolve,
+    lastActivity: Date.now()
+  };
+} // end of createGameRoom
+
+async function startServer() {
+  const app = express();
+  const server = http.createServer(app);
+  const io = new Server(server, { cors: { origin: '*' } });
+  const PORT = 3000;
+
+  app.get('/api/rooms', (req, res) => {
+    const activeRooms = Array.from(rooms.values()).map(r => ({
+      roomId: r.roomId,
+      playerCount: io.sockets.adapter.rooms.get(r.roomId)?.size || 0,
+      phase: r.gameState.phase,
+      round: r.gameState.round,
+      lastActivity: r.lastActivity
+    }));
+    res.json(activeRooms);
+  });
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [roomId, room] of rooms.entries()) {
+      const activeConnections = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+      const isInactive = (now - room.lastActivity) > 60 * 60 * 1000; // 1 hour
+      const isEmptyAndInactive = activeConnections === 0 && (now - room.lastActivity) > 10 * 60 * 1000; // 10 minutes empty + no activity
+
+      if (isInactive || isEmptyAndInactive) {
+        console.log(`Deleting stagnant room: ${roomId}`);
+        room.pendingBotTurnTimeout && clearTimeout(room.pendingBotTurnTimeout);
+        rooms.delete(roomId);
+      }
+    }
+  }, 5 * 60 * 1000); // Check every 5 minutes
+
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    const roomId = (socket.handshake.query.room as string) || 'default';
+    socket.join(roomId);
 
+    let room = rooms.get(roomId);
+    if (!room) {
+      room = createGameRoom(roomId, io);
+      rooms.set(roomId, room);
+    }
+    room.lastActivity = Date.now();
+
+    socket.onAny(() => {
+      if (room) {
+        room.lastActivity = Date.now();
+      }
+    });
+
+    const { gameState, migratedHandlers } = room;
+    const getPlayerIndex = (socketId: string) => gameState.seats.indexOf(socketId);
     const playerCount = Object.keys(gameState.players).length;
 
-    gameState.players[socket.id] = {
-      id: socket.id,
-      name: `Player ${playerCount + 1}`,
-      hand: [],
-      discardFinished: false
-    };
-    gameState.heroPlayed[socket.id] = false;
-    gameState.heroPlayedCount[socket.id] = 0;
+    if (!gameState.players[socket.id]) {
+      gameState.players[socket.id] = {
+        id: socket.id,
+        name: `Player ${playerCount + 1}`,
+        hand: [],
+        discardFinished: false
+      };
+      gameState.heroPlayed[socket.id] = false;
+      gameState.heroPlayedCount[socket.id] = 0;
+    }
 
     socket.emit('init', gameState);
-    socket.broadcast.emit('state_update', gameState);
+    socket.to(roomId).emit('state_update', gameState);
 
     socket.on('start_game', () => migratedHandlers.start_game(socket));
     socket.on('add_bot', (payload) => migratedHandlers.add_bot(socket, payload));
@@ -738,32 +811,28 @@ const broadcastState = () => {
       if (gameState.phase !== 'skill_interrupt_prompt') return;
       if (gameState.pendingSkillPrompt?.playerIndex !== playerIndex) return;
 
-      if (pendingSkillPromptResolve) {
-        const resolve = pendingSkillPromptResolve;
-        pendingSkillPromptResolve = null;
+      if (room.pendingSkillPromptResolve) {
+        const resolve = room.pendingSkillPromptResolve;
+        room.pendingSkillPromptResolve = null;
         gameState.pendingSkillPrompt = null;
         resolve(response);
       }
     });
+
     socket.on('remove_bot', (payload) => migratedHandlers.remove_bot(socket, payload));
-    socket.on('update_image_config', (config: ImageConfig) => migratedHandlers.update_image_config(socket));
-    socket.on('update_map', (mapConfig: MapConfig) => migratedHandlers.update_map(socket, mapConfig));
+    socket.on('update_image_config', (config: any) => migratedHandlers.update_image_config(socket));
+    socket.on('update_map', (mapConfig: any) => migratedHandlers.update_map(socket, mapConfig));
     socket.on('disconnect', () => migratedHandlers.disconnect(socket));
 
-    socket.on('move_item', ({ type, id, x, y }) => migratedHandlers.move_item(socket, { type, id, x, y }));
-
-    socket.on('draw_card', (deckType: 'treasure1' | 'treasure2' | 'treasure3' | 'action' | 'hero' | 'discard_action') => migratedHandlers.draw_card(socket, deckType));
-
-    socket.on('draw_card_to_table', (deckType: 'treasure1' | 'treasure2' | 'treasure3' | 'action' | 'hero' | 'discard_action', x: number, y: number) => {
+    socket.on('move_item', ({ type, id, x, y }: any) => migratedHandlers.move_item(socket, { type, id, x, y }));
+    socket.on('draw_card', (deckType: any) => migratedHandlers.draw_card(socket, deckType));
+    socket.on('draw_card_to_table', (deckType: any, x: number, y: number) => {
       migratedHandlers.draw_card_to_table(socket, deckType, x, y);
     });
 
-    socket.on('shuffle_deck', (deckType: 'treasure1' | 'treasure2' | 'treasure3' | 'action' | 'hero' | 'discard_action') => migratedHandlers.shuffle_deck(socket, deckType));
-
-    socket.on('take_card_to_hand', (cardId) => migratedHandlers.take_card_to_hand(socket, cardId));
-
-    socket.on('play_card', ({ cardId, x, y, targetCastleIndex }) => migratedHandlers.play_card(socket, { cardId, x, y, targetCastleIndex }));
-
+    socket.on('shuffle_deck', (deckType: any) => migratedHandlers.shuffle_deck(socket, deckType));
+    socket.on('take_card_to_hand', (cardId: any) => migratedHandlers.take_card_to_hand(socket, cardId));
+    socket.on('play_card', ({ cardId, x, y, targetCastleIndex }: any) => migratedHandlers.play_card(socket, { cardId, x, y, targetCastleIndex }));
     socket.on('undo_play', () => migratedHandlers.undo_play(socket));
 
     socket.on('click_action_token', (tokenId: string) => migratedHandlers.click_action_token(socket, tokenId));
@@ -771,82 +840,53 @@ const broadcastState = () => {
     socket.on('cancel_play_card', () => migratedHandlers.cancel_play_card(socket));
 
     socket.on('select_action_category', (category: any) => migratedHandlers.select_action_category(socket, category));
-
     socket.on('select_common_action', (action: any) => migratedHandlers.select_common_action(socket, action));
-
     socket.on('select_hero_for_action', (heroTokenId: string) => migratedHandlers.select_hero_for_action(socket, heroTokenId));
-
     socket.on('select_hero_action', (actionType: any) => migratedHandlers.select_hero_action(socket, actionType));
 
     socket.on('use_skill', (payload: any) => migratedHandlers.use_skill(socket, payload));
     socket.on('select_skill_target', (payload: any) => migratedHandlers.select_skill_target(socket, payload));
-
     socket.on('play_enhancement_card', (cardId: string) => migratedHandlers.play_enhancement_card(socket, cardId));
-
     socket.on('pass_enhancement', () => migratedHandlers.pass_enhancement(socket));
-
     socket.on('deep_freeze_break', () => migratedHandlers.deep_freeze_break(socket));
-
     socket.on('finish_action', () => migratedHandlers.finish_action(socket));
+    
+    // 从 actionHandlers 和 combatHandlers 等模块中补充缺失的事件
+    socket.on('revive_hero', (payload: any) => migratedHandlers.revive_hero(socket, payload));
+    socket.on('move_token_to_cell', (payload: any) => migratedHandlers.move_token_to_cell(socket, payload));
+    socket.on('remove_ember_zone', (payload: any) => migratedHandlers.remove_ember_zone(socket, payload));
+    socket.on('select_target', (targetId: string) => migratedHandlers.select_target(socket, targetId));
+    socket.on('proceed_phase', () => migratedHandlers.proceed_phase(socket));
+    socket.on('pass_action', () => migratedHandlers.pass_action(socket));
+    socket.on('checkAndResetChanting', (tokenId: string) => migratedHandlers.checkAndResetChanting(tokenId));
+    
+    socket.on('declare_counter', () => migratedHandlers.declare_counter(socket));
+    socket.on('declare_defend', () => migratedHandlers.declare_defend(socket));
+    socket.on('pass_defend', () => migratedHandlers.pass_defend(socket));
+    socket.on('end_resolve_attack', () => migratedHandlers.end_resolve_attack(socket));
 
     socket.on('start_buy', () => migratedHandlers.start_buy(socket));
     socket.on('start_hire', () => migratedHandlers.start_hire(socket));
     socket.on('select_hire_cost', (cost: number) => migratedHandlers.select_hire_cost(socket, cost));
     socket.on('select_hire_castle', (castle: number) => migratedHandlers.select_hire_castle(socket, castle));
     socket.on('cancel_hire_selection', () => migratedHandlers.cancel_hire_selection(socket));
+    socket.on('next_shop', () => migratedHandlers.next_shop(socket));
+    socket.on('hire_hero', (payload: any) => migratedHandlers.hire_hero(socket, payload));
 
     socket.on('pass_shop', () => migratedHandlers.pass_shop(socket));
-
     socket.on('end_resolve_attack_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
 
-    socket.on('end_resolve_counter', () => migratedHandlers.end_resolve_attack_counter(socket));
-
-    socket.on('select_token', (tokenId: string) => migratedHandlers.select_token(socket, tokenId));
-
-    socket.on('select_target', (targetId: string) => migratedHandlers.select_target(socket, targetId));
-
-    socket.on('move_token_to_cell', ({ q, r }) => migratedHandlers.move_token_to_cell(socket, { q, r }));
-
-    socket.on('steal_first_player', () => migratedHandlers.steal_first_player(socket));
-
-    socket.on('pass_action', () => migratedHandlers.pass_action(socket));
-
-    socket.on('clear_notification', () => migratedHandlers.clear_notification(socket));
-
-    socket.on('declare_defend', () => migratedHandlers.declare_defend(socket));
-
-    socket.on('declare_counter', () => migratedHandlers.declare_counter(socket));
-
-    socket.on('cancel_defend_or_counter', () => migratedHandlers.cancel_defend_or_counter(socket));
-
-    socket.on('pass_defend', () => migratedHandlers.pass_defend(socket));
-
-    socket.on('end_resolve_attack', () => migratedHandlers.end_resolve_attack(socket));
-
-    socket.on('next_shop', () => migratedHandlers.next_shop(socket));
-
-    socket.on('proceed_phase', () => migratedHandlers.proceed_phase(socket));
-
-    socket.on('hire_hero', ({ cardId, goldAmount, targetCastleIndex }) => migratedHandlers.hire_hero(socket, { cardId, goldAmount, targetCastleIndex }));
-    socket.on('revive_hero', ({ heroCardId, targetCastleIndex }) => migratedHandlers.revive_hero(socket, { heroCardId, targetCastleIndex }));
-
-    socket.on('discard_card', (cardId) => migratedHandlers.discard_card(socket, cardId));
-
     socket.on('undo_discard', () => migratedHandlers.undo_discard(socket));
-
     socket.on('finish_discard', () => migratedHandlers.finish_discard(socket));
-
-    socket.on('flip_card', (cardId) => migratedHandlers.flip_card(socket, cardId));
-
-    socket.on('add_counter', ({ type, x, y, value }) => migratedHandlers.add_counter(socket, { type, x, y, value }));
-
-    socket.on('update_counter', ({ id, delta }) => migratedHandlers.update_counter(socket, { id, delta }));
-
-    socket.on('update_token_value', ({ id, field, delta }) => migratedHandlers.update_token_value(socket, { id, field, delta }));
-
-    socket.on('spawn_hero', ({ heroClass, level, x, y }) => migratedHandlers.spawn_hero(socket, { heroClass, level, x, y }));
-    
+    socket.on('flip_card', (cardId: any) => migratedHandlers.flip_card(socket, cardId));
+    socket.on('add_counter', ({ type, x, y, value }: any) => migratedHandlers.add_counter(socket, { type, x, y, value }));
+    socket.on('update_counter', ({ id, delta }: any) => migratedHandlers.update_counter(socket, { id, delta }));
+    socket.on('update_token_value', ({ id, field, delta }: any) => migratedHandlers.update_token_value(socket, { id, field, delta }));
+    socket.on('spawn_hero', ({ heroClass, level, x, y }: any) => migratedHandlers.spawn_hero(socket, { heroClass, level, x, y }));
     socket.on('reset_game', () => migratedHandlers.reset_game(socket));
+    socket.on('clear_notification', () => migratedHandlers.clear_notification(socket));
+    socket.on('steal_first_player', () => migratedHandlers.steal_first_player(socket));
+    socket.on('join_seat', (payload: any) => migratedHandlers.join_seat(socket, payload));
   });
 
   if (process.env.NODE_ENV !== 'production') {
@@ -863,16 +903,7 @@ const broadcastState = () => {
   }
 
   // API routes
-  app.get('/api/state', (req, res) => {
-    res.json(gameState);
-  });
-
-  app.get('/api/reset', (req, res) => {
-    const newState = createInitialState();
-    Object.assign(gameState, newState);
-    io.emit('state_update', gameState);
-    res.send('Game has been reset. <a href="/">Back to game</a>');
-  });
+  
 
   // Global error handler
   app.use((err: any, req: any, res: any, next: any) => {

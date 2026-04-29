@@ -837,7 +837,7 @@ export class ActionEngine {
   static async selectHeroAction(
     gameState: GameState,
     playerIndex: number,
-    actionType: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire',
+    actionType: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | 'turret_attack',
     helpers: ActionHelpers,
     socket: any
   ): Promise<void> {
@@ -861,7 +861,7 @@ export class ActionEngine {
       }
     }
 
-    if (actionType === 'attack') {
+    if (actionType === 'attack' || actionType === 'turret_attack') {
       helpers.checkAndResetChanting(heroToken.id);
       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
       
@@ -874,9 +874,10 @@ export class ActionEngine {
       ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
 
       const attackerHex = pixelToHex(heroToken.x, heroToken.y);
-      gameState.reachableCells = getAttackableHexes(attackerHex.q, attackerHex.r, ar, playerIndex, gameState, heroCard?.level || 1);
+      gameState.reachableCells = getAttackableHexes(attackerHex.q, attackerHex.r, ar, playerIndex, gameState, heroCard?.level || 1, actionType === 'turret_attack');
       gameState.phase = 'action_resolve';
       gameState.activeActionType = 'attack';
+      gameState.selectedOption = actionType;
       gameState.selectedTokenId = heroToken.id;
     } else if (actionType === 'move') {
       helpers.checkAndResetChanting(heroToken.id);
@@ -1062,7 +1063,6 @@ export class ActionEngine {
         
         let ar = SkillEngine.getModifiedStat(attackerToken.id, 'ar', gameState);
         ar += getAttackRangeBonusFromEnhancement(enhancementCard?.name);
-        if (gameState.selectedOption === 'turret_attack') ar += 1;
 
         const attackerHex = pixelToHex(attackerToken.x, attackerToken.y);
         let targetHex;
@@ -1084,7 +1084,7 @@ export class ActionEngine {
           targetHex = targetToken ? pixelToHex(targetToken.x, targetToken.y) : pixelToHex(targetCard!.x, targetCard!.y);
         }
 
-        if (!isTargetInAttackRange(attackerHex, targetHex, ar, gameState)) {
+        if (!isTargetInAttackRange(attackerHex, targetHex, ar, gameState, gameState.selectedOption === 'turret_attack')) {
           socket.emit('error_message', `目标不在攻击范围内 (Target out of range).`);
           return;
         }

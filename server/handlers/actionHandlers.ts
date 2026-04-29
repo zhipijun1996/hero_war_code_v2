@@ -237,7 +237,7 @@ export const createActionHandlers = (deps: any) => {
         // Convert target IDs to hexes for highlighting
         gameState.reachableCells = targets.map(target => {
           if (typeof target === 'string') {
-            if (target.startsWith('monster_')) {
+            if (target.startsWith('monster_') || target.startsWith('icepillar_')) {
               const parts = target.split('_');
               return { q: parseInt(parts[1]), r: parseInt(parts[2]) };
             }

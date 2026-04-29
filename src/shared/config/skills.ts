@@ -184,6 +184,11 @@ export const SKILLS_LIBRARY: Record<string, Skill> = {
     "name": "坚硬",
     "description": "被攻击时，攻击者必须额外弃一张牌，否则攻击失效。被攻击只能防御，无法反击"
   },
+  "resolute": {
+    id: "resolute",
+    "name": "坚毅",
+    "description": "被攻击时，可以把任意手牌视为防御卡打出。此时只能防御，不能反击。"
+  },
   "steadfast": {
     id: "steadfast",
     "name": "坚守",
