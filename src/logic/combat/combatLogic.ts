@@ -154,6 +154,8 @@ export class CombatLogic {
       }
     }
 
+    if (actualDamage <= 0) return false;
+
     damageCounter.value += actualDamage;
     helpers.addLog(`【${skillName}】LV${monster.level}怪物 受到 ${actualDamage} 点魔法伤害！(当前受伤: ${damageCounter.value})`, playerIndex);
 
@@ -250,6 +252,16 @@ export class CombatLogic {
 
     if (actualDamage <= 0) {
       return false;
+    }
+
+    // 法术或环境伤害来源于英雄技能且目标为敌方英雄时，给予1经验
+    const sourceToken = gameState.tokens.find((t: any) => t.id === sourceTokenId);
+    const sourceCard = sourceToken ? gameState.tableCards.find(c => c.id === sourceToken.boundToCardId) : null;
+    if (sourceCard) {
+      const sourceOwnerIndex = sourceCard.y > 0 ? 0 : 1;
+      if (sourceOwnerIndex !== ownerIndex) {
+        this.addExp(sourceCard, 1, gameState);
+      }
     }
 
     targetCard.damage = (targetCard.damage || 0) + actualDamage;
@@ -752,6 +764,14 @@ export class CombatLogic {
       value: 0, 
       boundToCardId: deadHeroCard.id 
     });
+
+    // Check and set action token as used
+    if (gameState.actionTokens) {
+      const actionToken = gameState.actionTokens.find(t => t.heroCardId === deadHeroCard.id);
+      if (actionToken) {
+        actionToken.used = true;
+      }
+    }
 
     if (helpers.checkAndResetChanting) {
       helpers.checkAndResetChanting(deadHeroToken.id);

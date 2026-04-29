@@ -1,7 +1,7 @@
 import { GameState, Card, TableCard, Token, HexCoord, ActionToken } from '../../shared/types/index.ts';
 import { pixelToHex, hexToPixel, generateId, getHexDistance } from '../../shared/utils/hexUtils.ts';
 import { getHeroStat } from '../hero/heroLogic.ts';
-import { isTargetInAttackRange, getReachableHexes, getAttackableHexes } from '../map/mapLogic.ts';
+import { isTargetInAttackRange, getReachableHexes, getAttackableHexes, getPathDist } from '../map/mapLogic.ts';
 import { canHeroEvolve } from '../hero/heroLogic.ts';
 import { isEnhancementCardName } from '../card/enhancementModifiers.ts';
 import { skillRegistry } from '../skills/skillRegistry.ts';
@@ -593,6 +593,55 @@ export class BotStrategy {
     };
   }
 
+  private static getTruePathDist(start: {q: number, r: number}, end: {q: number, r: number}, gameState: GameState, myHeroTokenId: string): number {
+    if (start.q === end.q && start.r === end.r) return 0;
+    
+    const queue = [{ q: start.q, r: start.r, dist: 0 }];
+    const visited = new Set<string>();
+    visited.add(`${start.q},${start.r}`);
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (current.dist >= 15) continue; 
+      
+      const neighbors = [
+          { q: current.q + 1, r: current.r },
+          { q: current.q + 1, r: current.r - 1 },
+          { q: current.q, r: current.r - 1 },
+          { q: current.q - 1, r: current.r },
+          { q: current.q - 1, r: current.r + 1 },
+          { q: current.q, r: current.r + 1 }
+      ];
+
+      for (const neighbor of neighbors) {
+        if (neighbor.q === end.q && neighbor.r === end.r) return current.dist + 1;
+        
+        const key = `${neighbor.q},${neighbor.r}`;
+        if (visited.has(key)) continue;
+
+        if (Math.abs(neighbor.q) > 4 || Math.abs(neighbor.r) > 4 || Math.abs(-neighbor.q - neighbor.r) > 4) continue;
+        
+        const isIcePillar = gameState.icePillars?.some((p: any) => p.q === neighbor.q && p.r === neighbor.r);
+        const isCastle = gameState.map?.castles[0]?.some((c: any) => c.q === neighbor.q && c.r === neighbor.r) || 
+                         gameState.map?.castles[1]?.some((c: any) => c.q === neighbor.q && c.r === neighbor.r);
+        const isMapObstacle = gameState.map?.obstacles?.some((o: any) => o.q === neighbor.q && o.r === neighbor.r) || 
+                              gameState.map?.obstacles_v2?.some((o: any) => o.q === neighbor.q && o.r === neighbor.r);
+        const hasOtherToken = gameState.tokens.some((t: any) => {
+            if (t.id === myHeroTokenId) return false;
+            const th = pixelToHex(t.x, t.y);
+            return th.q === neighbor.q && th.r === neighbor.r;
+        });
+
+        if (!isIcePillar && !isCastle && !isMapObstacle && !hasOtherToken) {
+          visited.add(key);
+          queue.push({ q: neighbor.q, r: neighbor.r, dist: current.dist + 1 });
+        }
+      }
+    }
+    
+    return 999;
+  }
+
   private static decideActionResolveAction(gameState: GameState, playerIndex: number): BotAction {
     const isPlayer1 = playerIndex === 0;
     if (gameState.activeActionType === 'move') {
@@ -638,21 +687,41 @@ export class BotStrategy {
             let minEnemyDist = 999;
             enemyTokens.forEach(e => {
                 if ((e as any).hp > 0) {
-                    const dist = getHexDistance(cell, pixelToHex(e.x, e.y));
+                    const dist = this.getTruePathDist(cell, pixelToHex(e.x, e.y), gameState, heroToken.id);
                     if (dist < minEnemyDist) minEnemyDist = dist;
                 }
             });
             monsters.forEach(m => {
-                const dist = getHexDistance(cell, {q: m.q, r: m.r});
+                const dist = this.getTruePathDist(cell, {q: m.q, r: m.r}, gameState, heroToken.id);
                 if (dist < minEnemyDist) minEnemyDist = dist;
             });
             let minCastleDist = 999;
             enemyCastles.forEach(c => {
-                const dist = getHexDistance(cell, {q: c.q, r: c.r});
+                const dist = this.getTruePathDist(cell, {q: c.q, r: c.r}, gameState, heroToken.id);
                 if (dist < minCastleDist) minCastleDist = dist;
             });
             
-            if (minEnemyDist === 999) minEnemyDist = minCastleDist; // 没有敌人时走向城堡
+            // if unreachable via BFS, fallback to bird's eye distance
+            if (minEnemyDist >= 999) {
+                enemyTokens.forEach(e => {
+                    if ((e as any).hp > 0) {
+                        const dist = getHexDistance(cell, pixelToHex(e.x, e.y));
+                        if (dist < minEnemyDist) minEnemyDist = dist;
+                    }
+                });
+                monsters.forEach(m => {
+                    const dist = getHexDistance(cell, {q: m.q, r: m.r});
+                    if (dist < minEnemyDist) minEnemyDist = dist;
+                });
+            }
+            if (minCastleDist >= 999) {
+                enemyCastles.forEach(c => {
+                    const dist = getHexDistance(cell, {q: c.q, r: c.r});
+                    if (dist < minCastleDist) minCastleDist = dist;
+                });
+            }
+            
+            if (minEnemyDist >= 999) minEnemyDist = minCastleDist; // 没有敌人时走向城堡
 
             if (isRanged) {
                 // 远程职业放风筝逻辑：
@@ -672,6 +741,10 @@ export class BotStrategy {
             // --- 3. 兜底推进：稍微倾向于往前走 ---
             const castleDistScore = (20 - minCastleDist); 
             score += (castleDistScore * 2);
+
+            // --- 4. 消除左右横跳：添加基于坐标的微小确定性偏差 ---
+            // 当AI在被障碍物挡住而产生多个相同距离的选择时，始终倾向于依靠坐标绕行。
+            score += (cell.q * 0.113 + cell.r * 0.071);
 
             if (score > bestScore) {
                 bestScore = score;

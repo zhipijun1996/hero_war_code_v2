@@ -186,7 +186,7 @@ export class ActionEngine {
                 // Check if hero dies
                 if (CombatLogic.isHeroDead(heroCard, gameState)) {
                   helpers.addLog(`玩家${playerIndex + 1}的英雄被陷阱击杀！`, playerIndex);
-                  CombatLogic.handleHeroDeath(heroCard, token, playerIndex, helpers, gameState);
+                  await CombatLogic.handleHeroDeath(heroCard, token, playerIndex, helpers, gameState);
                 }
               }
               
@@ -815,6 +815,13 @@ export class ActionEngine {
     const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
     const isOwner = heroCard && ((playerIndex === 0 && heroCard.y > 0) || (playerIndex === 1 && heroCard.y < 0));
     if (!isOwner) return;
+
+    // Verify hero is not dead
+    const isDead = heroCard && gameState.counters.some(c => c.type === 'time' && c.boundToCardId === heroCard.id);
+    if (isDead) {
+      if (socket) socket.emit('error_message', '该英雄已阵亡，无法行动 (Hero is dead)');
+      return;
+    }
 
     if (gameState.phase === 'action_select_hero') {
       gameState.activeHeroTokenId = heroTokenId;
@@ -1728,8 +1735,15 @@ export class ActionEngine {
     gameState: GameState,
     helpers: ActionHelpers
   ): Promise<void> {
-    // 把行动 token 翻回可用
+    // 把行动 token 翻回可用，除非英雄阵亡
     gameState.actionTokens.forEach(t => {
+      if (t.heroCardId) {
+        const isDead = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === t.heroCardId);
+        if (isDead) {
+          t.used = true;
+          return;
+        }
+      }
       t.used = false;
     });
     gameState.round += 1;
@@ -1950,6 +1964,13 @@ export class ActionEngine {
     }
 
     gameState.actionTokens.forEach(t => {
+      if (t.heroCardId) {
+        const isDead = gameState.counters.some(c => c.type === 'time' && c.boundToCardId === t.heroCardId);
+        if (isDead) {
+          t.used = true;
+          return;
+        }
+      }
       t.used = false;
     });
     this.scoreEndPhaseReputation(gameState, helpers);
