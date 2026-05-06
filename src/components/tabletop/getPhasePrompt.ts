@@ -119,5 +119,15 @@ export const getPhasePrompt = ({
   if (gameState.phase === 'end') {
     return `结束阶段：时间计数+1`;
   }
+  if (gameState.phase === 'skill_interrupt_prompt') {
+    if (gameState.pendingSkillPrompt?.promptType === 'discard_excess_equipment') {
+      if (gameState.pendingSkillPrompt.playerIndex === playerIndex) {
+        return `请选择一件多余的装备卡弃置 (Select an excess equipment card to discard)`;
+      } else {
+        return `等待对方弃置多余装备... (Waiting for opponent to discard equipment...)`;
+      }
+    }
+  }
+
   return "";
 };

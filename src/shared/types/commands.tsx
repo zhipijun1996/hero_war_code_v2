@@ -17,4 +17,5 @@ export type GameCommand =
   | { type: 'discard_card'; payload: { cardId: string } }
   | { type: 'finish_discard' }
   | { type: 'pass_shop' }
-  | { type: 'proceed_phase' };
+  | { type: 'proceed_phase' }
+  | { type: 'use_equipment_card'; payload: { cardId: string } };

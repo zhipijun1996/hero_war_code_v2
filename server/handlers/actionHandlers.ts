@@ -94,6 +94,7 @@ export const createActionHandlers = (deps: any) => {
       }
     },
     discard_card: (socket: any, cardId: string) => {
+      console.log(`[discard_card] called by ${socket.id} for card ${cardId}`);
       const player = gameState.players?.[socket.id];
       if (!player) return;
 
@@ -101,7 +102,12 @@ export const createActionHandlers = (deps: any) => {
         let cardIndex = gameState.tableCards.findIndex((c: any) => c.id === cardId);
         if (cardIndex !== -1) {
           const card = gameState.tableCards.splice(cardIndex, 1)[0];
-          gameState.discardPiles.action.push(card);
+          if (card.type && card.type.startsWith('treasure')) {
+            if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+            gameState.discardPiles.treasure.push(card);
+          } else {
+            gameState.discardPiles.action.push(card);
+          }
           io.emit('state_update', gameState);
           return;
         }
@@ -119,7 +125,12 @@ export const createActionHandlers = (deps: any) => {
           cardIndex = gameState.playAreaCards.findIndex((c: any) => c.id === cardId);
           if (cardIndex !== -1) {
             const card = gameState.playAreaCards.splice(cardIndex, 1)[0];
-            gameState.discardPiles.action.push(card);
+            if (card.type && card.type.startsWith('treasure')) {
+              if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+              gameState.discardPiles.treasure.push(card);
+            } else {
+              gameState.discardPiles.action.push(card);
+            }
             io.emit('state_update', gameState);
             return;
           }
@@ -135,7 +146,16 @@ export const createActionHandlers = (deps: any) => {
         }
         
         const card = player.hand.splice(cardIndex, 1)[0];
-        gameState.discardPiles.action.push(card);
+        
+        if (card.type && card.type.startsWith('treasure')) {
+          if (!gameState.discardPiles.treasure) {
+            gameState.discardPiles.treasure = [];
+          }
+          gameState.discardPiles.treasure.push(card);
+        } else {
+          gameState.discardPiles.action.push(card);
+        }
+        
         // Save state for undo
         if (!player.discardHistory) player.discardHistory = [];
         player.discardHistory.push(card);
@@ -149,12 +169,19 @@ export const createActionHandlers = (deps: any) => {
       if (player.discardHistory && player.discardHistory.length > 0) {
         const card = player.discardHistory.pop();
         if (card) {
-          const discardIndex = gameState.discardPiles.action.findIndex((c: any) => c.id === card.id);
-          if (discardIndex !== -1) {
-            gameState.discardPiles.action.splice(discardIndex, 1);
-            player.hand.push(card);
-            io.emit('state_update', gameState);
+          if (card.type && card.type.startsWith('treasure')) {
+            const discardIndex = (gameState.discardPiles.treasure || []).findIndex((c: any) => c.id === card.id);
+            if (discardIndex !== -1) {
+              gameState.discardPiles.treasure.splice(discardIndex, 1);
+            }
+          } else {
+            const discardIndex = gameState.discardPiles.action.findIndex((c: any) => c.id === card.id);
+            if (discardIndex !== -1) {
+              gameState.discardPiles.action.splice(discardIndex, 1);
+            }
           }
+          player.hand.push(card);
+          io.emit('state_update', gameState);
         }
       }
     },
@@ -210,6 +237,10 @@ export const createActionHandlers = (deps: any) => {
     cancel_action_token: (socket: any) => {
       const playerIndex = getPlayerIndex(socket.id);
       ActionEngine.cancelActionToken(gameState, playerIndex, actionHelpers, socket);
+    },
+    use_equipment_card: async (socket: any, equipmentCardId: string) => {
+      const playerIndex = getPlayerIndex(socket.id);
+      await ActionEngine.useEquipmentCard(gameState, playerIndex, equipmentCardId, actionHelpers, socket);
     },
     use_skill: async (socket: any, payload: { skillId: string, targetTokenId?: string, targetHex?: { q: number, r: number } }) => {
       const playerIndex = getPlayerIndex(socket.id);
@@ -292,6 +323,11 @@ export const createActionHandlers = (deps: any) => {
         ActionEngine.cancelBuySelection(gameState, playerIndex, actionHelpers);
         broadcastState();
         checkBotTurn();
+        return;
+      }
+
+      if (gameState.phase === 'buy_select_equip_target') {
+        ActionEngine.cancelBuyEquipSelection(gameState, playerIndex, actionHelpers);
         return;
       }
 

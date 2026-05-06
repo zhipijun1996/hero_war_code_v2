@@ -193,6 +193,20 @@ export class SkillEngine {
     let bonusAdd = 0;
     let bonusMult = 1;
 
+    // Process equipment modifiers
+    if (token.boundToCardId) {
+      const equipments = gameState.tableCards.filter(c => c && c.equippedToId === token.boundToCardId);
+      for (const eq of equipments) {
+        if (!eq.name) continue;
+        if (statType === 'ar') {
+           if (eq.name === '战术望远镜') bonusAdd += 1;
+        } else if (statType === 'mv') {
+           if (eq.name === '战马') bonusAdd += 1;
+           if (eq.name === '骑士战靴' && !eq.usedInTurn) bonusAdd += 1;
+        }
+      }
+    }
+
     // 1. 遍历该英雄自己的技能
     const statSkills = levelData.skills ? [...levelData.skills] : [];
     if ((gameState as any).stolenSkill && (gameState as any).stolenSkill.sourceTokenId === tokenId) {

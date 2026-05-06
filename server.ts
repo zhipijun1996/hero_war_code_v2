@@ -78,9 +78,13 @@ const getHeroBackImage = (level: number) => {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 
-const T1_CARDS = ['冲刺卷轴', '治疗药水', '移动号角', '经验卷轴', '远程战术', '防御符文'].map(n => `${BASE_URL}t1_${encodeURIComponent(n)}.png`);
-const T2_CARDS = ['侦察镜', '战术盾', '战术腰带', '指挥旗', '防御手套', '骑士战靴'].map(n => `${BASE_URL}t2_${encodeURIComponent(n)}.png`);
-const T3_CARDS = ['战场旗帜', '战术望远镜', '战马', '重装铠甲'].map(n => `${BASE_URL}t3_${encodeURIComponent(n)}.png`);
+const T1_CARDS_RAW = ['冲刺卷轴', '治疗药水', '移动号角', '经验卷轴', '远程战术', '防御符文'];
+const T2_CARDS_RAW = ['侦察镜', '战术盾', '战术腰带', '指挥旗', '防御手套', '骑士战靴'];
+const T3_CARDS_RAW = ['战场旗帜', '战术望远镜', '战马', '重装铠甲'];
+
+const T1_CARDS = T1_CARDS_RAW.map(n => ({ name: n, url: `${BASE_URL}t1_${encodeURIComponent(n)}.png` }));
+const T2_CARDS = T2_CARDS_RAW.map(n => ({ name: n, url: `${BASE_URL}t2_${encodeURIComponent(n)}.png` }));
+const T3_CARDS = T3_CARDS_RAW.map(n => ({ name: n, url: `${BASE_URL}t3_${encodeURIComponent(n)}.png` }));
 
 const ACTION_CARDS_CONFIG = [
   { name: '冲刺', copies: 3, image: 'https://image.pollinations.ai/prompt/A%20pair%20of%20glowing%20winged%20boots%20speeding%20forward%20fantasy%20anime%20art?nologo=true' },
@@ -129,13 +133,14 @@ const createHeroDeck = (): Card[] => {
   return deck.sort(() => Math.random() - 0.5);
 };
 
-const createSpecificDeck = (type: string, back: string, urls: string[], copies: number): Card[] => {
+const createSpecificDeck = (type: string, back: string, cards: {name: string, url: string}[], copies: number): Card[] => {
   const deck: Card[] = [];
-  urls.forEach(url => {
+  cards.forEach(card => {
     for (let i = 0; i < copies; i++) {
       deck.push({
         id: generateId(),
-        frontImage: url,
+        name: card.name,
+        frontImage: card.url,
         backImage: back,
         type: type as any,
       });
@@ -661,6 +666,19 @@ const broadcastState = () => {
         }
       }
     },
+    resolveSkillPrompt: (response: any) => {
+        if (pendingBotTurnTimeout) {
+          clearTimeout(pendingBotTurnTimeout);
+          pendingBotTurnTimeout = null;
+        }
+        if (pendingSkillPromptResolve) {
+            const resolve = pendingSkillPromptResolve;
+            pendingSkillPromptResolve = null;
+            gameState.pendingSkillPrompt = null;
+            resolve(response);
+            broadcastState();
+        }
+    },
     promptPlayer: (playerIndex: number, promptType: string, context: any) => {
       return new Promise<any>((resolve) => {
         const previousPhase = gameState.phase;
@@ -811,11 +829,8 @@ async function startServer() {
       if (gameState.phase !== 'skill_interrupt_prompt') return;
       if (gameState.pendingSkillPrompt?.playerIndex !== playerIndex) return;
 
-      if (room.pendingSkillPromptResolve) {
-        const resolve = room.pendingSkillPromptResolve;
-        room.pendingSkillPromptResolve = null;
-        gameState.pendingSkillPrompt = null;
-        resolve(response);
+      if (room.actionHelpers && room.actionHelpers.resolveSkillPrompt) {
+        room.actionHelpers.resolveSkillPrompt(response);
       }
     });
 
@@ -843,6 +858,7 @@ async function startServer() {
     socket.on('select_common_action', (action: any) => migratedHandlers.select_common_action(socket, action));
     socket.on('select_hero_for_action', (heroTokenId: string) => migratedHandlers.select_hero_for_action(socket, heroTokenId));
     socket.on('select_hero_action', (actionType: any) => migratedHandlers.select_hero_action(socket, actionType));
+    socket.on('use_equipment_card', (cardId: string) => migratedHandlers.use_equipment_card(socket, cardId));
 
     socket.on('use_skill', (payload: any) => migratedHandlers.use_skill(socket, payload));
     socket.on('select_skill_target', (payload: any) => migratedHandlers.select_skill_target(socket, payload));
@@ -878,6 +894,7 @@ async function startServer() {
 
     socket.on('undo_discard', () => migratedHandlers.undo_discard(socket));
     socket.on('finish_discard', () => migratedHandlers.finish_discard(socket));
+    socket.on('discard_card', (cardId: string) => migratedHandlers.discard_card(socket, cardId));
     socket.on('flip_card', (cardId: any) => migratedHandlers.flip_card(socket, cardId));
     socket.on('add_counter', ({ type, x, y, value }: any) => migratedHandlers.add_counter(socket, { type, x, y, value }));
     socket.on('update_counter', ({ id, delta }: any) => migratedHandlers.update_counter(socket, { id, delta }));

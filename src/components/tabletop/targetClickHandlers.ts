@@ -163,6 +163,10 @@ export const handleTokenClickLogic = (
       socket.emit('use_skill', { skillId: gameState.activeSkillId, targetTokenId: id });
       return;
     }
+    if (gameState.phase === 'buy_select_equip_target') {
+      socket.emit('select_target', id);
+      return;
+    }
     if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
       const token = gameState.tokens.find(t => t.id === id);
       if (token) {
@@ -189,6 +193,14 @@ export const handleTokenClickLogic = (
         }
       }
     }
+    
+    if (gameState.phase === 'action_select_target' && gameState.activeActionType === 'use_equipment') {
+      const token = gameState.tokens.find(t => t.id === id);
+      if (token && token.boundToCardId) {
+        socket.emit('select_target', token.boundToCardId);
+        return;
+      }
+    }
   }
 };
 
@@ -205,6 +217,18 @@ export const handleCardClickLogic = (
     }
     if (gameState.phase === 'action_select_skill_target' && isActivePlayer && gameState.activeSkillId) {
       socket.emit('use_skill', { skillId: gameState.activeSkillId, targetTokenId: id });
+    }
+    if (gameState.phase === 'buy' && isActivePlayer) {
+      socket.emit('select_target', id);
+    }
+    if (gameState.phase === 'buy_select_equip_target' && isActivePlayer) {
+      socket.emit('select_target', id);
+    }
+    if (gameState.phase === 'action_play_enhancement' && isActivePlayer) {
+      const card = gameState.tableCards?.find(c => c.id === id);
+      if (card && card.equippedToId) {
+        socket.emit('play_enhancement_card', id);
+      }
     }
   } else if (area === 'hire') {
     if ((gameState.phase === 'hire') && isActivePlayer) {

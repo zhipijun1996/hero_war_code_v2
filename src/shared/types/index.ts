@@ -16,6 +16,8 @@ export interface TableCard extends Card {
   xp?: number;
   level?: number;
   maxHP?: number;
+  equippedToId?: string;
+  usedInTurn?: boolean;
 }
 
 export interface ActionCard extends Card {
@@ -99,12 +101,15 @@ export type GamePhase =
   | 'revival' 
   | 'hire'   
   | 'buy'    
+  | 'buy_select_equip_target'
   | 'action_defend' 
   | 'action_resolve_attack' 
   | 'action_resolve_attack_counter' 
   | 'action_common' 
   | 'action_select_skill'
   | 'action_select_skill_target'
+  | 'action_select_equipment'
+  | 'action_select_target'
   | 'action_play_defense'
   | 'skill_interrupt_prompt'
   | 'action_remove_ember_zone'
@@ -228,6 +233,7 @@ export interface GameState {
   };
   discardPiles: {
     action: Card[];
+    treasure?: Card[];
   };
   counters: Counter[];
   emberZones?: EmberZone[];
@@ -263,6 +269,8 @@ export interface GameState {
   selectedHireCastle?: number | null;
   hireSource?: 'shop' | 'action_common' | null;
   buySource?: 'shop' | 'action_common' | null;  
+  pendingEquipCardId?: string | null;
+  pendingEquipSlot?: { x: number, y: number, type: string } | null;
   hasSeizedInitiative?: boolean;
   canEvolve?: boolean;
   evolvableHeroIds?: string[];
@@ -283,7 +291,7 @@ export interface GameState {
   logs: GameLog[];
   actionTokens: ActionToken[];
   activeActionTokenId?: string | null;
-  activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | null;
+  activeActionType?: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | 'turret_attack' | 'use_equipment' | null;
   activeSkillId?: string | null;
   combatInitiatingSkillId?: string | null;
   activeEnhancementCardId?: string | null;

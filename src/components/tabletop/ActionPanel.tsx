@@ -116,6 +116,32 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         );
       }
 
+      if (prompt.promptType === 'discard_excess_equipment') {
+        const heroId = prompt.context?.heroId;
+        const equippedCards = (gameState.tableCards || []).filter(c => c && c.equippedToId === heroId);
+
+        return (
+          <div className="flex flex-col gap-3 items-center pointer-events-auto bg-black/80 p-4 rounded-xl backdrop-blur-sm border border-amber-500/50 shadow-2xl shadow-amber-900/20">
+            <div className="text-amber-400 font-bold text-lg">{prompt.context?.message || '装备容量已满'}</div>
+            <div className="text-zinc-200 text-sm mb-2">请选择一件装备弃置：</div>
+            <div className="flex gap-2 flex-wrap justify-center">
+              {equippedCards.map(card => (
+                <button
+                  key={card.id}
+                  onClick={() => socket.emit('skill_interrupt_response', { discardedCardId: card.id })}
+                  className="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 active:scale-95 border border-zinc-600 rounded-lg flex flex-col items-center gap-1 transition-all"
+                >
+                  <span className="text-white font-bold">{card.name || card.id}</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-zinc-900 text-amber-400 font-mono">
+                    {card.type === 'treasure1' ? 'LV1' : card.type === 'treasure2' ? 'LV2' : card.type === 'treasure3' ? 'LV3' : '装备'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
       if (prompt.promptType === 'select_skill') {
         const skills = prompt.context?.skills || [];
         return (
@@ -198,6 +224,37 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
           返回 (Back)
         </button>
+      </div>
+    );
+  }
+
+  if (gameState.phase === 'action_select_equipment') {
+    const selectedToken = (gameState.tokens || []).find(t => t && t.id === gameState.activeHeroTokenId);
+    const heroCardId = selectedToken?.boundToCardId;
+    const activeEquipNames = ['治疗药水', '经验卷轴', '移动号角', '指挥旗', '防御手套', '冲刺卷轴', '远程战术'];
+    const activeEquips = (gameState.tableCards || []).filter(c => 
+      c && c.equippedToId === heroCardId && 
+      c.name && activeEquipNames.includes(c.name) && 
+      !c.usedInTurn
+    );
+
+    return (
+      <div className="flex flex-col gap-4 items-center w-full max-w-md bg-black/40 p-4 rounded-xl backdrop-blur-sm">
+        <div className="text-white font-bold mb-2">选择要使用的装备</div>
+        <div className="flex gap-2 flex-wrap justify-center w-full">
+          {activeEquips.map(equip => (
+            <button 
+              key={equip.id}
+              onClick={() => socket.emit('use_equipment_card', equip.id)} 
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold text-sm"
+            >
+              {equip.name}
+            </button>
+          ))}
+          <button onClick={() => socket.emit('cancel_action_token')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold text-sm">
+            取消 (Cancel)
+          </button>
+        </div>
       </div>
     );
   }
@@ -435,6 +492,20 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               <button onClick={() => socket.emit('select_hero_action', 'evolve')} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm">进化 (Evolve)</button>
               {(() => {
                 if (!selectedToken) return false;
+                const heroCardId = selectedToken.boundToCardId;
+                if (!heroCardId) return false;
+                const activeEquipNames = ['治疗药水', '经验卷轴', '移动号角', '指挥旗', '防御手套', '冲刺卷轴', '远程战术'];
+                const hasActiveEquip = (gameState.tableCards || []).some(c => 
+                  c && c.equippedToId === heroCardId && 
+                  c.name && activeEquipNames.includes(c.name) && 
+                  !c.usedInTurn
+                );
+                return hasActiveEquip;
+              })() && (
+                <button onClick={() => socket.emit('select_hero_action', 'use_equipment')} className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold text-sm">使用装备 (Equip)</button>
+              )}
+              {(() => {
+                if (!selectedToken) return false;
                 const hex = pixelToHex(selectedToken.x, selectedToken.y);
                 const mc = (gameState.magicCircles || []).find(m => m && m.q === hex.q && m.r === hex.r);
                 return mc && mc.state === 'idle';
@@ -539,6 +610,46 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         <button onClick={() => socket.emit('pass_shop')} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
           返回 (Back)
         </button>
+      </div>
+    );
+  }
+  if (gameState.phase === 'buy_select_equip_target') {
+    const myHeroes = (gameState.tokens || []).filter(token => {
+      if (!token || !token.boundToCardId) return false;
+      const heroCard = (gameState.tableCards || []).find(c => c && c.id === token.boundToCardId);
+      if (!heroCard) return false;
+      const isMine =
+        (playerIndex === 0 && heroCard.y > 0) ||
+        (playerIndex === 1 && heroCard.y < 0);
+      const isDead = (gameState.counters || []).some(counter =>
+        counter && counter.type === 'time' && counter.boundToCardId === token.boundToCardId
+      );
+      return isMine && !isDead;
+    });
+
+    return (
+      <div className="flex flex-col items-center gap-4 w-full max-w-md">
+        <div className="text-white font-bold mb-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm shadow-xl text-center">请选择接收装备的英雄</div>
+        <div className="flex gap-2 flex-wrap justify-center">
+          {myHeroes.map(heroToken => {
+            const heroCard = (gameState.tableCards || []).find(c => c && c.id === heroToken.boundToCardId);
+            return (
+              <button 
+                key={heroToken.id}
+                onClick={() => socket.emit('select_target', heroToken.boundToCardId)} 
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold"
+              >
+                {heroCard?.heroClass || '英雄'}
+              </button>
+            );
+          })}
+          <button onClick={() => socket.emit('select_target', playerId)} className="px-4 py-2 bg-zinc-600 hover:bg-zinc-500 text-white rounded-lg font-bold">
+            留在手牌 (Keep in Hand)
+          </button>
+          <button onClick={() => socket.emit('undo_play')} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold">
+            撤回购买 (Undo)
+          </button>
+        </div>
       </div>
     );
   }

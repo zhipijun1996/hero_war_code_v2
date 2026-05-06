@@ -26,6 +26,10 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
       socket.emit('error_message', '弃牌阶段无法出牌。');
       return;
     }
+    if (gameState.phase === 'buy_select_equip_target') {
+      socket.emit('select_target', cardId);
+      return;
+    }
     if (gameState.phase === 'action_play_enhancement') {
       socket.emit('play_enhancement_card', cardId);
       return;
@@ -44,7 +48,6 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
       return;
     }
     if (gameState.phase === 'discard') {
-      if (hand.length <= 5) { return; }
       socket.emit('discard_card', cardId);
       return;
     }
@@ -95,6 +98,17 @@ export default function Hand({ socket, hand, setZoomedCard, gameState, selectedH
               onHoverStart={() => setHoveredIndex(index)}
               onHoverEnd={() => setHoveredIndex(null)}
               onClick={() => handleCardClick(card.id)}
+              onTap={() => handleCardClick(card.id)}
+              onTouchEnd={(e) => {
+                // Prevent any default behavior that might interfere with onTap
+                // We don't e.preventDefault() here because we want regular taps to work,
+                // but just in case, we can also manually call it if Framer Motion misses it.
+                // Actually, let's just make sure handleCardClick fires reliably
+                if (window.matchMedia("(hover: none)").matches && gameState.phase === 'discard') {
+                  // Only aggressively fire on mobile during discard to be safe
+                  handleCardClick(card.id);
+                }
+              }}
               onDoubleClick={(e) => handleCardDoubleClick(e, card)}
             >
               {card.frontImage ? (

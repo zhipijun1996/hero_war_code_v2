@@ -291,18 +291,34 @@ export default function Tabletop({ socket, gameState, setZoomedCard, playerId, i
             </Group>
           )}
 
-          {gameState.tableCards.map(card => card && (
-            <CardNode 
-              key={card.id} 
-              card={card} 
-              socket={socket} 
-              onContextMenu={handleCardContextMenu} 
-              onZoom={setZoomedCard} 
-              onClick={(id) => handleCardClick(id, 'table')}
-              isSelected={gameState.selectedTargetId === card.id}
-              lastEvolvedId={gameState.lastEvolvedId}
-            />
-          ))}
+          {gameState.tableCards.map(card => {
+            if (!card) return null;
+            let renderX = card.x;
+            let renderY = card.y;
+            
+            if (card.equippedToId) {
+              const heroCard = gameState.tableCards.find(c => c && c.id === card.equippedToId);
+              if (heroCard) {
+                const equippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                const idx = equippedCards.findIndex(c => c.id === card.id);
+                renderX = heroCard.x;
+                renderY = heroCard.y > 0 ? (heroCard.y + 160 + (idx * 160)) : (heroCard.y - 160 - (idx * 160));
+              }
+            }
+
+            return (
+              <CardNode 
+                key={card.id} 
+                card={{...card, x: renderX, y: renderY}} 
+                socket={socket} 
+                onContextMenu={handleCardContextMenu} 
+                onZoom={setZoomedCard} 
+                onClick={(id) => handleCardClick(id, 'table')}
+                isSelected={gameState.selectedTargetId === card.id}
+                lastEvolvedId={gameState.lastEvolvedId}
+              />
+            );
+          })}
 
           {gameState.hireAreaCards.map(card => card && (
             <CardNode 

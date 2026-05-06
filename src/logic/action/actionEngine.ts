@@ -28,6 +28,7 @@ export interface ActionHelpers {
   checkAllTokensUsed: () => void;
   updateAvailableActions: (playerIndex: number) => void;
   discardOpponentCard: (playerIndex: number) => void;
+  resolveSkillPrompt?: (response: any) => void;
   promptPlayer?: (playerIndex: number, promptType: string, context: any) => Promise<any>;
 }
 
@@ -161,6 +162,39 @@ export class ActionEngine {
             token.x = pos.x;
             token.y = pos.y;
             gameState.remainingMv! -= dist;
+
+            // If the hero has 骑士战靴 equipped, mark it as used in this turn
+            if (token.boundToCardId) {
+              const equipments = gameState.tableCards.filter(c => c && c.equippedToId === token.boundToCardId);
+              for (const eq of equipments) {
+                if (eq.name === '骑士战靴') {
+                  eq.usedInTurn = true;
+                }
+              }
+            }
+
+            // --- 战场旗帜 trigger ---
+            const allies = gameState.tokens.filter(t => t.id !== token.id && ((t.y > 0 && token.y > 0) || (t.y < 0 && token.y < 0)));
+            for (const ally of allies) {
+              if (ally.boundToCardId) {
+                const eq = gameState.tableCards.find(c => c && c.equippedToId === ally.boundToCardId && c.name === '战场旗帜');
+                if (eq) {
+                   const allyHex = pixelToHex(ally.x, ally.y);
+                   const isAdjacentNow = getHexDistance(allyHex, { q, r }) === 1;
+                   // Just check adjacency on destination 
+                   if (isAdjacentNow) {
+                     helpers.addLog(`[战场旗帜] 生效！旗帜持有者移动1格`, playerIndex);
+                     const resp = await helpers.promptPlayer!(playerIndex, 'heal_move', { message: `请选择战场旗帜持有者移动目标`});
+                     if (resp && resp.targetHex) {
+                       const pos = hexToPixel(resp.targetHex.q, resp.targetHex.r);
+                       ally.x = pos.x; 
+                       ally.y = pos.y;
+                       socket.emit('item_moved', { type: 'token', id: ally.id, x: pos.x, y: pos.y });
+                     }
+                   }
+                }
+              }
+            }
 
             // Tile effect logic
             const effect = resolveTileEffect({ q, r }, token.id, gameState);
@@ -638,13 +672,13 @@ export class ActionEngine {
   /**
    * 处理公共行动选择逻辑 (Common action selection logic)
    */
-  static selectCommonAction(
+  static async selectCommonAction(
     gameState: GameState,
     playerIndex: number,
     action: 'open_chest' | 'early_buy' | 'seize_initiative' | 'hire',
     helpers: ActionHelpers,
     socket: any
-  ): void {
+  ): Promise<void> {
     if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_common') return;
 
     const token = gameState.actionTokens.find(t => t.id === gameState.activeActionTokenId);
@@ -676,9 +710,57 @@ export class ActionEngine {
             if (gameState.decks[deckKey] && (gameState.decks[deckKey] as any[]).length > 0) {
               const treasureCard = (gameState.decks[deckKey] as any[]).pop()!;
               const player = gameState.players[gameState.seats[playerIndex]!];
-              if (player) {
-                player.hand.push(treasureCard);
-                helpers.addLog(`玩家${playerIndex + 1}开启了${chestType}级宝箱，获得了${goldReward}金币和一张宝藏卡`, playerIndex);
+              const heroCard = gameState.tableCards.find(tc => tc.id === token.boundToCardId);
+              
+              if (player && heroCard) {
+                // Look for LV3 replacement
+                if (treasureCard.type === 'treasure3') {
+                  const existingLV3Index = gameState.tableCards.findIndex(c => c && c.equippedToId === heroCard.id && c.type === 'treasure3');
+                  if (existingLV3Index !== -1) {
+                    const oldLV3 = gameState.tableCards.splice(existingLV3Index, 1)[0];
+                    oldLV3.equippedToId = undefined;
+                    if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                    gameState.discardPiles.treasure.push(oldLV3);
+                    helpers.addLog(`玩家${playerIndex + 1}的英雄获得了新的LV3装备，原LV3装备已弃置`, playerIndex);
+                  }
+                }
+                
+                // Equip directly
+                treasureCard.equippedToId = heroCard.id;
+                treasureCard.faceUp = true;
+                
+                // Position calculations
+                const equippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                const idx = equippedCards.length;
+                treasureCard.x = heroCard.x;
+                treasureCard.y = heroCard.y > 0 ? (heroCard.y + 160 + (idx * 160)) : (heroCard.y - 160 - (idx * 160));
+                
+                gameState.tableCards.push(treasureCard);
+                helpers.addLog(`玩家${playerIndex + 1}开启了${chestType}级宝箱，获得了${goldReward}金币并将装备 [${treasureCard.name || treasureCard.id}] 装备给英雄`, playerIndex);
+                
+                // Handle excess equipment
+                const newEquippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                if (newEquippedCards.length > 2 && helpers.promptPlayer) {
+                  helpers.broadcastState(); // Broadcast state to show the new card
+                  const response = await helpers.promptPlayer(playerIndex, 'discard_excess_equipment', { heroId: heroCard.id });
+                  if (response && response.discardedCardId) {
+                    const toDiscardIdx = gameState.tableCards.findIndex(c => c && c.id === response.discardedCardId);
+                    if (toDiscardIdx !== -1) {
+                      const discardedEquip = gameState.tableCards.splice(toDiscardIdx, 1)[0];
+                      discardedEquip.equippedToId = undefined;
+                      if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                      gameState.discardPiles.treasure.push(discardedEquip);
+                      helpers.addLog(`玩家${playerIndex + 1}弃置了多余的装备卡`, playerIndex);
+                      
+                      // recalculate positions
+                      const remainingEquipped = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                      remainingEquipped.forEach((eq, i) => {
+                        eq.x = heroCard.x;
+                        eq.y = heroCard.y > 0 ? (heroCard.y + 160 + (i * 160)) : (heroCard.y - 160 - (i * 160));
+                      });
+                    }
+                  }
+                }
               }
             } else {
               helpers.addLog(`玩家${playerIndex + 1}开启了${chestType}级宝箱，获得了${goldReward}金币`, playerIndex);
@@ -766,6 +848,48 @@ export class ActionEngine {
     helpers.broadcastState();
   }
 
+  static cancelBuyEquipSelection(gameState: any, playerIndex: number, helpers: any) {
+    if (playerIndex !== gameState.activePlayerIndex) return;
+    if (gameState.phase !== 'buy_select_equip_target') return;
+
+    const pendingCardId = gameState.pendingEquipCardId;
+    if (!pendingCardId) return;
+
+    const player = gameState.players[gameState.seats[playerIndex]];
+    if (!player) return;
+
+    const cardIndex = player.hand.findIndex((c: any) => c.id === pendingCardId);
+    if (cardIndex !== -1) {
+      const card = player.hand[cardIndex];
+      player.hand.splice(cardIndex, 1);
+      
+      const slot = gameState.pendingEquipSlot;
+      // Put back to table cards
+      gameState.tableCards.push({ 
+        ...card, 
+        faceUp: true, 
+        x: slot ? slot.x : card.x, 
+        y: slot ? slot.y : card.y 
+      });
+      
+      // Refund gold
+      const gold = gameState.counters.find((c: any) => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
+      if (gold) {
+        const level = parseInt(card.type?.replace('treasure', ''), 10) || 1;
+        const cost = level === 3 ? 4 : level;
+        gold.value += cost;
+      }
+    }
+
+    gameState.pendingEquipCardId = null;
+    gameState.pendingEquipSlot = null;
+    gameState.selectedOption = 'buy';
+    gameState.notification = null;
+    gameState.phase = 'buy';
+    
+    helpers.broadcastState();
+  }
+
   static startHireSelection(
     gameState: GameState,
     source: 'shop' | 'action_common',
@@ -844,7 +968,7 @@ export class ActionEngine {
   static async selectHeroAction(
     gameState: GameState,
     playerIndex: number,
-    actionType: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | 'turret_attack',
+    actionType: 'move' | 'attack' | 'skill' | 'evolve' | 'chant' | 'fire' | 'turret_attack' | 'use_equipment',
     helpers: ActionHelpers,
     socket: any
   ): Promise<void> {
@@ -941,9 +1065,139 @@ export class ActionEngine {
       gameState.activeActionType = 'fire';
       gameState.selectedTokenId = heroToken.id;
       gameState.notification = '选择敌方王城开火 (Select enemy castle to fire)';
+    } else if (actionType === 'use_equipment') {
+      helpers.checkAndResetChanting(heroToken.id);
+      gameState.phase = 'action_select_equipment';
+      gameState.activeActionType = 'use_equipment';
+      gameState.selectedTokenId = heroToken.id;
     }
     helpers.broadcastState();
     helpers.checkBotTurn();
+  }
+
+  /**
+   * 处理使用装备卡主动技能逻辑
+   */
+  static async useEquipmentCard(
+    gameState: GameState,
+    playerIndex: number,
+    equipmentCardId: string,
+    helpers: ActionHelpers,
+    socket: any
+  ): Promise<void> {
+    if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_select_equipment') return;
+
+    const equipCard = (gameState.tableCards || []).find(c => c && c.id === equipmentCardId);
+    if (!equipCard) {
+      socket.emit('error_message', '找不到该装备 (Equipment not found)');
+      return;
+    }
+    
+    if (equipCard.usedInTurn) {
+      socket.emit('error_message', '本回合已经使用过该装备 (Equipment already used this turn)');
+      return;
+    }
+
+    const heroToken = gameState.tokens.find(t => t.id === gameState.activeHeroTokenId);
+    if (!heroToken) return;
+
+    // Apply effect based on name
+    if (equipCard.name === '治疗药水') {
+       equipCard.usedInTurn = true;
+       // Discard item after use since it is consumable
+       equipCard.equippedToId = undefined;
+       if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+       gameState.discardPiles.treasure.push(equipCard);
+       gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== equipmentCardId);
+       
+       // Process heal
+       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+       if (heroCard) {
+          heroCard.damage = Math.max(0, (heroCard.damage || 0) - 1);
+          helpers.addLog(`玩家${playerIndex + 1}使用了[${equipCard.name}]，恢复了1点生命值`, playerIndex);
+       }
+       await this.finishAction(gameState, playerIndex, helpers, socket);
+    } else if (equipCard.name === '经验卷轴') {
+       equipCard.usedInTurn = true;
+       // Discard consumable
+       equipCard.equippedToId = undefined;
+       if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+       gameState.discardPiles.treasure.push(equipCard);
+       gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== equipmentCardId);
+       
+       const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+       if (heroCard) {
+          heroCard.xp = (heroCard.xp || 0) + 1;
+          helpers.addLog(`玩家${playerIndex + 1}使用了[${equipCard.name}]，获得1点经验值`, playerIndex);
+       }
+       await this.finishAction(gameState, playerIndex, helpers, socket);
+    } else if (equipCard.name === '冲刺卷轴' || equipCard.name === '远程战术') {
+       equipCard.usedInTurn = true;
+       // Discard consumable
+       equipCard.equippedToId = undefined;
+       if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+       gameState.discardPiles.treasure.push(equipCard);
+       gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== equipmentCardId);
+
+       const statType = equipCard.name === '冲刺卷轴' ? 'mv' : 'ar';
+       const statName = equipCard.name === '冲刺卷轴' ? '移动' : '攻击';
+       gameState.turnModifiers = gameState.turnModifiers || [];
+       gameState.turnModifiers.push({ tokenId: heroToken.id, stat: statType, value: 1, type: 'add', sourceSkillId: 'equipment_' + equipCard.id });
+       helpers.addLog(`玩家${playerIndex + 1}使用了[${equipCard.name}]，本回合${statName}范围+1`, playerIndex);
+       await this.finishAction(gameState, playerIndex, helpers, socket);
+    } else if (equipCard.name === '移动号角' || equipCard.name === '指挥旗') {
+      const attackerHex = pixelToHex(heroToken.x, heroToken.y);
+      const adjacentHexes = [
+        { q: attackerHex.q + 1, r: attackerHex.r },
+        { q: attackerHex.q + 1, r: attackerHex.r - 1 },
+        { q: attackerHex.q, r: attackerHex.r - 1 },
+        { q: attackerHex.q - 1, r: attackerHex.r },
+        { q: attackerHex.q - 1, r: attackerHex.r + 1 },
+        { q: attackerHex.q, r: attackerHex.r + 1 }
+      ];
+      const targetableHexes = adjacentHexes.filter(h => {
+         const hasAlly = gameState.tokens.find(t => {
+            if (t.type !== 'hero' || t.id === heroToken.id) return false;
+            const tHex = pixelToHex(t.x, t.y);
+            const isAlly = gameState.actionTokens.some(at => at.playerIndex === playerIndex && at.heroCardId === t.boundToCardId);
+            return tHex.q === h.q && tHex.r === h.r && isAlly;
+         });
+         return hasAlly;
+      });
+
+      if (targetableHexes.length === 0) {
+        socket.emit('error_message', '没有相邻的友方英雄可以成为目标 (No adjacent friendly heroes)');
+        return;
+      }
+
+      equipCard.usedInTurn = true;
+      if (equipCard.name === '移动号角') {
+         equipCard.equippedToId = undefined;
+         if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+         gameState.discardPiles.treasure.push(equipCard);
+         gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== equipmentCardId);
+      }
+      // Need to select adjacent ally token
+      gameState.phase = 'action_select_target';
+      gameState.activeActionType = 'use_equipment';
+      gameState.selectedTokenId = heroToken.id;
+      
+      gameState.reachableCells = targetableHexes;
+      gameState.notification = '选择相邻友方英雄进行移动';
+      
+      // We hijack the activeSkillState to remember we are using this equipment
+      gameState.activeSkillState = { equipmentEffect: 'move_ally', equipmentName: equipCard.name };
+      helpers.addLog(`玩家${playerIndex + 1}使用了[${equipCard.name}]，请选择目标`, playerIndex);
+      
+      helpers.broadcastState();
+      helpers.checkBotTurn();
+    } else if (equipCard.name === '防御手套') {
+      equipCard.usedInTurn = true;
+      helpers.addLog(`玩家${playerIndex + 1}本回合激活了[${equipCard.name}]，可将任意卡牌视为防御卡`, playerIndex);
+      await this.finishAction(gameState, playerIndex, helpers, socket);
+    } else {
+      socket.emit('error_message', '该装备没有主动技能 (This equipment has no active skill)');
+    }
   }
 
   /**
@@ -988,6 +1242,38 @@ export class ActionEngine {
     if (playerIndex === gameState.activePlayerIndex) {
       
       gameState.selectedTargetId = targetId;
+      
+      if (gameState.phase === 'action_select_target' && gameState.activeActionType === 'use_equipment') {
+        const equipmentName = gameState.activeSkillState?.equipmentName;
+        if (equipmentName === '移动号角' || equipmentName === '指挥旗') {
+          const targetToken = gameState.tokens.find(t => t.boundToCardId === targetId);
+          if (!targetToken) {
+             socket.emit('error_message', '无效的目标英雄 (Invalid target hero)');
+             return;
+          }
+          
+          helpers.addLog(`玩家${playerIndex + 1}使用此装备令目标英雄移动1格`, playerIndex);
+          
+          if (helpers.promptPlayer) {
+            helpers.broadcastState();
+            const targetHex = pixelToHex(targetToken.x, targetToken.y);
+            gameState.reachableCells = getReachableHexes(targetHex, 1, playerIndex, gameState);
+            const response = await helpers.promptPlayer(playerIndex, 'heal_move', { message: `请选择目标英雄的移动目标` });
+            
+            if (response && response.targetHex) {
+              const { q, r } = response.targetHex;
+              const newPos = hexToPixel(q, r);
+              targetToken.x = newPos.x;
+              targetToken.y = newPos.y;
+              helpers.addLog(`玩家${playerIndex + 1}移动了被号令的英雄`, playerIndex);
+            }
+          }
+          
+          gameState.activeSkillState = null;
+          await this.finishAction(gameState, playerIndex, helpers, socket);
+          return;
+        }
+      }
 
       if (gameState.activeActionType === 'fire') {
         const heroToken = gameState.tokens.find(t => t.id === gameState.selectedTokenId);
@@ -1040,6 +1326,202 @@ export class ActionEngine {
           return;
         }
       } 
+      
+      if (gameState.phase === 'buy' && gameState.selectedOption === 'buy') {
+        const cardIndex = gameState.tableCards.findIndex(c => c && c.id === targetId);
+        const card = gameState.tableCards[cardIndex];
+        const gold = gameState.counters.find(c => c.type === 'gold' && (playerIndex === 0 ? (c.x === -150 && c.y === 550) : (c.x === -150 && c.y === -700)));
+        if (cardIndex !== -1 && card && gold) {
+          // Check if it's a treasure card (we don't want to buy a hero on the table during this)
+          if (card.type && card.type.startsWith('treasure')) {
+            const level = parseInt(card.type.replace('treasure', ''), 10) || 1;
+            const cost = level === 3 ? 4 : level;
+            if (gold.value >= cost) {
+              // Deduct cost
+              gold.value -= cost;
+              const slot = { x: card.x, y: card.y, type: card.type };
+
+              // Move item to player hand temporarily
+              gameState.tableCards.splice(cardIndex, 1);
+              
+              const player = gameState.players[gameState.seats[playerIndex]];
+              if (player) {
+                player.hand.push({ ...card, faceUp: false, equippedToId: undefined } as any);
+              }
+
+              gameState.pendingEquipCardId = card.id;
+              gameState.pendingEquipSlot = slot;
+              gameState.phase = 'buy_select_equip_target';
+              gameState.selectedOption = null;
+
+              helpers.addLog(`玩家${playerIndex + 1}购买了等级 ${cost} 装备卡，消费 ${cost} 金币，正在选择装备目标`, playerIndex);
+              
+              helpers.broadcastState();
+              helpers.checkBotTurn();
+              return;
+            } else {
+              socket.emit('error_message', `金币不足！购买此装备需要 ${cost} 金币`);
+              return;
+            }
+          } else {
+            socket.emit('error_message', '请先点击要购买的装备卡！(只能购买装备卡)');
+            return;
+          }
+        } else {
+            socket.emit('error_message', '无效的选择');
+            return;
+        }
+      }
+
+      if (gameState.phase === 'buy_select_equip_target') {
+        const player = gameState.players[gameState.seats[playerIndex]];
+        const pendingCardId = gameState.pendingEquipCardId;
+        
+        let equipTargetHandCard = false;
+        let targetHeroCardId: string | null = null;
+        
+        // Find click target - might be a token, or a card
+        const token = gameState.tokens.find(t => t.id === targetId);
+        if (token && token.boundToCardId) {
+          targetHeroCardId = token.boundToCardId;
+        } else {
+          const tableCard = gameState.tableCards.find(c => c && c.id === targetId);
+          if (tableCard && tableCard.type === 'hero') {
+            targetHeroCardId = tableCard.id;
+          } else if (targetId === player.id) { // REMOVED || targetId === pendingCardId
+            equipTargetHandCard = true;
+          }
+        }
+        
+        if (targetHeroCardId || equipTargetHandCard) {
+          // It's a valid choice
+          const cardIndex = player.hand.findIndex(c => c.id === pendingCardId);
+          if (cardIndex !== -1) {
+            const card = player.hand[cardIndex];
+            
+            if (targetHeroCardId) {
+              const heroCard = gameState.tableCards.find(c => c && c.id === targetHeroCardId);
+              
+              const isOwner = heroCard && ((playerIndex === 0 && heroCard.y > 0) || (playerIndex === 1 && heroCard.y < 0));
+              if (!isOwner) {
+                socket.emit('error_message', '只能将物品装备给自己的英雄！(Can only equip to your own heroes)');
+                return;
+              }
+
+              if (heroCard) {
+                // Look for LV3 replacement
+                if (card.type === 'treasure3') {
+                  const existingLV3Index = gameState.tableCards.findIndex(c => c && c.equippedToId === heroCard.id && c.type === 'treasure3');
+                  if (existingLV3Index !== -1) {
+                    const oldLV3 = gameState.tableCards.splice(existingLV3Index, 1)[0];
+                    oldLV3.equippedToId = undefined;
+                    if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                    gameState.discardPiles.treasure.push(oldLV3);
+                    helpers.addLog(`玩家${playerIndex + 1}为英雄替换了原有的LV3装备`, playerIndex);
+                  }
+                }
+
+                // Move from hand back to tableCards, equipped
+                player.hand.splice(cardIndex, 1);
+                (card as any).equippedToId = targetHeroCardId;
+                (card as any).faceUp = true;
+                
+                // Calculate position relative to hero card based on how many cards are already equipped
+                const equippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                const idx = equippedCards.length;
+                (card as any).x = heroCard.x;
+                (card as any).y = heroCard.y > 0 ? (heroCard.y + 160 + (idx * 160)) : (heroCard.y - 160 - (idx * 160));
+                
+                gameState.tableCards.push(card as any);
+                helpers.addLog(`玩家${playerIndex + 1}将装备卡装备给了英雄 [${heroCard.id}]`, playerIndex);
+
+                // Handle excess equipment discard prompt
+                const newEquippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                if (newEquippedCards.length > 2 && helpers.promptPlayer) {
+                  const response = await helpers.promptPlayer(playerIndex, 'discard_excess_equipment', { heroId: heroCard.id });
+                  if (response && response.discardedCardId) {
+                    const toDiscardIdx = gameState.tableCards.findIndex(c => c && c.id === response.discardedCardId);
+                    if (toDiscardIdx !== -1) {
+                      const discardedEquip = gameState.tableCards.splice(toDiscardIdx, 1)[0];
+                      discardedEquip.equippedToId = undefined;
+                      if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                      gameState.discardPiles.treasure.push(discardedEquip);
+                      helpers.addLog(`玩家${playerIndex + 1}弃置了多余的装备卡`, playerIndex);
+                      
+                      // recalculate positions
+                      const remainingEquipped = gameState.tableCards.filter(c => c && c.equippedToId === heroCard.id);
+                      remainingEquipped.forEach((eq, i) => {
+                        eq.x = heroCard.x;
+                        eq.y = heroCard.y > 0 ? (heroCard.y + 160 + (i * 160)) : (heroCard.y - 160 - (i * 160));
+                      });
+                    }
+                  }
+                }
+              }
+            } else {
+              helpers.addLog(`玩家${playerIndex + 1}未装备该装备卡，它将留在手牌中`, playerIndex);
+            }
+          }
+          
+          // REFILL SHOP LOGIC
+          const slot = gameState.pendingEquipSlot;
+          if (slot && slot.type) {
+            const deckKey = slot.type as keyof typeof gameState.decks;
+            let targetDeck = gameState.decks[deckKey];
+            
+            if (!targetDeck || targetDeck.length === 0) {
+              const discardPile = gameState.discardPiles.treasure || [];
+              const matchingCards = discardPile.filter(c => c.type === slot.type);
+              
+              if (matchingCards.length > 0) {
+                 gameState.discardPiles.treasure = discardPile.filter(c => c.type !== slot.type);
+                 matchingCards.sort(() => Math.random() - 0.5);
+                 targetDeck = matchingCards;
+                 gameState.decks[deckKey] = targetDeck as any;
+                 helpers.addLog(`从装备弃牌区重新洗切了 ${slot.type} 牌堆`, -1);
+              }
+            }
+            
+            if (targetDeck && targetDeck.length > 0) {
+               const newCard = targetDeck.pop()!;
+               gameState.tableCards.push({
+                 ...newCard,
+                 x: slot.x,
+                 y: slot.y,
+                 faceUp: true,
+                 equippedToId: undefined
+               } as TableCard);
+            }
+          }
+
+          gameState.pendingEquipCardId = null;
+          gameState.pendingEquipSlot = null;
+          gameState.notification = null;
+          
+          // Finish the phase accordingly
+          if (gameState.buySource === 'shop') {
+            gameState.phase = 'shop';
+            gameState.activePlayerIndex = 1 - playerIndex;
+          } else {
+            const tokenToUse = gameState.actionTokens.find(t => t.id === gameState.activeActionTokenId);
+            if (tokenToUse) tokenToUse.used = true;
+            gameState.activeActionTokenId = null;
+            gameState.activeHeroTokenId = null;
+            gameState.selectedTokenId = null;
+            gameState.activePlayerIndex = 1 - playerIndex;
+            gameState.phase = 'action_play';
+            helpers.checkAllTokensUsed();
+          }
+          
+          gameState.buySource = null;
+          helpers.broadcastState();
+          helpers.checkBotTurn();
+          return;
+        } else {
+          socket.emit('error_message', '请选择一个英雄目标，或点击自己来跳过');
+          return;
+        }
+      }
 
       // If we are in action_resolve and it's an attack, transition to defense phase
       if (gameState.phase === 'action_resolve' && gameState.activeActionType === 'attack') {
@@ -1174,21 +1656,46 @@ export class ActionEngine {
   ): void {
     if (playerIndex === -1 || playerIndex !== gameState.activePlayerIndex || gameState.phase !== 'action_play_enhancement') return;
 
-    const player = gameState.players[socket.id];
-    if (!player) return;
+    let card: any;
+    let fromHand = false;
 
-    const cardIndex = player.hand.findIndex((c: any) => c.id === cardId);
-    if (cardIndex === -1) return;
+    // Check hand first
+    const player = gameState.players[gameState.seats[playerIndex]];
+    if (player) {
+      const cardIndex = player.hand.findIndex((c: any) => c.id === cardId);
+      if (cardIndex !== -1) {
+        card = player.hand[cardIndex];
+        fromHand = true;
+      }
+    }
 
-    const card = player.hand[cardIndex];
-    
+    // Check equipped items (e.g. one-time items)
+    if (!card) {
+       const equipIndex = gameState.tableCards.findIndex(c => c && c.id === cardId && c.equippedToId);
+       if (equipIndex !== -1) {
+         card = gameState.tableCards[equipIndex];
+         fromHand = false;
+       }
+    }
+
+    if (!card) return;
+
     if (!isEnhancementCardName(card.name || '')) {
-      socket.emit('error_message', '只能打出增强卡');
+      socket.emit('error_message', '只能打出增强卡和一次性装备 (Can only play enhancement cards or one-time equipments)');
       return;
     }
 
-    player.hand.splice(cardIndex, 1);
-    gameState.discardPiles.action.push(card);
+    if (fromHand) {
+      player.hand = player.hand.filter((c: any) => c.id !== card.id);
+      gameState.discardPiles.action.push(card);
+    } else {
+      card.equippedToId = undefined;
+      card.usedInTurn = true;
+      gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== card.id);
+      if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+      gameState.discardPiles.treasure.push(card);
+    }
+
     gameState.activeEnhancementCardId = card.id;
 
     const { logs, nextPhase } = CardLogic.applyActionCard(
@@ -1618,6 +2125,15 @@ export class ActionEngine {
     gameState.reachableCells = [];
     gameState.notification = null;
 
+    // Reset equipment used status for the round
+    if (gameState.tableCards) {
+      gameState.tableCards.forEach(c => {
+        if (c.usedInTurn !== undefined) {
+          c.usedInTurn = false;
+        }
+      });
+    }
+
     helpers.addLog(`--- 结束阶段开始 (end Phase Starts) ---`, -1);
     helpers.broadcastState();
     
@@ -1774,6 +2290,28 @@ export class ActionEngine {
     
     // 触发回合开始事件
     await SkillEngine.triggerEvent('onTurnStart', gameState, helpers);
+
+    // --- 装备触发：侦察镜 (Scout Glass) --- //
+    // 回合开始时，拥有侦察镜的玩家可以随机查看对手2张手牌
+    for (const token of gameState.tokens) {
+      if (token.boundToCardId) {
+        const eq = gameState.tableCards.find(c => c && c.equippedToId === token.boundToCardId && c.name === '侦察镜');
+        if (eq) {
+          const ownerIndex = token.y > 0 ? 0 : 1;
+          const oppIndex = 1 - ownerIndex;
+          const opponent = gameState.players[oppIndex];
+          if (opponent && opponent.hand && opponent.hand.length > 0) {
+            // Shuffle and pick up to 2
+            const handCards = [...opponent.hand];
+            const shuffled = handCards.sort(() => 0.5 - Math.random());
+            const picked = shuffled.slice(0, 2);
+            
+            const cardNames = picked.map(c => `[${c.name}]`).join(', ');
+            helpers.addLog(`🔍 [侦察镜] 探测到对手的手牌包含：${cardNames}`, ownerIndex);
+          }
+        }
+      }
+    }
 
     helpers.broadcastState();
     helpers.checkBotTurn();
@@ -2111,6 +2649,57 @@ export class ActionEngine {
       
       // Trigger skill post-combat effects (like knockback) before counter-attack
       await SkillEngine.onCombatResolved(gameState, {}, helpers);
+
+      // ----- Defensive and Offensive Equipment Triggers ----- //
+      const targetToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
+      const attackerToken = gameState.tokens.find((t: any) => t.id === gameState.selectedTokenId);
+      
+      if (gameState.isDefended) {
+        const defenderIndex = 1 - attackerIndex;
+        // Target defended: Trigger target's 战术盾 and 防御符文
+        if (targetToken) {
+          const equipments = gameState.tableCards.filter(c => c && c.equippedToId === targetToken.boundToCardId);
+          for (const eq of equipments) {
+            if (!eq.name) continue;
+            if ((eq.name === '战术盾' && !eq.usedInTurn) || eq.name === '防御符文') {
+              eq.usedInTurn = true;
+              let logMsg = `[${eq.name}] 生效，可移动1格`;
+              if (eq.name === '防御符文') {
+                eq.equippedToId = undefined;
+                if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                gameState.discardPiles.treasure.push(eq);
+                gameState.tableCards = gameState.tableCards.filter(c => c && c.id !== eq.id);
+                logMsg += "（消耗）";
+              }
+              helpers.addLog(logMsg, defenderIndex);
+              const resp = await helpers.promptPlayer!(defenderIndex, 'heal_move', { message: `请选择移动目标` });
+              if (resp && resp.targetHex) {
+                const pos = hexToPixel(resp.targetHex.q, resp.targetHex.r);
+                targetToken.x = pos.x;
+                targetToken.y = pos.y;
+                socket.emit('item_moved', { type: 'token', id: targetToken.id, x: pos.x, y: pos.y });
+              }
+            }
+          }
+        }
+        // Attacker failed attack: Trigger attacker's 战术腰带
+        if (attackerToken) {
+          const equipments = gameState.tableCards.filter(c => c && c.equippedToId === attackerToken.boundToCardId);
+          for (const eq of equipments) {
+            if (eq.name === '战术腰带' && !eq.usedInTurn) {
+              eq.usedInTurn = true;
+              helpers.addLog(`[战术腰带] 生效，攻击失败，可移动1格`, attackerIndex);
+              const resp = await helpers.promptPlayer!(attackerIndex, 'heal_move', { message: `请选择移动目标` });
+              if (resp && resp.targetHex) {
+                const pos = hexToPixel(resp.targetHex.q, resp.targetHex.r);
+                attackerToken.x = pos.x;
+                attackerToken.y = pos.y;
+                socket.emit('item_moved', { type: 'token', id: attackerToken.id, x: pos.x, y: pos.y });
+              }
+            }
+          }
+        }
+      }
       
       if (gameState.isCounterAttack) {
         // Automate counter-attack resolution

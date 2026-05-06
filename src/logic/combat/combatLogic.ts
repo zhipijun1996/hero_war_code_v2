@@ -815,6 +815,14 @@ export class CombatLogic {
       return false;
     }
 
+    // Check if attacker has '重装铠甲' equipped
+    if (attackerToken.boundToCardId) {
+      const attackerEquips = gameState.tableCards.filter(c => c && c.equippedToId === attackerToken.boundToCardId);
+      if (attackerEquips.some(eq => eq.name === '重装铠甲')) {
+         return false; // Cannot counter-attack against heavy armor
+      }
+    }
+
     // Check if defender has 'hardened' skill (legacy)
     if (defenderToken.heroClass) {
       const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);

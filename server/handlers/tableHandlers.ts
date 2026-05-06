@@ -189,12 +189,82 @@ export const createTableHandlers = (deps: any) => {
         broadcastState();
       }
     },
-    move_item: (socket: any, { type, id, x, y }: any) => {
+    move_item: async (socket: any, { type, id, x, y }: any) => {
       if (type === 'card') {
         const card = gameState.tableCards.find((c: any) => c.id === id);
         if (card) {
-          card.x = x;
-          card.y = y;
+          if (card.type && (card.type.startsWith('treasure') || card.type === 'action')) {
+            // Also allow action cards because users might drag an enhancement action card
+            const heroCard = gameState.tableCards.find((c: any) => {
+              if (c.type === 'hero' && c.id !== id) {
+                return Math.abs(c.x - x) < 80 && Math.abs(c.y - y) < 100;
+              }
+              return false;
+            });
+            if (heroCard) {
+              // Only allow owner to equip manually
+              const playerIndex = getPlayerIndex(socket.id);
+              const isOwner = ((playerIndex === 0 && heroCard.y > 0) || (playerIndex === 1 && heroCard.y < 0));
+              
+              if (isOwner) {
+                // Handle LV3
+                if (card.type === 'treasure3') {
+                  const existingLV3Index = gameState.tableCards.findIndex((c: any) => c && c.equippedToId === heroCard.id && c.type === 'treasure3' && c.id !== card.id);
+                  if (existingLV3Index !== -1) {
+                    const oldLV3 = gameState.tableCards.splice(existingLV3Index, 1)[0];
+                    oldLV3.equippedToId = undefined;
+                    if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                    gameState.discardPiles.treasure.push(oldLV3);
+                    addLog(`玩家为英雄替换了原有的LV3装备`, playerIndex);
+                  }
+                }
+
+                card.equippedToId = heroCard.id;
+                
+                // Recalculate layout properly
+                const remainingEquipped = gameState.tableCards.filter((c: any) => c && c.equippedToId === heroCard.id);
+                remainingEquipped.forEach((eq: any, i: number) => {
+                  eq.x = heroCard.x;
+                  eq.y = heroCard.y > 0 ? (heroCard.y + 160 + (i * 160)) : (heroCard.y - 160 - (i * 160));
+                });
+
+                // Capacity check
+                if (remainingEquipped.length > 2 && deps.actionHelpers && deps.actionHelpers.promptPlayer) {
+                  deps.actionHelpers.broadcastState();
+                  const response = await deps.actionHelpers.promptPlayer(playerIndex, 'discard_excess_equipment', { heroId: heroCard.id });
+                  if (response && response.discardedCardId) {
+                    const toDiscardIdx = gameState.tableCards.findIndex((c: any) => c && c.id === response.discardedCardId);
+                    if (toDiscardIdx !== -1) {
+                      const discardedEquip = gameState.tableCards.splice(toDiscardIdx, 1)[0];
+                      discardedEquip.equippedToId = undefined;
+                      if (!gameState.discardPiles.treasure) gameState.discardPiles.treasure = [];
+                      gameState.discardPiles.treasure.push(discardedEquip);
+                      addLog(`玩家弃置了多余的装备卡`, playerIndex);
+                      
+                      // recalculate positions
+                      const finalEquipped = gameState.tableCards.filter((c: any) => c && c.equippedToId === heroCard.id);
+                      finalEquipped.forEach((eq: any, i: number) => {
+                        eq.x = heroCard.x;
+                        eq.y = heroCard.y > 0 ? (heroCard.y + 160 + (i * 160)) : (heroCard.y - 160 - (i * 160));
+                      });
+                    }
+                  }
+                }
+
+              } else {
+                card.equippedToId = undefined;
+                card.x = x;
+                card.y = y;
+              }
+            } else {
+              card.equippedToId = undefined;
+              card.x = x;
+              card.y = y;
+            }
+          } else {
+            card.x = x;
+            card.y = y;
+          }
           io.emit('state_update', gameState);
         } else {
           const hireCard = gameState.hireAreaCards.find((c: any) => c.id === id);

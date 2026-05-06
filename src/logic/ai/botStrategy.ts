@@ -36,6 +36,7 @@ export type BotAction =
   | { type: 'use_skill'; payload: { skillId: string; targetTokenId?: string; targetHex?: { q: number; r: number } } }
   | { type: 'select_skill_target'; payload: { skillId: string } }
   | { type: 'remove_ember_zone'; payload: { q: number; r: number } }
+  | { type: 'use_equipment_card'; payload: { cardId: string } }
   | { type: 'none' };
 
 export class BotStrategy {
@@ -78,6 +79,9 @@ export class BotStrategy {
       case 'action_select_skill_target':
         return this.decideActionSelectSkillTargetAction(gameState, playerIndex);
 
+      case 'action_select_equipment':
+        return this.decideActionSelectEquipmentAction(gameState, playerIndex);
+
       case 'action_play_enhancement':
         return this.decideActionPlayEnhancementAction(gameState, botPlayer, playerIndex);
 
@@ -96,6 +100,12 @@ export class BotStrategy {
 
       case 'shop':
         return this.decideShopAction(gameState, playerIndex);
+
+      case 'buy':
+        return this.decideBuyAction(gameState, playerIndex);
+
+      case 'buy_select_equip_target':
+        return this.decideBuyEquipAction(gameState, activePlayerId);
 
       case 'hire':
         return this.decideHireAction(gameState, playerIndex);
@@ -138,6 +148,15 @@ export class BotStrategy {
         } else {
           // Cannot discard, cancel move
           return { type: 'skill_interrupt_response', payload: { response: null } };
+        }
+      }
+
+      if (prompt.promptType === 'discard_excess_equipment') {
+        const heroId = prompt.context?.heroId;
+        const equippedCards = gameState.tableCards.filter(c => c && c.equippedToId === heroId);
+        if (equippedCards.length > 0) {
+          // Just discard the first one
+          return { type: 'skill_interrupt_response', payload: { response: { discardedCardId: equippedCards[0].id } } };
         }
       }
 
@@ -241,6 +260,40 @@ export class BotStrategy {
     } else {
       return { type: 'select_common_action', payload: { action: 'seize_initiative' } };
     } 
+  }
+
+  private static getValidEquipments(gameState: GameState, playerIndex: number, heroCardId: string, heroToken: Token): any[] {
+    const activeEquipNames = ['治疗药水', '经验卷轴', '移动号角', '指挥旗', '防御手套', '冲刺卷轴', '远程战术'];
+    const activeEquips = (gameState.tableCards || []).filter(c => 
+      c && c.equippedToId === heroCardId && 
+      c.name && activeEquipNames.includes(c.name) && 
+      !c.usedInTurn
+    );
+
+    return activeEquips.filter(equipCard => {
+      if (equipCard.name === '移动号角' || equipCard.name === '指挥旗') {
+        const attackerHex = pixelToHex(heroToken.x, heroToken.y);
+        const adjacentHexes = [
+          { q: attackerHex.q + 1, r: attackerHex.r },
+          { q: attackerHex.q + 1, r: attackerHex.r - 1 },
+          { q: attackerHex.q, r: attackerHex.r - 1 },
+          { q: attackerHex.q - 1, r: attackerHex.r },
+          { q: attackerHex.q - 1, r: attackerHex.r + 1 },
+          { q: attackerHex.q, r: attackerHex.r + 1 }
+        ];
+        const targetableHexes = adjacentHexes.filter(h => {
+           const hasAlly = gameState.tokens.find(t => {
+              if (t.type !== 'hero' || t.id === heroToken.id) return false;
+              const tHex = pixelToHex(t.x, t.y);
+              const isAlly = gameState.actionTokens.some(at => at.playerIndex === playerIndex && at.heroCardId === t.boundToCardId);
+              return tHex.q === h.q && tHex.r === h.r && isAlly;
+           });
+           return hasAlly;
+        });
+        return targetableHexes.length > 0;
+      }
+      return true;
+    });
   }
 
   private static decideActionSelectHeroAction(gameState: GameState, playerIndex: number): BotAction {
@@ -375,6 +428,15 @@ export class BotStrategy {
     // Add a 30% chance to skip skill and move/attack instead, to prevent AI from getting stuck spamming 0-cost skills
     if (validSkills.length > 0 && Math.random() > 0.3) {
       return { type: 'select_hero_action', payload: { action: 'skill' } };
+    }
+
+    // 2.2 Equipment Priority
+    if (heroCard) {
+      const activeEquips = this.getValidEquipments(gameState, playerIndex, heroCard.id, heroToken);
+      if (activeEquips.length > 0 && Math.random() > 0.3) {
+        // Evaluate if logic makes sense for some equips, otherwise random
+        return { type: 'select_hero_action', payload: { action: 'use_equipment' } };
+      }
     }
     
     // 2.5 Turret Attack Priority
@@ -591,6 +653,22 @@ export class BotStrategy {
         targetHex: hex 
       } 
     };
+  }
+
+  private static decideActionSelectEquipmentAction(gameState: GameState, playerIndex: number): BotAction {
+    const selectedToken = (gameState.tokens || []).find(t => t && t.id === gameState.activeHeroTokenId);
+    const heroCardId = selectedToken?.boundToCardId;
+    if (!heroCardId || !selectedToken) return { type: 'undo_play' };
+
+    const activeEquips = this.getValidEquipments(gameState, playerIndex, heroCardId, selectedToken);
+
+    if (activeEquips.length === 0) {
+      return { type: 'undo_play' };
+    }
+
+    // Pick random valid equipment to use
+    const chosenEquip = activeEquips[Math.floor(Math.random() * activeEquips.length)];
+    return { type: 'use_equipment_card', payload: { cardId: chosenEquip.id } };
   }
 
   private static getTruePathDist(start: {q: number, r: number}, end: {q: number, r: number}, gameState: GameState, myHeroTokenId: string): number {
@@ -904,8 +982,45 @@ export class BotStrategy {
     ) {
       return { type: 'start_hire' };
     }
+    
+    // Check if we want to buy something instead
+    if (gold >= 1) {
+      const shopCards = gameState.tableCards.filter(c => c && c.type && c.type.startsWith('treasure'));
+      if (shopCards.length > 0) {
+        return { type: 'start_buy' };
+      }
+    }
 
     return { type: 'pass_shop' };
+  }
+
+  private static decideBuyAction(gameState: GameState, playerIndex: number): BotAction {
+    const targetCard = gameState.tableCards.find(c => c && c.type && c.type.startsWith('treasure'));
+    if (targetCard) {
+      return { type: 'select_target', payload: { targetId: targetCard.id } };
+    }
+    return { type: 'pass_shop' };
+  }
+
+  private static decideBuyEquipAction(gameState: GameState, activePlayerId: string): BotAction {
+    const playerIndex = gameState.seats.indexOf(activePlayerId);
+    
+    // Find my hero tokens on the board
+    const myHeroTokens = gameState.tokens.filter(t => {
+      if (!t || t.type !== 'hero') return false;
+      const heroCard = gameState.tableCards.find(c => c && c.id === t.boundToCardId);
+      if (!heroCard) return false;
+      return (playerIndex === 0 && heroCard.y > 0) || (playerIndex === 1 && heroCard.y < 0);
+    });
+
+    if (myHeroTokens.length > 0) {
+      // Pick a random hero to equip
+      const selectedHero = myHeroTokens[Math.floor(Math.random() * myHeroTokens.length)];
+      return { type: 'select_target', payload: { targetId: selectedHero.id } };
+    }
+
+    // Fallback: keep in hand
+    return { type: 'select_target', payload: { targetId: activePlayerId } };
   }
 
   private static decideHireAction(gameState: GameState, playerIndex: number): BotAction {

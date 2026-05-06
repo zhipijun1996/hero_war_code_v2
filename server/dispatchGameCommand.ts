@@ -60,6 +60,10 @@ export function dispatchGameCommand(
       migratedHandlers.select_hero_action(socketLike, action.payload.action as any);
       break;
 
+    case 'use_equipment_card':
+      migratedHandlers.use_equipment_card(socketLike, action.payload.cardId);
+      break;
+
     case 'select_skill_target':
       migratedHandlers.select_skill_target(socketLike, action.payload);
       break;

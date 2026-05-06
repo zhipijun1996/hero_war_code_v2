@@ -186,6 +186,7 @@ export class CardLogic {
       if (gameState.phase === 'action_defend' || gameState.phase === 'action_play_defense') {
         const defenderToken = gameState.tokens.find((t: any) => t.boundToCardId === gameState.selectedTargetId);
         let hasResolute = false;
+        let hasDefenseGloves = false;
         if (defenderToken?.heroClass) {
           const heroData = HEROES_DATABASE.heroes.find(h => h.name === defenderToken.heroClass || h.id === defenderToken.heroClass);
           if (heroData) {
@@ -196,19 +197,28 @@ export class CardLogic {
           }
         }
 
-        if (card.name === '防御' || hasResolute) {
+        if (card.name !== '防御' && !hasResolute && defenderToken) {
+          const eq = gameState.tableCards.find(c => c && c.equippedToId === defenderToken.boundToCardId && c.name === '防御手套');
+          if (eq && !eq.usedInTurn) {
+            hasDefenseGloves = true;
+            eq.usedInTurn = true;
+            helpers.addLog(`玩家${playerIndex + 1}使用了[防御手套]，将任意手牌作为防御卡打出`, playerIndex);
+          }
+        }
+
+        if (card.name === '防御' || hasResolute || hasDefenseGloves) {
           gameState.hasDefenseCard = true;
           gameState.pendingDefenseCardId = tableCard.id;
           gameState.lastPlayedCardId = tableCard.id;
           gameState.isDefended = false;
           gameState.isCounterAttack = false;
-          // If using resolute with a non-defense card, they cannot counter attack!
+          // If using resolute or defense gloves with a non-defense card, they cannot counter attack!
           gameState.canCounterAttack = false;
 
           // Note: we'll let ActionEngine and CombatLogic know about the state via `canCounterAttack` 
           // However, ActionEngine explicitly recalculates canCounterAttack after playing card:
           //   gameState.canCounterAttack = CombatLogic.canCounterAttack(gameState, playerIndex);
-          // Therefore, we must pass the knowledge that we used resolute down.
+          // Therefore, we must pass the knowledge that we used resolute/gloves down.
           // Let's add a flag on gameState tracking if resolute was used for this defense.
           if (card.name !== '防御') {
              (gameState as any).usedResoluteForDefense = true;
