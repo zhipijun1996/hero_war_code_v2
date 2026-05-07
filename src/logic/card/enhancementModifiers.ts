@@ -7,7 +7,7 @@ export function isEnhancementCardName(cardName?: string | null): boolean {
     '间谍',
     '替身',
     '远攻',
-    '强击',
+    '强攻',
     '冲刺卷轴',
     '治疗药水',
     '远程战术'
@@ -37,7 +37,7 @@ export function getAttackRangeBonusFromEnhancement(cardName?: string | null): nu
 export function getAttackDamageBonusFromEnhancement(cardName?: string | null): number {
   if (!cardName) return 0;
 
-  if (cardName === '强击') {
+  if (cardName === '强攻') {
     return 1;
   }
 

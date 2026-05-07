@@ -75,12 +75,13 @@ const T2_CARDS = T2_CARDS_RAW.map(n => ({ name: n, url: `${BASE_URL}t2_${encodeU
 const T3_CARDS = T3_CARDS_RAW.map(n => ({ name: n, url: `${BASE_URL}t3_${encodeURIComponent(n)}.png` }));
 
 const ACTION_CARDS_CONFIG = [
-  { name: '冲刺', copies: 3, image: 'https://image.pollinations.ai/prompt/A%20pair%20of%20glowing%20winged%20boots%20speeding%20forward%20fantasy%20anime%20art?nologo=true' },
-  { name: '回复', copies: 2, image: 'https://image.pollinations.ai/prompt/A%20glowing%20green%20healing%20potion%20bottle%20fantasy%20anime%20art?nologo=true' },
-  { name: '间谍', copies: 3, image: 'https://image.pollinations.ai/prompt/A%20mysterious%20rogue%20in%20a%20dark%20cloak%20hiding%20in%20shadows%20fantasy%20anime%20art?nologo=true' },
-  { name: '替身', copies: 3, image: 'https://image.pollinations.ai/prompt/A%20magical%20shadow%20clone%20or%20substitute%20dummy%20in%20fantasy%20style%20anime%20art?nologo=true' },
-  { name: '远攻', copies: 3, image: 'https://image.pollinations.ai/prompt/A%20glowing%20magic%20arrow%20flying%20through%20the%20air%20fantasy%20anime%20art?nologo=true' },
-  { name: '防御', copies: 5, image: 'https://image.pollinations.ai/prompt/A%20glowing%20magical%20shield%20blocking%20an%20attack%20fantasy%20anime%20art?nologo=true' },
+  { name: '冲刺', copies: 10, image: 'https://image.pollinations.ai/prompt/A%20pair%20of%20glowing%20winged%20boots%20speeding%20forward%20fantasy%20anime%20art?nologo=true' },
+  { name: '回复', copies: 4, image: 'https://image.pollinations.ai/prompt/A%20glowing%20green%20healing%20potion%20bottle%20fantasy%20anime%20art?nologo=true' },
+  { name: '间谍', copies: 4, image: 'https://image.pollinations.ai/prompt/A%20mysterious%20rogue%20in%20a%20dark%20cloak%20hiding%20in%20shadows%20fantasy%20anime%20art?nologo=true' },
+  { name: '替身', copies: 5, image: 'https://image.pollinations.ai/prompt/A%20magical%20shadow%20clone%20or%20substitute%20dummy%20in%20fantasy%20style%20anime%20art?nologo=true' },
+  { name: '远攻', copies: 6, image: 'https://image.pollinations.ai/prompt/A%20glowing%20magic%20arrow%20flying%20through%20the%20air%20fantasy%20anime%20art?nologo=true' },
+  { name: '强攻', copies: 6, image: 'https://image.pollinations.ai/prompt/A%20flaming%20sword%20striking%20forward%20with%20power%20fantasy%20anime%20art?nologo=true' },
+  { name: '防御', copies: 15, image: 'https://image.pollinations.ai/prompt/A%20glowing%20magical%20shield%20blocking%20an%20attack%20fantasy%20anime%20art?nologo=true' },
 ];
 
 const MONSTER_CELLS = [
