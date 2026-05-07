@@ -64,9 +64,7 @@ export function getHeroCurrentHP (hero: TableCard, gameState: GameState): number
 }
 
 export function getHeroCardImage (heroClass: string, level: number) : string {
-  if (heroClass === '圣职者' && level === 2) return `${BASE_URL}%E5%9C%A3%E8%81%8C%E8%80%85_LV2.png`;
-  if (heroClass === '重甲兵' && level === 2) return `${BASE_URL}%E9%87%8D%E7%94%B2%E5%85%B5_LV2.png`;
-  return `${BASE_URL}${encodeURIComponent(heroClass)}lv${level}.png`;
+  return `${BASE_URL}hero_pic_v2/${encodeURIComponent(heroClass)}_lv${level}.png`;
 }
 
 export function getHeroBackImage (level: number) : string {

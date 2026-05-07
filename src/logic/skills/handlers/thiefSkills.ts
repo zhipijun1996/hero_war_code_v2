@@ -65,6 +65,47 @@ export const thiefSneakAttack: SkillDefinition = {
       return { success: true };
     }
 
+    if (targetTokenId || context.targetHex) {
+      let resolvedTargetTokenId = targetTokenId;
+      if (!resolvedTargetTokenId && context.targetHex) {
+        const h = context.targetHex;
+        const targetToken = gameState.tokens.find(t => {
+          const th = pixelToHex(t.x, t.y);
+          return th.q === h.q && th.r === h.r;
+        });
+        if (targetToken) {
+            resolvedTargetTokenId = targetToken.boundToCardId || targetToken.id;
+        }
+      }
+
+      if (resolvedTargetTokenId) {
+        helpers.addLog(`玩家${playerIndex + 1} 选择了偷袭目标`, playerIndex);
+        gameState.combatInitiatingSkillId = 'sneak_attack';
+        gameState.selectedTokenId = sourceTokenId;
+        gameState.selectedTargetId = resolvedTargetTokenId;
+        gameState.reachableCells = [];
+        
+        const sourceCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);
+        const targetToken = gameState.tokens.find(t => t.id === resolvedTargetTokenId || t.boundToCardId === resolvedTargetTokenId);
+        const targetCard = gameState.tableCards.find(c => c.id === targetToken?.boundToCardId);
+        
+        if (sourceCard && targetCard) {
+            const { ActionEngine } = await import('../../action/actionEngine.ts');
+            await ActionEngine.initiateAttack(
+              gameState,
+              playerIndex,
+              sourceCard.id,
+              targetCard.id,
+              helpers as any,
+              null
+            );
+        }
+        return { success: true };
+      } else {
+        return { success: false, reason: '未找到有效目标。' };
+      }
+    }
+
     // Active usage
     const hHex = pixelToHex(heroToken.x, heroToken.y);
     const heroCard = gameState.tableCards.find(c => c.id === heroToken.boundToCardId);

@@ -80,6 +80,10 @@ export function dispatchGameCommand(
       migratedHandlers.select_target(socketLike, action.payload.targetId);
       break;
 
+    case 'cancel_action_token':
+      migratedHandlers.cancel_action_token(socketLike);
+      break;
+
     case 'pass_action':
       if (gameState.phase === 'action_play_enhancement') {
         migratedHandlers.pass_enhancement(socketLike);

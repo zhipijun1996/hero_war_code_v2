@@ -18,6 +18,7 @@ export type BotAction =
   | { type: 'select_hero_for_action'; payload: { tokenId: string } }
   | { type: 'select_hero_action'; payload: { action: string } }
   | { type: 'select_target'; payload: { targetId: string } }
+  | { type: 'cancel_action_token' }
   | { type: 'pass_action' }
   | { type: 'select_hire_cost'; payload: { cost: number } }
   | { type: 'select_hire_castle'; payload: { castle: number } } 
@@ -78,6 +79,9 @@ export class BotStrategy {
 
       case 'action_select_skill_target':
         return this.decideActionSelectSkillTargetAction(gameState, playerIndex);
+
+      case 'action_select_target':
+        return this.decideActionSelectTargetAction(gameState, playerIndex);
 
       case 'action_select_equipment':
         return this.decideActionSelectEquipmentAction(gameState, playerIndex);
@@ -612,6 +616,22 @@ export class BotStrategy {
     return { bestTarget, bestScore };
   }
 
+  private static decideActionSelectTargetAction(gameState: GameState, playerIndex: number): BotAction {
+    if (gameState.activeActionType === 'use_equipment' && gameState.reachableCells && gameState.reachableCells.length > 0) {
+      // Find a token in reachableCells
+      const targetTokens = gameState.tokens.filter(t => {
+        if (!t || t.type !== 'hero' || !t.boundToCardId) return false;
+        const targetHex = pixelToHex(t.x, t.y);
+        return gameState.reachableCells!.some(cell => cell.q === targetHex.q && cell.r === targetHex.r);
+      });
+      
+      if (targetTokens.length > 0) {
+        return { type: 'select_target', payload: { targetId: targetTokens[0].boundToCardId } };
+      }
+    }
+    return { type: 'cancel_action_token' };
+  }
+
   private static decideActionSelectSkillTargetAction(gameState: GameState, playerIndex: number): BotAction {
     if (!gameState.activeSkillId || !gameState.reachableCells || gameState.reachableCells.length === 0) {
       return { type: 'undo_play' };
@@ -954,6 +974,19 @@ export class BotStrategy {
     return { type: 'pass_defend' };
   }
 
+  private static getAffordableTreasures(gameState: GameState, playerIndex: number): any[] {
+    const goldY = playerIndex === 0 ? 550 : -700;
+    const goldCounter = gameState.counters.find(c => c && c.type === 'gold' && Math.abs(c.y - goldY) < 100);
+    const gold = goldCounter ? goldCounter.value : 0;
+
+    return gameState.tableCards.filter(c => {
+      if (!c || !c.type || !c.type.startsWith('treasure')) return false;
+      const level = parseInt(c.type.replace('treasure', ''), 10) || 1;
+      const cost = level === 3 ? 4 : level;
+      return gold >= cost;
+    });
+  }
+
   private static decideShopAction(gameState: GameState, playerIndex: number): BotAction {
     const goldY = playerIndex === 0 ? 550 : -700;
     const goldCounter = gameState.counters.find(c => c && c.type === 'gold' && Math.abs(c.y - goldY) < 100);
@@ -985,8 +1018,8 @@ export class BotStrategy {
     
     // Check if we want to buy something instead
     if (gold >= 1) {
-      const shopCards = gameState.tableCards.filter(c => c && c.type && c.type.startsWith('treasure'));
-      if (shopCards.length > 0) {
+      const affordableCards = this.getAffordableTreasures(gameState, playerIndex);
+      if (affordableCards.length > 0) {
         return { type: 'start_buy' };
       }
     }
@@ -995,9 +1028,9 @@ export class BotStrategy {
   }
 
   private static decideBuyAction(gameState: GameState, playerIndex: number): BotAction {
-    const targetCard = gameState.tableCards.find(c => c && c.type && c.type.startsWith('treasure'));
-    if (targetCard) {
-      return { type: 'select_target', payload: { targetId: targetCard.id } };
+    const affordableCards = this.getAffordableTreasures(gameState, playerIndex);
+    if (affordableCards.length > 0) {
+      return { type: 'select_target', payload: { targetId: affordableCards[0].id } };
     }
     return { type: 'pass_shop' };
   }

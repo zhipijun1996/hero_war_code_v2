@@ -12,7 +12,7 @@ import { getHeroTokenImage } from './src/shared/utils/assetUtils.ts';
 import { HEROES_DATABASE } from './src/shared/config/heroes.ts';
 import { Hex, hexRound, hexToPixel, pixelToHex, getHexDistance, HEX_DIRECTIONS } from './src/shared/utils/hexUtils.ts';
 import { isTargetInAttackRange, getNeighbors, getRecoilHex, getPathDist, isHexInEnemyAttackRange, getReachableHexes, resolveTileEffect, getAttackableHexes } from './src/logic/map/mapLogic.ts';
-import { getHeroStat, canHeroEvolve, getRespawnTime, getHeroCurrentHP } from './src/logic/hero/heroLogic.ts';
+import { getHeroStat, canHeroEvolve, getRespawnTime, getHeroCurrentHP, getHeroCardImage, getHeroBackImage } from './src/logic/hero/heroLogic.ts';
 import { PhaseManager } from './src/logic/phase/phaseLogic.ts';
 import { CardLogic } from './src/logic/card/cardLogic.ts';
 import { HeroEngine } from './src/logic/hero/heroEngine.ts';
@@ -62,18 +62,6 @@ const HERO_PRIORITY: Record<string, number> = {
 };
 
 // --- HERO IMAGES CONFIGURATION ---
-
-const getHeroCardImage = (heroClass: string, level: number) => {
-  if (heroClass === '圣职者' && level === 2) return `${BASE_URL}%E5%9C%A3%E8%81%8C%E8%80%85_LV2.png`;
-  if (heroClass === '重甲兵' && level === 2) return `${BASE_URL}%E9%87%8D%E7%94%B2%E5%85%B5_LV2.png`;
-  return `${BASE_URL}${encodeURIComponent(heroClass)}lv${level}.png`;
-};
-
-const getHeroBackImage = (level: number) => {
-  if (level === 1) return HERO1_BACK;
-  if (level === 2) return HERO2_BACK;
-  return HERO3_BACK;
-};
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
